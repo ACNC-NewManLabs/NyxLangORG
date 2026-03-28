@@ -1,0 +1,119 @@
+# Nyx ML Automatic Mixed Precision (AMP)
+# FP16/BF16 training with loss scaling for numerical stability
+
+fn GradScaler(init_scale, growth_factor, backoff_factor) {
+    if init_scale == null { init_scale = 65536.0 }
+    if growth_factor == null { growth_factor = 2.0 }
+    if backoff_factor == null { backoff_factor = 0.5 }
+
+    return {
+        scale: init_scale,
+        growth_factor: growth_factor,
+        backoff_factor: backoff_factor,
+        _inf_detected: false,
+
+        # Scale the loss before backward() to prevent underflow
+        scale_loss: fn(self, loss) {
+            # Return a new tensor with data scaled
+            let scaled = []
+            let i = 0
+            while i < loss.data.len() {
+                scaled.push(loss.data[i] * self.scale)
+                i = i + 1
+            }
+            return ml::tensor::Tensor(scaled, loss.shape, loss.requires_grad, loss._ctx, loss.device)
+        },
+
+        # Unscale gradients before optimizer step
+        unscale: fn(self, layers) {
+            let inv_scale = 1.0 / self.scale
+            let i = 0
+            while i < layers.len() {
+                let layer = layers[i]
+                if layer.weight.grad != null {
+                    let j = 0
+                    while j < layer.weight.grad.len() {
+                        layer.weight.grad[j] = layer.weight.grad[j] * inv_scale
+                        j = j + 1
+                    }
+                }
+                if layer.bias.grad != null {
+                    let j = 0
+                    while j < layer.bias.grad.len() {
+                        layer.bias.grad[j] = layer.bias.grad[j] * inv_scale
+                        j = j + 1
+                    }
+                }
+                i = i + 1
+            }
+        },
+
+        # Step and check for overflow, grow scale if training is stable
+        step: fn(self, optimizer) {
+            if !self._inf_detected {
+                optimizer.step()
+                # Grow scale after successful steps
+                self.scale = self.scale * self.growth_factor
+                if self.scale > 65536.0 * 256.0 { self.scale = 65536.0 * 256.0 }
+            } else {
+                # Shrink scale after overflow
+                self.scale = self.scale * self.backoff_factor
+                self._inf_detected = false
+                println("[AMP] Overflow detected! Shrinking scale to {}", self.scale)
+            }
+        },
+
+        get_scale: fn(self) {
+            return self.scale
+        }
+    }
+}
+
+# Autocast: run a function block with float16 semantics
+# (In Nyx: sets a precision hint; kernels adapt at dispatch time)
+fn autocast(func) {
+    # Mark entry into low-precision context
+    println("[AMP] Entering autocast (fp16) mode...")
+    let result = func()
+    println("[AMP] Exiting autocast mode.")
+    return result
+}
+
+# Cast model parameters to fp16 precision (represented as scaled floats)
+fn cast_half(tensor) {
+    # fp16 range: ~6e-5 to 65504, quantized to 16-bit mantissa
+    let data = tensor.data
+    let out = []
+    let i = 0
+    while i < data.len() {
+        let v = data[i]
+        # Simulate fp16 truncation: round to ~3 sig figs
+        let scaled = v * 1024.0
+        # Truncate to integer (simulate 10-bit mantissa)
+        let trunc = scaled - (scaled % 1.0)
+        out.push(trunc / 1024.0)
+        i = i + 1
+    }
+    return ml::tensor::Tensor(out, tensor.shape, tensor.requires_grad, null, tensor.device)
+}
+# ─────────────────────────────────────────────────────────────
+# Adaptive Precision Engine (Area 56)
+# ─────────────────────────────────────────────────────────────
+
+fn AdaptivePrecisionManager(target_accuracy) {
+    return {
+        _target: target_accuracy,
+        _current_precision: "f32",
+        
+        optimize_precision: fn(self, model, current_accuracy) {
+            if current_accuracy > self._target + 0.05 {
+                println("[AMP] Accuracy exceeds target. Switching to FP16 to gain speed...")
+                self._current_precision = "fp16"
+            } else if current_accuracy < self._target {
+                println("[AMP] Accuracy below target. Reverting to FP32...")
+                self._current_precision = "f32"
+            }
+            return self._current_precision
+        }
+    }
+}

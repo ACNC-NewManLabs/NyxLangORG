@@ -1,0 +1,47 @@
+fn main() {
+    print("--- Running Primitive Verification ---")
+
+    // String::contains
+    print("Testing string.contains:")
+    let s = "hello world"
+    if s.contains("hello") { print("  PASS: contains 'hello'") } else { print("  FAIL: contains 'hello'") }
+    if s.contains("world") { print("  PASS: contains 'world'") } else { print("  FAIL: contains 'world'") }
+    if !s.contains("nyx") { print("  PASS: not contains 'nyx'") } else { print("  FAIL: not contains 'nyx'") }
+
+    // String::split
+    print("Testing string.split:")
+    let s2 = "a,b,c"
+    let parts = s2.split(",")
+    print("  Parts: ")
+    print(parts)
+    if parts.len() == 3 { print("  PASS: split count") } else { print("  FAIL: split count") }
+
+    // String::substring
+    print("Testing string.substring:")
+    let s3 = "0123456789"
+    let sub = s3.substring(2, 5)
+    print("  Substring(2, 5): ")
+    print(sub)
+    if sub == "234" { print("  PASS: substring(2, 5)") } else { print("  FAIL: substring(2, 5)") }
+
+    // String::chars
+    print("Testing string.chars:")
+    let s4 = "nyx"
+    let chars = s4.chars()
+    print("  Chars: ")
+    print(chars)
+    if chars.len() == 3 { print("  PASS: chars count") } else { print("  FAIL: chars count") }
+
+    // List::shift
+    print("Testing list.shift:")
+    let mut arr = [10, 20, 30]
+    let first = arr.shift()
+    print("  Shifted: ")
+    print(first)
+    print("  Remaining: ")
+    print(arr)
+    if first == 10 { print("  PASS: shift element") } else { print("  FAIL: shift element") }
+    if arr.len() == 2 { print("  PASS: remaining len") } else { print("  FAIL: remaining len") }
+
+    print("--- Verification Complete ---")
+}

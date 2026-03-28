@@ -1,0 +1,10 @@
+// Nyx Reflection & Metadata [Layer 1]
+// Provides runtime introspection and type analysis.
+
+export fn typeof(val) -> str {
+    return std::meta::typeof(val);
+}
+
+export fn fields(obj) -> [str] {
+    return std::meta::fields(obj);
+}

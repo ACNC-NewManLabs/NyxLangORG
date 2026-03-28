@@ -1,0 +1,70 @@
+# Nyx ML Profiler
+# Kernel-level timing, memory tracking, and bottleneck detection
+
+fn Profiler() {
+    return {
+        records: [],
+        running: false,
+        start_time: 0,
+        peak_alloc: 0,
+        current_alloc: 0,
+
+        start: fn(self) {
+            self.running = true
+            self.start_time = get_time()
+            self.records = []
+            println("[Profiler] Started.")
+        },
+
+        stop: fn(self) {
+            self.running = false
+            let elapsed = get_time() - self.start_time
+            println("[Profiler] Stopped. Total time: {}ms", elapsed)
+            return elapsed
+        },
+
+        mark: fn(self, label) {
+            if !self.running { return }
+            let t = get_time() - self.start_time
+            self.records.push({ label: label, time_ms: t })
+        },
+
+        report: fn(self) {
+            println("=== Profiler Report ===")
+            let i = 0
+            while i < self.records.len() {
+                let r = self.records[i]
+                println("  {:>30}  {:>8.2f} ms", r.label, r.time_ms)
+                i = i + 1
+            }
+            println("=======================")
+        },
+
+        # Estimate memory from tensor size (rough)
+        track_tensor: fn(self, tensor, label) {
+            let bytes = tensor.data.len() * 8   # f64 = 8 bytes
+            self.current_alloc = self.current_alloc + bytes
+            if self.current_alloc > self.peak_alloc {
+                self.peak_alloc = self.current_alloc
+            }
+            if label != null {
+                println("[Profiler] Tensor '{}': {} KB", label, bytes / 1024)
+            }
+            return bytes
+        },
+
+        memory_peak: fn(self) {
+            println("[Profiler] Peak allocation: {} KB", self.peak_alloc / 1024)
+            return self.peak_alloc
+        }
+    }
+}
+
+# Quick one-shot timing helper
+fn time_fn(label, func) {
+    let t0 = get_time()
+    let result = func()
+    let dt = get_time() - t0
+    println("[Profiler] {}: {}ms", label, dt)
+    return result
+}

@@ -1,0 +1,38 @@
+# 📄 Nyx Core Source: Proprietary Software License Agreement
+
+**Copyright (c) 2026 SURYA SEKHAR ROY. All Rights Reserved.**
+
+---
+
+### 1. OWNERSHIP AND INTELLECTUAL PROPERTY
+The **Nyx Core Source Code** (including but not limited to the lexer, parser, AST, semantic analyzer, runtime execution engine, and all associated logic within this directory), is the sole and exclusive intellectual property of **SURYA SEKHAR ROY** (the "Owner").
+
+This software is protected by international copyright laws, trade secret protections, and trademark laws. All rights not expressly granted in this Agreement are reserved by the Owner.
+
+### 2. TRADEMARK POLICY
+The names **Nyx™**, **Nyx Universal Core™**, **Nyx Runtime™**, and all associated logos are trademarks owned by **SURYA SEKHAR ROY**.
+- This License does not grant you any rights to use these trademarks for commercial purposes without a separate written agreement.
+- Any use of these trademarks in documentation, extensions, or third-party implementations must include a clear attribution to the Owner.
+- You are prohibited from registering any trademarks or domain names that are confusingly similar to these marks.
+
+### 3. LICENSE GRANT
+The Owner hereby grants to the user a limited, non-exclusive, non-transferable license to examine and evaluate the Nyx Core Source Code for educational and review purposes only. This license is strictly contingent upon your compliance with all terms of this Agreement.
+
+### 4. RESTRICTIONS
+You are expressly prohibited from:
+- **Redistribution**: You may not sell, lease, sublicense, or redistribute the source code of the Nyx Core as a standalone product or as part of another software package.
+- **Modification**: You may not create derivative works or modify the core compiler architecture without express written permission from the Owner.
+- **Authorship Removal**: You must maintain all copyright and trademark notices (attributing SURYA SEKHAR ROY) in all copies of the software and its documentation.
+
+### 5. TERMINATION
+This license terminates automatically if you fail to comply with any of its terms. Upon termination, you must cease all use of the software and destroy all copies.
+
+### 6. NO WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. SURYA SEKHAR ROY DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+
+---
+
+**BY ACCESSING OR USING THE NYX CORE SOURCE, YOU AGREE TO BE BOUND BY THESE PROPRIETARY TERMS.**
+
+**AUTHOR & OWNER:** SURYA SEKHAR ROY
+**DATE:** March 14, 2026

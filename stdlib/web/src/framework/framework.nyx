@@ -1,0 +1,213 @@
+// Nyx Web Framework
+// Core framework for building web applications
+
+// Request represents an incoming HTTP request
+struct Request {
+    method: string
+    path: string
+    headers: Map<string, string>
+    query_params: Map<string, string>
+    body: bytes
+    path_params: Map<string, string>
+    cookies: Map<string, string>
+    remote_addr: string
+    proto: string
+}
+
+// Response represents an HTTP response
+struct Response {
+    status_code: u16
+    headers: Map<string, string>
+    body: bytes
+    cookies: Map<string, string>
+}
+
+// Application state
+struct AppState {
+    name: string
+    version: string
+    env: string
+    debug: bool
+}
+
+// Web application context
+struct Context {
+    request: Request
+    response: Response
+    state: AppState
+    params: Map<string, string>
+    session: Session
+}
+
+// Session management
+struct Session {
+    id: string
+    data: Map<string, string>
+    expires_at: u64
+}
+
+// HTTP Methods
+enum HttpMethod {
+    GET
+    POST
+    PUT
+    DELETE
+    PATCH
+    OPTIONS
+    HEAD
+}
+
+// Content types
+enum ContentType {
+    HTML
+    JSON
+    XML
+    TEXT
+    CSS
+    JAVASCRIPT
+    BINARY
+}
+
+// HTTP Status Codes
+enum StatusCode {
+    OK = 200
+    CREATED = 201
+    ACCEPTED = 202
+    NO_CONTENT = 204
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    METHOD_NOT_ALLOWED = 405
+    INTERNAL_SERVER_ERROR = 500
+    BAD_GATEWAY = 502
+    SERVICE_UNAVAILABLE = 503
+}
+
+// Create a new request
+fn new_request() -> Request {
+    return Request {
+        method: "GET"
+        path: "/"
+        headers: Map::new()
+        query_params: Map::new()
+        body: bytes::new()
+        path_params: Map::new()
+        cookies: Map::new()
+        remote_addr: "0.0.0.0"
+        proto: "HTTP/1.1"
+    }
+}
+
+// Create a new response
+fn new_response() -> Response {
+    return Response {
+        status_code: 200
+        headers: Map::new()
+        body: bytes::new()
+        cookies: Map::new()
+    }
+}
+
+// Create context from request
+fn create_context(req: Request) -> Context {
+    return Context {
+        request: req
+        response: new_response()
+        state: AppState::default()
+        params: Map::new()
+        session: Session::new()
+    }
+}
+
+// Get header value
+fn get_header(ctx: Context, key: string) -> Option<string> {
+    return ctx.request.headers.get(key)
+}
+
+// Set header value
+fn set_header(ctx: Context, key: string, value: string) {
+    ctx.response.headers.insert(key, value)
+}
+
+// Get query parameter
+fn get_query(ctx: Context, key: string) -> Option<string> {
+    return ctx.request.query_params.get(key)
+}
+
+// Get path parameter
+fn get_param(ctx: Context, key: string) -> Option<string> {
+    return ctx.params.get(key)
+}
+
+// Set session value
+fn set_session(ctx: Context, key: string, value: string) {
+    ctx.session.data.insert(key, value)
+}
+
+// Get session value
+fn get_session(ctx: Context, key: string) -> Option<string> {
+    return ctx.session.data.get(key)
+}
+
+// JSON response helper
+fn json(ctx: Context, data: any) -> Response {
+    ctx.response.headers.insert("Content-Type", "application/json")
+    ctx.response.body = json::serialize(data)
+    return ctx.response
+}
+
+// HTML response helper
+fn html(ctx: Context, html: string) -> Response {
+    ctx.response.headers.insert("Content-Type", "text/html")
+    ctx.response.body = html.to_bytes()
+    return ctx.response
+}
+
+// Text response helper
+fn text(ctx: Context, text: string) -> Response {
+    ctx.response.headers.insert("Content-Type", "text/plain")
+    ctx.response.body = text.to_bytes()
+    return ctx.response
+}
+
+// Redirect helper
+fn redirect(ctx: Context, url: string, status: u16 = 302) -> Response {
+    ctx.response.status_code = status
+    ctx.response.headers.insert("Location", url)
+    return ctx.response
+}
+
+// Error response helper
+fn error(ctx: Context, message: string, status: u16) -> Response {
+    ctx.response.status_code = status
+    ctx.response.body = json::serialize({
+        error: message
+        status: status
+    })
+    return ctx.response
+}
+
+export Request
+export Response
+export Context
+export AppState
+export Session
+export HttpMethod
+export ContentType
+export StatusCode
+export new_request
+export new_response
+export create_context
+export get_header
+export set_header
+export get_query
+export get_param
+export set_session
+export get_session
+export json
+export html
+export text
+export redirect
+export error
+

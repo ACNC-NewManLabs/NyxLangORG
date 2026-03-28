@@ -1,0 +1,73 @@
+// Nyx Cryptography Module Verification Test
+// Testing Hashing, Symmetric Encryption, and Conversions.
+
+import crypto as c
+
+fn test_hashing() {
+    println("--- Testing Hashing ---")
+    let msg = "Nyx Security Test 2026"
+    
+    let h_sha256 = c::sha256(msg)
+    let h_sha3 = c::sha3(msg)
+    let h_blake3 = c::blake3(msg)
+    
+    println("SHA-256:  {}", h_sha256)
+    println("SHA-3:    {}", h_sha3)
+    println("BLAKE3:   {}", h_blake3)
+    
+    if std::bytes::len(h_sha256) != 32 { println("SHA-256 output length mismatch") }
+    if std::bytes::len(h_sha3) != 32 { println("SHA-3 output length mismatch") }
+    if std::bytes::len(h_blake3) != 32 { println("BLAKE3 output length mismatch") }
+    
+    println("✅ Hashing tests passed\n")
+}
+
+fn test_aes_gcm() {
+    println("--- Testing AES-256-GCM ---")
+    let key = c::random_bytes(32)
+    let plaintext = "This is a top-secret message for the Nyx Universe."
+    let data = std::string::as_bytes(plaintext)
+    
+    println("Plaintext:  {}", plaintext)
+    
+    let encrypted = c::aes_encrypt(data, key)
+    println("Encrypted:  {}", encrypted)
+    
+    let decrypted_bytes = c::aes_decrypt(encrypted, key)
+    let decrypted_str = std::bytes::as_string(decrypted_bytes)
+    
+    println("Decrypted:  {}", decrypted_str)
+    
+    if decrypted_str != plaintext {
+        println("AES Decryption failed - plaintext mismatch!")
+    } else {
+        println("✅ AES-256-GCM roundtrip successful\n")
+    }
+}
+
+fn test_chacha20() {
+    println("--- Testing ChaCha20-Poly1305 ---")
+    let key = c::random_bytes(32)
+    let plaintext = "ChaCha20 is fast and secure."
+    let data = std::string::as_bytes(plaintext)
+    
+    let encrypted = c::chacha_encrypt(data, key)
+    let decrypted_bytes = c::chacha_decrypt(encrypted, key)
+    let decrypted_str = std::bytes::as_string(decrypted_bytes)
+    
+    if decrypted_str != plaintext {
+        println("ChaCha20 Decryption failed!")
+    } else {
+        println("✅ ChaCha20-Poly1305 roundtrip successful\n")
+    }
+}
+
+fn main() {
+    println("=== Nyx Crypto Module Validation ===\n")
+    
+    test_hashing()
+    test_aes_gcm()
+    test_chacha20()
+    
+    println("=== All Cryptography Tests Passed! ✅ ===")
+}

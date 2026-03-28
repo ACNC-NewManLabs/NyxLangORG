@@ -1,0 +1,13 @@
+import df.column;
+import df.dataframe;
+fn main() {
+    println("DEBUG: simple test with df.dataframe")
+    let i = 0
+    let a = []
+    while i < 10 {
+        println("i=", i)
+        a.push(i)
+        i = i + 1
+    }
+    println("Done")
+}

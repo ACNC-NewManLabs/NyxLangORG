@@ -1,0 +1,5 @@
+fn main() {
+    println("test start")
+    let x = ml::tensor::zeros([2])
+    println("zeros OK: {}", x.data.len())
+}

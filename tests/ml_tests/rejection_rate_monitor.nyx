@@ -1,0 +1,32 @@
+import ml;
+
+# --- Nyx Rejection Rate Monitor (Availability Audit) ---
+
+fn report_rate(total, rejections, limit) {
+    let rate = rejections * 1.0 / total
+    println("--- Nyx Operational Update: Rejection Rate Audit ---")
+    println("  Total Requests: ", total)
+    println("  Total Rejected: ", rejections)
+    println("  Rejection Rate: ", rate * 100, "%")
+    
+    if rate > limit {
+        println("  ALERT: Over-rejection detected (Availability Risk)!")
+    } else {
+        println("  STATUS: Rejections within operational bounds.")
+    }
+}
+
+fn main() {
+    println("--- Testing Nyx Rejection Rate Monitor (Hardened) ---")
+    let limit = 0.15
+    
+    # Scenario 1: Nominal (10% rejection)
+    println("Scenario 1: Nominal Operating Conditions")
+    report_rate(100, 10, limit)
+    
+    println("")
+    
+    # Scenario 2: Over-conservative (25% rejection)
+    println("Scenario 2: Safety Paralysis Detected")
+    report_rate(100, 25, limit)
+}

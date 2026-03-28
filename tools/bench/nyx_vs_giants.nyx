@@ -1,0 +1,84 @@
+import df;
+import time;
+
+fn main() {
+    print("--------------------------------------------------\n");
+    print("🏎️  NYX DB APEX BENCHMARK: THE SHOOTOUT v2\n");
+    print("--------------------------------------------------\n");
+
+    # 1. Dataset Generation
+    let rows = 10000000; # Scale to 10M (safe limit for local RAM)
+    print("🚀 Generating "); print(rows); print(" rows of synthetic data...\n");
+
+    let t0 = std::time::now_nanos();
+    let cols = df::generate_synthetic(rows, {
+        "user_id": "int",
+        "category": "string",
+        "score": "float"
+    });
+    let data = df::DataFrame(cols);
+    let t1 = std::time::now_nanos();
+    print("✅ Generation Time: ");
+    print((t1 - t0) / 1000000);
+    print(" ms\n");
+
+    # 2. Query 1: Aggregation (Group By [category], Sum(score))
+    print("\n📊 Query 1: Aggregation (Group By [category], Sum(score))\n");
+    let t2 = std::time::now_nanos();
+    let keys = [df::col("category")];
+    let aggs = [df::col("score").sum()];
+    let result_q1 = data.group_by(keys).agg(aggs).collect();
+    let t3 = std::time::now_nanos();
+    print("✅ Nyx Execution Time: ");
+    print((t3 - t2) / 1000000);
+    print(" ms\n");
+    print("   [Groups Found: ");
+    print(result_q1.nrows());
+    print("]\n");
+
+    # 3. Query 2: Filter + Count
+    print("\n🔍 Query 2: Filter (score > 5.0) + Count\n");
+    let t4 = std::time::now_nanos();
+    let filtered = data.lazy().filter(df::col("score").gt(df::lit(5.0))).collect();
+    let count = filtered.nrows();
+    let t5 = std::time::now_nanos();
+    print("✅ Nyx Execution Time: ");
+    print((t5 - t4) / 1000000);
+    print(" ms\n");
+    print("   [Result Count: ");
+    print(count);
+    print("]\n");
+
+    # 4. Query 3: Hash Join (Fact ⋈ Dimension)
+    print("\n🤝 Query 3: Hash Join (1M rows ⋈ 100k dimensions)\n");
+    let dim_rows = 100000;
+    let dim_cols = df::generate_synthetic(dim_rows, {
+        "user_id": "int",
+        "username": "string"
+    });
+    let dim_df = df::DataFrame(dim_cols);
+
+    let t8 = std::time::now_nanos();
+    let joined = data.lazy().join(dim_df.lazy(), "user_id", "user_id").collect();
+    let t9 = std::time::now_nanos();
+    print("✅ Nyx Join Time: ");
+    print((t9 - t8) / 1000000);
+    print(" ms\n");
+    print("   [Joined Rows: ");
+    print(joined.nrows());
+    print("]\n");
+
+    # 5. Stress Test: Parallel Column Math
+    print("\n🔥 Stress Test: Parallel Column Math\n");
+    let t6 = std::time::now_nanos();
+    let boosted = data.lazy().with_columns([
+        df::col("score").mul(df::lit(1.5)).alias("boosted")
+    ]).collect();
+    let t7 = std::time::now_nanos();
+    print("✅ Nyx execution Time: ");
+    print((t7 - t6) / 1000000);
+    print(" ms\n");
+
+    print("\n--------------------------------------------------\n");
+    print("🏁 BENCHMARK COMPLETE\n");
+}

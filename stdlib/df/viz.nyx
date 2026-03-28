@@ -1,0 +1,146 @@
+# Nyx Dataframe Engine: Visualization
+# Quick SVG-based plots via std::media::write_svg native.
+
+fn _svg_header(width, height) {
+    return "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + width + "\" height=\"" + height + "\" style=\"background:#1a1a2e;font-family:sans-serif\">"
+}
+
+fn _svg_footer() {
+    return "</svg>"
+}
+
+fn plot_line(df, x_col, y_col, path, options) {
+    if options == null { options = {} }
+    let width = 800
+    let height = 500
+    let pad = 60
+    if options.width != null { width = options.width }
+    if options.height != null { height = options.height }
+
+    let xc = df.col(x_col)
+    let yc = df.col(y_col)
+    if xc == null || yc == null { println("[df.viz] Column not found")  return false }
+
+    let n = xc._data.len()
+    if n < 2 { println("[df.viz] Need at least 2 points")  return false }
+
+    let x_min = std::df::col_min(xc._data)
+    let x_max = std::df::col_max(xc._data)
+    let y_min = std::df::col_min(yc._data)
+    let y_max = std::df::col_max(yc._data)
+    let x_range = x_max - x_min
+    let y_range = y_max - y_min
+    if x_range == 0 { x_range = 1 }
+    if y_range == 0 { y_range = 1 }
+
+    let svg = _svg_header(width, height)
+    svg = svg + "<text x=\"" + (width / 2) + "\" y=\"20\" fill=\"#eee\" text-anchor=\"middle\" font-size=\"14\">" + y_col + " vs " + x_col + "</text>"
+
+    # Build polyline points
+    let points_str = ""
+    let i = 0
+    while i < n {
+        let px = pad + ((xc._data[i] - x_min) / x_range) * (width - 2 * pad)
+        let py = (height - pad) - ((yc._data[i] - y_min) / y_range) * (height - 2 * pad)
+        if i > 0 { points_str = points_str + " " }
+        points_str = points_str + px + "," + py
+        i = i + 1
+    }
+    svg = svg + "<polyline points=\"" + points_str + "\" fill=\"none\" stroke=\"#7c3aed\" stroke-width=\"2\"/>"
+
+    # Axes
+    svg = svg + "<line x1=\"" + pad + "\" y1=\"" + (height - pad) + "\" x2=\"" + (width - pad) + "\" y2=\"" + (height - pad) + "\" stroke=\"#888\" stroke-width=\"1\"/>"
+    svg = svg + "<line x1=\"" + pad + "\" y1=\"" + pad + "\" x2=\"" + pad + "\" y2=\"" + (height - pad) + "\" stroke=\"#888\" stroke-width=\"1\"/>"
+
+    # Labels
+    svg = svg + "<text x=\"" + (width / 2) + "\" y=\"" + (height - 10) + "\" fill=\"#aaa\" text-anchor=\"middle\" font-size=\"12\">" + x_col + "</text>"
+
+    svg = svg + _svg_footer()
+    std::media::write_svg(path, svg)
+    return true
+}
+
+fn plot_bar(df, x_col, y_col, path, options) {
+    if options == null { options = {} }
+    let width = 800
+    let height = 500
+    let pad = 60
+    if options.width != null { width = options.width }
+    if options.height != null { height = options.height }
+
+    let xc = df.col(x_col)
+    let yc = df.col(y_col)
+    if xc == null || yc == null { println("[df.viz] Column not found")  return false }
+
+    let n = xc._data.len()
+    let y_max = std::df::col_max(yc._data)
+    let y_min = 0.0
+    let y_range = y_max - y_min
+    if y_range == 0 { y_range = 1 }
+
+    let bar_width = (width - 2 * pad) / n - 2
+
+    let svg = _svg_header(width, height)
+    svg = svg + "<text x=\"" + (width / 2) + "\" y=\"20\" fill=\"#eee\" text-anchor=\"middle\" font-size=\"14\">" + y_col + " by " + x_col + "</text>"
+
+    let i = 0
+    while i < n {
+        let bx = pad + i * ((width - 2 * pad) / n) + 1
+        let bar_h = ((yc._data[i] - y_min) / y_range) * (height - 2 * pad)
+        let by = (height - pad) - bar_h
+        svg = svg + "<rect x=\"" + bx + "\" y=\"" + by + "\" width=\"" + bar_width + "\" height=\"" + bar_h + "\" fill=\"#7c3aed\" rx=\"3\"/>"
+        # X label
+        svg = svg + "<text x=\"" + (bx + bar_width / 2) + "\" y=\"" + (height - pad + 14) + "\" fill=\"#aaa\" text-anchor=\"middle\" font-size=\"10\">" + xc._data[i] + "</text>"
+        i = i + 1
+    }
+
+    # Axes
+    svg = svg + "<line x1=\"" + pad + "\" y1=\"" + (height - pad) + "\" x2=\"" + (width - pad) + "\" y2=\"" + (height - pad) + "\" stroke=\"#888\" stroke-width=\"1\"/>"
+
+    svg = svg + _svg_footer()
+    std::media::write_svg(path, svg)
+    return true
+}
+
+fn plot_scatter(df, x_col, y_col, path, options) {
+    if options == null { options = {} }
+    let width = 800
+    let height = 500
+    let pad = 60
+    if options.width != null { width = options.width }
+    if options.height != null { height = options.height }
+
+    let xc = df.col(x_col)
+    let yc = df.col(y_col)
+    if xc == null || yc == null { println("[df.viz] Column not found")  return false }
+
+    let n = xc._data.len()
+    let x_min = std::df::col_min(xc._data)
+    let x_max = std::df::col_max(xc._data)
+    let y_min = std::df::col_min(yc._data)
+    let y_max = std::df::col_max(yc._data)
+    let x_range = x_max - x_min
+    let y_range = y_max - y_min
+    if x_range == 0 { x_range = 1 }
+    if y_range == 0 { y_range = 1 }
+
+    let svg = _svg_header(width, height)
+    svg = svg + "<text x=\"" + (width / 2) + "\" y=\"20\" fill=\"#eee\" text-anchor=\"middle\" font-size=\"14\">" + y_col + " vs " + x_col + "</text>"
+
+    let i = 0
+    while i < n {
+        let px = pad + ((xc._data[i] - x_min) / x_range) * (width - 2 * pad)
+        let py = (height - pad) - ((yc._data[i] - y_min) / y_range) * (height - 2 * pad)
+        svg = svg + "<circle cx=\"" + px + "\" cy=\"" + py + "\" r=\"4\" fill=\"#06b6d4\" fill-opacity=\"0.7\"/>"
+        i = i + 1
+    }
+
+    # Axes
+    svg = svg + "<line x1=\"" + pad + "\" y1=\"" + (height - pad) + "\" x2=\"" + (width - pad) + "\" y2=\"" + (height - pad) + "\" stroke=\"#888\" stroke-width=\"1\"/>"
+    svg = svg + "<line x1=\"" + pad + "\" y1=\"" + pad + "\" x2=\"" + pad + "\" y2=\"" + (height - pad) + "\" stroke=\"#888\" stroke-width=\"1\"/>"
+    svg = svg + "<text x=\"" + (width / 2) + "\" y=\"" + (height - 5) + "\" fill=\"#aaa\" text-anchor=\"middle\" font-size=\"12\">" + x_col + "</text>"
+
+    svg = svg + _svg_footer()
+    std::media::write_svg(path, svg)
+    return true
+}

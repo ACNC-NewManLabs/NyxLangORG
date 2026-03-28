@@ -1,0 +1,123 @@
+/**
+ * SQLite Database Driver
+ * 
+ * Provides SQLite database connectivity for file-based databases.
+ * 
+ * @module db::sqlite
+ */
+
+/**
+ * SQLite connection
+ */
+type Connection = {
+    type: string,
+    path: string,
+    connected: bool,
+    in_transaction: bool
+};
+
+/**
+ * Connect to SQLite
+ * 
+ * @param path - Path to SQLite database file
+ * @returns Connection
+ */
+fn connect(path: string) -> Connection {
+    // Try to open the database
+    let success = __native_sqlite_open(path);
+    return Connection {
+        type: "sqlite",
+        path: path,
+        connected: success,
+        in_transaction: false
+    };
+}
+
+/**
+ * Execute a query
+ * 
+ * @param conn - Connection
+ * @param sql - SQL query
+ * @param params - Query parameters
+ * @returns Query result
+ */
+fn query(conn: Connection, sql: string, params: List<any>) -> any {
+    // Native implementation handles query execution
+    return __native_sqlite_query(conn.path, sql, params);
+}
+
+/**
+ * Close connection
+ * 
+ * @param conn - Connection
+ */
+fn close(conn: Connection) {
+    conn.connected = false;
+}
+
+/**
+ * Begin transaction
+ * 
+ * @param conn - Connection
+ */
+fn begin(conn: Connection) {
+    conn.in_transaction = true;
+}
+
+/**
+ * Commit transaction
+ * 
+ * @param conn - Connection
+ */
+fn commit(conn: Connection) {
+    conn.in_transaction = false;
+}
+
+/**
+ * Rollback transaction
+ * 
+ * @param conn - Connection
+ */
+fn rollback(conn: Connection) {
+    conn.in_transaction = false;
+}
+
+/**
+ * Create a new database file
+ * 
+ * @param path - Path to create database at
+ * @returns Connection
+ */
+fn create(path: string) -> Connection {
+    return connect(path);
+}
+
+/**
+ * Check if database exists
+ * 
+ * @param path - Path to database
+ * @returns Whether database exists
+ */
+fn exists(path: string) -> bool {
+    // Use native function to check file existence
+    return __native_file_exists(path);
+}
+
+/**
+ * Get database file size
+ * 
+ * @param conn - Connection
+ * @returns File size in bytes
+ */
+fn size(conn: Connection) -> i64 {
+    if !conn.connected {
+        return 0;
+    }
+    return __native_file_size(conn.path);
+}
+
+// Native SQLite functions - implemented by VM/runtime
+fn __native_sqlite_open(path: string) -> bool;
+fn __native_sqlite_query(path: string, sql: string, params: List<any>) -> any;
+fn __native_file_exists(path: string) -> bool;
+fn __native_file_size(path: string) -> i64;

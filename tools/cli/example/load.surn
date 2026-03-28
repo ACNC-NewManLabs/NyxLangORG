@@ -1,0 +1,9 @@
+[package]
+name = "my_app"
+version = "0.1.0"
+
+[dependencies]
+jit = "0.0.5"
+crypto = { version = "0.1", features = ["fast"] }
+llvm = { git = "https://github.com/llvm/llvm-project" }
+local_lib = { path = "./libs/local_lib" }

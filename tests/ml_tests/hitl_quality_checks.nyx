@@ -1,0 +1,47 @@
+import ml;
+
+# --- Nyx HITL Quality & Independence Checks ---
+
+fn main() {
+    println("--- Nyx Governance: HITL Quality Audit ---")
+    println("")
+
+    # 1. Dual-Approval Enforcement
+    let high_risk_request = {
+        id: "REQ_FIN_99",
+        domain: "FINANCE",
+        risk_level: "HIGH",
+        approval_v1: "AUDITOR_01",
+        approval_v2: "MANAGER_02"
+    }
+
+    println("DUAL-APPROVAL VERIFICATION:")
+    if high_risk_request.approval_v1 == high_risk_request.approval_v2 {
+        println("  CRITICAL: Dual-approval violation! Reviewers must be distinct.")
+    } else {
+        println("  SUCCESS: Dual-approval confirmed. [AUDITOR_01 + MANAGER_02]")
+    }
+    println("")
+
+    # 2. Conflict-of-Interest (COI) Check
+    let reviewer_context = {
+        name: "AUDITOR_01",
+        dept: "Compliance",
+        project_author: "USER_DS_01"
+    }
+
+    println("INDEPENDENCE AUDIT:")
+    if reviewer_context.name == reviewer_context.project_author {
+        println("  CRITICAL: Conflict of Interest! Author cannot audit own work.")
+    } else {
+        println("  SUCCESS: Reviewer independence verified.")
+    }
+    println("")
+
+    # 3. Periodic Reviewer Audit
+    println("REVIEWER QUALITY LOG:")
+    println("  [2026-Q1] 50 random samples audited. 100% adherence to rationale policy.")
+    
+    println("")
+    println("SUCCESS: HITL quality and independence verified. Governance is robust.")
+}

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nyx Nexus — Executive Dashboard</title>
+  <meta name="description" content="Industrial-grade developer intelligence platform for the Nyx programming language ecosystem." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="nexus.css" />
+</head>
+<body>
+  <!-- Sidebar Navigation -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <span class="glyph">🌌</span>
+      <div>
+        <div class="brand-name">Nyx <span class="accent-text">Nexus</span></div>
+        <div class="brand-ver">v1.0 APEX</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </a>
+      <a href="#" class="nav-item" data-section="health">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Health Audit
+      </a>
+      <a href="#" class="nav-item" data-section="diagnostics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Diagnostics
+      </a>
+      <a href="#" class="nav-item" data-section="modules">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Architecture
+      </a>
+      <a href="#" class="nav-item" data-section="files">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        File Explorer
+      </a>
+      <a href="#" class="nav-item" data-section="vitals">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 7 13.5 7 10.5 3 1 3"/><polyline points="23 20 1 20"/><line x1="7" y1="3" x2="7" y2="20"/><line x1="11.5" y1="7" x2="11.5" y2="20"/><line x1="17" y1="11" x2="17" y2="20"/></svg>
+        System Vitals
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="ws-status" id="ws-badge">
+        <span class="ws-dot"></span>
+        <span id="ws-label">Connecting…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <div id="app">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-title" id="section-title">Overview</div>
+      <div class="topbar-right">
+        <div class="metric-chip">CPU <span id="tb-cpu">--</span>%</div>
+        <div class="metric-chip">RAM <span id="tb-ram">--</span> MB</div>
+        <div class="metric-chip">Uptime <span id="tb-uptime">--</span></div>
+        <button class="refresh-btn" id="refresh-btn" title="Refresh All">↻</button>
+      </div>
+    </header>
+
+    <!-- ── OVERVIEW ── -->
+    <section class="panel active" id="panel-overview">
+      <div class="stat-grid">
+        <div class="stat-card" id="sc-health">
+          <div class="sc-label">Health Score</div>
+          <div class="sc-value" id="ov-health">--</div>
+          <div class="sc-sub">Project Status</div>
+          <div class="sc-bar-wrap"><div class="sc-bar" id="ov-health-bar"></div></div>
+        </div>
+        <div class="stat-card" id="sc-files">
+          <div class="sc-label">Source Files</div>
+          <div class="sc-value" id="ov-files">--</div>
+          <div class="sc-sub"><span id="ov-nyx">--</span> Nyx • <span id="ov-rs">--</span> Rust</div>
+        </div>
+        <div class="stat-card" id="sc-lines">
+          <div class="sc-label">Lines of Code</div>
+          <div class="sc-value" id="ov-lines">--</div>
+          <div class="sc-sub">Across all source files</div>
+        </div>
+        <div class="stat-card" id="sc-procs">
+          <div class="sc-label">System Processes</div>
+          <div class="sc-value" id="ov-procs">--</div>
+          <div class="sc-sub">Running on host</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hdr">
+            <span>VM Heartbeat</span>
+            <span class="pulse-badge STABLE" id="ov-vibe">STABLE</span>
+          </div>
+          <div class="heartbeat-grid">
+            <div class="hb-item">
+              <div class="hb-label">CPU</div>
+              <div class="hb-bar-wrap"><div class="hb-bar cpu" id="hb-cpu"></div></div>
+              <div class="hb-val" id="hb-cpu-val">--</div>
+            </div>
+            <div class="hb-item">
+              <div class="hb-label">RAM</div>
+              <div class="hb-bar-wrap"><div class="hb-bar ram" id="hb-ram"></div></div>
+              <div class="hb-val" id="hb-ram-val">--</div>
+            </div>
+            <div class="hb-item">
+              <div class="hb-label">DISK</div>
+              <div class="hb-bar-wrap"><div class="hb-bar disk" id="hb-disk"></div></div>
+              <div class="hb-val" id="hb-disk-val">--</div>
+            </div>
+          </div>
+          <div class="pulse-ring-wrap">
+            <div class="pulse-ring" id="pulse-ring"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><span>Quick Health</span></div>
+          <ul id="ov-health-list" class="mini-checks"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── HEALTH AUDIT ── -->
+    <section class="panel" id="panel-health">
+      <div class="card full-card">
+        <div class="card-hdr">
+          <span>Ecosystem Health Audit</span>
+          <span class="badge" id="health-score-badge">--/100</span>
+        </div>
+        <div id="health-table" class="health-table">
+          <div class="loading-msg">Scanning environment…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── DIAGNOSTICS ── -->
+    <section class="panel" id="panel-diagnostics">
+      <div class="card full-card">
+        <div class="card-hdr">
+          <span>Source Diagnostics</span>
+          <div class="filter-row" id="diag-filters">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="Maintenance">TODO</button>
+            <button class="filter-btn" data-filter="Style">Style</button>
+            <button class="filter-btn" data-filter="System">System</button>
+          </div>
+        </div>
+        <div id="diag-list" class="diag-list">
+          <div class="loading-msg">Scanning source files…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ARCHITECTURE ── -->
+    <section class="panel" id="panel-modules">
+      <div class="two-col">
+        <div class="card" style="grid-column: span 2;">
+          <div class="card-hdr"><span>Module Architecture</span></div>
+          <div id="module-canvas-wrap">
+            <canvas id="module-canvas" width="900" height="400"></canvas>
+            <div id="module-legend" class="module-legend"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card full-card" style="margin-top:20px">
+        <div class="card-hdr"><span>Module Index</span></div>
+        <div id="module-table" class="module-table"></div>
+      </div>
+    </section>
+
+    <!-- ── FILES ── -->
+    <section class="panel" id="panel-files">
+      <div class="card full-card">
+        <div class="card-hdr">
+          <span>File Explorer</span>
+          <input id="file-search" class="search-input" type="text" placeholder="Filter files…" />
+        </div>
+        <div id="file-table" class="file-table">
+          <div class="loading-msg">Scanning filesystem…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── VITALS ── -->
+    <section class="panel" id="panel-vitals">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="sc-label">CPU Usage</div>
+          <div class="sc-value" id="v-cpu">--</div>
+          <div class="sc-sub">%</div>
+        </div>
+        <div class="stat-card">
+          <div class="sc-label">Memory Used</div>
+          <div class="sc-value" id="v-ram">--</div>
+          <div class="sc-sub" id="v-ram-pct">-- MB total</div>
+        </div>
+        <div class="stat-card">
+          <div class="sc-label">Disk Used</div>
+          <div class="sc-value" id="v-disk">--</div>
+          <div class="sc-sub" id="v-disk-total">-- GB total</div>
+        </div>
+        <div class="stat-card">
+          <div class="sc-label">Load Average</div>
+          <div class="sc-value" id="v-load">--</div>
+          <div class="sc-sub">1-min average</div>
+        </div>
+      </div>
+      <div class="card full-card" style="margin-top:20px">
+        <div class="card-hdr"><span>CPU History (Live)</span></div>
+        <canvas id="cpu-chart" class="cpu-chart" height="120"></canvas>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      Nyx Nexus &bull; Production-Grade Developer Intelligence Platform &bull; v1.0 Apex
+    </footer>
+  </div>
+
+  <script src="nexus.js"></script>
+</body>
+</html>

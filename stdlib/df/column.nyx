@@ -1,0 +1,285 @@
+# Nyx Dataframe Engine: Column
+# A typed, nullable, contiguous vector — the fundamental building block.
+# Dtypes: "int", "float", "bool", "str", "cat"
+# validity: bool array or null (null means all valid)
+
+fn Column(name, dtype, data, validity) {
+    if data == null { data = [] }
+    if dtype == null { dtype = "float" }
+    return {
+        _name: name,
+        _dtype: dtype,
+        _data: data,
+        _validity: validity,
+
+        # ── identity ────────────────────────────────────────────────
+        name: fn(self) { return self._name },
+        dtype: fn(self) { return self._dtype },
+        len: fn(self) { return self._data.len() },
+
+        # ── element access ───────────────────────────────────────────
+        get: fn(self, i) {
+            if self._validity != null {
+                if self._validity[i] == false { return null }
+            }
+            return self._data[i]
+        },
+
+        set: fn(self, i, v) {
+            self._data[i] = v
+            if self._validity != null {
+                self._validity[i] = (v != null)
+            }
+        },
+
+        is_null: fn(self, i) {
+            if self._validity == null { return false }
+            return self._validity[i] == false
+        },
+
+        null_count: fn(self) {
+            if self._validity == null { return 0 }
+            let count = 0
+            let i = 0
+            while i < self._validity.len() {
+                if self._validity[i] == false { count = count + 1 }
+                i = i + 1
+            }
+            return count
+        },
+
+        # ── slicing  (zero-copy view via index range) ────────────────
+        slice: fn(self, offset, length) {
+            let new_data = []
+            let new_validity = null
+            if self._validity != null { new_validity = [] }
+            let i = offset
+            while i < offset + length {
+                if i < self._data.len() {
+                    new_data.push(self._data[i])
+                    if new_validity != null { new_validity.push(self._validity[i]) }
+                }
+                i = i + 1
+            }
+            return Column(self._name, self._dtype, new_data, new_validity)
+        },
+
+        # ── bulk arithmetic (delegates to native SIMD kernels) ───────
+        add: fn(self, other) {
+            let result = std::df::col_add(self._data, other._data)
+            return Column(self._name, "float", result, null)
+        },
+
+        sub: fn(self, other) {
+            let result = std::df::col_sub(self._data, other._data)
+            return Column(self._name, "float", result, null)
+        },
+
+        mul: fn(self, other) {
+            let result = std::df::col_mul(self._data, other._data)
+            return Column(self._name, "float", result, null)
+        },
+
+        div: fn(self, other) {
+            let result = std::df::col_div(self._data, other._data)
+            return Column(self._name, "float", result, null)
+        },
+
+        add_scalar: fn(self, s) {
+            let scalars = []
+            let i = 0
+            while i < self._data.len() { scalars.push(s)  i = i + 1 }
+            let result = std::df::col_add(self._data, scalars)
+            return Column(self._name, self._dtype, result, null)
+        },
+
+        mul_scalar: fn(self, s) {
+            let scalars = []
+            let i = 0
+            while i < self._data.len() { scalars.push(s)  i = i + 1 }
+            let result = std::df::col_mul(self._data, scalars)
+            return Column(self._name, self._dtype, result, null)
+        },
+
+        # ── comparisons  (return bool Column) ───────────────────────
+        gt: fn(self, val) {
+            let mask = []
+            let i = 0
+            while i < self._data.len() {
+                mask.push(self._data[i] > val)
+                i = i + 1
+            }
+            return Column(self._name + "_gt", "bool", mask, null)
+        },
+
+        lt: fn(self, val) {
+            let mask = []
+            let i = 0
+            while i < self._data.len() {
+                mask.push(self._data[i] < val)
+                i = i + 1
+            }
+            return Column(self._name + "_lt", "bool", mask, null)
+        },
+
+        eq: fn(self, val) {
+            let mask = []
+            let i = 0
+            while i < self._data.len() {
+                mask.push(self._data[i] == val)
+                i = i + 1
+            }
+            return Column(self._name + "_eq", "bool", mask, null)
+        },
+
+        gte: fn(self, val) {
+            let mask = []
+            let i = 0
+            while i < self._data.len() {
+                mask.push(self._data[i] >= val)
+                i = i + 1
+            }
+            return Column(self._name + "_gte", "bool", mask, null)
+        },
+
+        lte: fn(self, val) {
+            let mask = []
+            let i = 0
+            while i < self._data.len() {
+                mask.push(self._data[i] <= val)
+                i = i + 1
+            }
+            return Column(self._name + "_lte", "bool", mask, null)
+        },
+
+        # ── filter: apply boolean column as mask ────────────────────
+        filter: fn(self, bool_col) {
+            let result = std::df::col_filter(self._data, bool_col._data)
+            let new_valid = null
+            if self._validity != null {
+                new_valid = std::df::col_filter(self._validity, bool_col._data)
+            }
+            return Column(self._name, self._dtype, result, new_valid)
+        },
+
+        # ── sort  (returns index array) ──────────────────────────────
+        argsort: fn(self, descending) {
+            if descending == null { descending = false }
+            return std::df::col_sort(self._data, descending)
+        },
+
+        # ── aggregations ─────────────────────────────────────────────
+        sum: fn(self) { return std::math::sum(self._data) },
+        mean: fn(self) { return std::math::mean(self._data) },
+        min: fn(self) { return std::df::col_min(self._data) },
+        max: fn(self) { return std::df::col_max(self._data) },
+        std: fn(self) { return std::df::col_std(self._data) },
+        count: fn(self) { return self._data.len() },
+
+        # ── null handling ────────────────────────────────────────────
+        fill_null: fn(self, value) {
+            let new_data = []
+            let i = 0
+            while i < self._data.len() {
+                if self.is_null(i) { new_data.push(value) }
+                else { new_data.push(self._data[i]) }
+                i = i + 1
+            }
+            return Column(self._name, self._dtype, new_data, null)
+        },
+
+        drop_nulls: fn(self) {
+            if self._validity == null { return self }
+            let new_data = []
+            let i = 0
+            while i < self._data.len() {
+                if self._validity[i] != false { new_data.push(self._data[i]) }
+                i = i + 1
+            }
+            return Column(self._name, self._dtype, new_data, null)
+        },
+
+        # ── cast ─────────────────────────────────────────────────────
+        cast: fn(self, new_dtype) {
+            let new_data = []
+            let i = 0
+            while i < self._data.len() {
+                let v = self._data[i]
+                if new_dtype == "float" {
+                    if v == null { new_data.push(0.0) }
+                    else { new_data.push(v * 1.0) }
+                } else if new_dtype == "int" {
+                    if v == null { new_data.push(0) }
+                    else { new_data.push(v * 1) }
+                } else if new_dtype == "str" {
+                    new_data.push("" + v)
+                } else if new_dtype == "bool" {
+                    new_data.push(v != 0 && v != false && v != null)
+                } else {
+                    new_data.push(v)
+                }
+                i = i + 1
+            }
+            return Column(self._name, new_dtype, new_data, self._validity)
+        },
+
+        # ── string operations (only valid for dtype=="str") ──────────
+        str_upper: fn(self) {
+            let new_data = []
+            let i = 0
+            while i < self._data.len() {
+                new_data.push(std::string::to_upper(self._data[i]))
+                i = i + 1
+            }
+            return Column(self._name, "str", new_data, self._validity)
+        },
+
+        str_lower: fn(self) {
+            let new_data = []
+            let i = 0
+            while i < self._data.len() {
+                new_data.push(std::string::to_lower(self._data[i]))
+                i = i + 1
+            }
+            return Column(self._name, "str", new_data, self._validity)
+        },
+
+        str_contains: fn(self, needle) {
+            let mask = []
+            let i = 0
+            while i < self._data.len() {
+                mask.push(std::string::contains(self._data[i], needle))
+                i = i + 1
+            }
+            return Column(self._name + "_contains", "bool", mask, null)
+        },
+
+        # ── rename ───────────────────────────────────────────────────
+        alias: fn(self, new_name) {
+            return Column(new_name, self._dtype, self._data, self._validity)
+        }
+    }
+}
+
+# ── convenience constructors ─────────────────────────────────────────────────
+
+fn col_from_range(name, start, stop) {
+    let data = []
+    let i = start
+    while i < stop { data.push(i)  i = i + 1 }
+    return Column(name, "int", data, null)
+}
+
+fn col_zeros(name, n) {
+    let data = []
+    let i = 0
+    while i < n { data.push(0.0)  i = i + 1 }
+    return Column(name, "float", data, null)
+}
+
+fn col_ones(name, n) {
+    let data = []
+    let i = 0
+    while i < n { data.push(1.0)  i = i + 1 }
+    return Column(name, "float", data, null)
+}

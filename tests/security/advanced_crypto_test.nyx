@@ -1,0 +1,116 @@
+// Nyx Advanced Cryptography Verification Test
+// Testing Argon2, HKDF, X25519, and HMAC.
+
+import crypto as c
+
+fn test_kdf() {
+    println("--- Testing KDF (Argon2, HKDF, PBKDF2) ---")
+    let password = std::string::as_bytes("correct horse battery staple")
+    let salt = c::random_bytes(16)
+    
+    // Argon2
+    let hash = c::argon2_hash(password, salt)
+    println("Argon2 Hash: {}", hash)
+    if c::argon2_verify(password, hash) {
+        println("✅ Argon2 verification: OK")
+    } else {
+        println("❌ Argon2 verification: FAILED")
+    }
+    
+    // HKDF
+    let ikm = c::random_bytes(32)
+    let info = std::string::as_bytes("session-123")
+    let derived = c::hkdf_expand(ikm, null, info, 32)
+    println("HKDF Derived Key: {}", c::to_hex(derived))
+    if std::bytes::len(derived) == 32 {
+        println("✅ HKDF expansion: OK")
+    }
+    
+    // PBKDF2
+    let pbk_key = c::pbkdf2_hmac(password, salt, 1000, 32)
+    println("PBKDF2 Key: {}", c::to_hex(pbk_key))
+    if std::bytes::len(pbk_key) == 32 {
+        println("✅ PBKDF2: OK")
+    }
+    println("")
+}
+
+fn test_key_exchange() {
+    println("--- Testing Key Exchange (X25519) ---")
+    
+    // Alice generates keypair
+    let alice_pair = c::x25519_generate()
+    let alice_sec = alice_pair[0]
+    let alice_pub = alice_pair[1]
+    
+    // Bob generates keypair
+    let bob_pair = c::x25519_generate()
+    let bob_sec = bob_pair[0]
+    let bob_pub = bob_pair[1]
+    
+    // Alice derives shared secret
+    let alice_shared = c::x25519_dh(alice_sec, bob_pub)
+    
+    // Bob derives shared secret
+    let bob_shared = c::x25519_dh(bob_sec, alice_pub)
+    
+    println("Alice Shared: {}", c::to_hex(alice_shared))
+    println("Bob Shared:   {}", c::to_hex(bob_shared))
+    
+    if c::to_hex(alice_shared) == c::to_hex(bob_shared) {
+        println("✅ X25519 Diffie-Hellman: OK")
+    } else {
+        println("❌ X25519 Diffie-Hellman: FAILED")
+    }
+    println("")
+}
+
+fn test_auth() {
+    println("--- Testing Hub Authentication (HMAC) ---")
+    let key = c::random_bytes(32)
+    let data = std::string::as_bytes("Integrity matters")
+    
+    let tag = c::hmac_sha256(key, data)
+    println("HMAC Tag: {}", c::to_hex(tag))
+    
+    if std::bytes::len(tag) == 32 {
+        println("✅ HMAC-SHA256: OK")
+    }
+    println("")
+}
+
+fn test_encoding() {
+    println("--- Testing Encoding (Base64, Hex) ---")
+    let original = c::random_bytes(24)
+    
+    let b64 = c::to_base64(original)
+    let hex = c::to_hex(original)
+    
+    println("Base64: {}", b64)
+    println("Hex:    {}", hex)
+    
+    let from_b64 = c::from_base64(b64)
+    let from_hex = c::from_hex(hex)
+    
+    if c::to_hex(from_b64) == hex {
+        if c::to_hex(from_hex) == hex {
+            println("✅ Base64/Hex Roundtrip: OK")
+        } else {
+            println("❌ Hex Roundtrip: FAILED")
+        }
+    } else {
+        println("❌ Base64 Roundtrip: FAILED")
+    }
+    println("")
+}
+
+fn main() {
+    println("=== Nyx Advanced Crypto Module Validation ===\n")
+    
+    test_kdf()
+    test_key_exchange()
+    test_auth()
+    test_encoding()
+    
+    println("=== Phase 5 Verification Complete ✅ ===")
+}

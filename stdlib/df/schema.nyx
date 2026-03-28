@@ -1,0 +1,152 @@
+# Nyx Dataframe Engine: Schema
+# Describes the structure of a DataFrame — typed, ordered field list.
+# Supports evolution: add, drop, project, rename columns.
+
+fn Schema(fields) {
+    # fields: [{name: str, dtype: str}]
+    if fields == null { fields = [] }
+    return {
+        _fields: fields,
+
+        # ── inspection ───────────────────────────────────────────────
+        len: fn(self) { return self._fields.len() },
+
+        names: fn(self) {
+            let out = []
+            let i = 0
+            while i < self._fields.len() {
+                out.push(self._fields[i].name)
+                i = i + 1
+            }
+            return out
+        },
+
+        dtypes: fn(self) {
+            let out = []
+            let i = 0
+            while i < self._fields.len() {
+                out.push(self._fields[i].dtype)
+                i = i + 1
+            }
+            return out
+        },
+
+        dtype_of: fn(self, name) {
+            let i = 0
+            while i < self._fields.len() {
+                if self._fields[i].name == name { return self._fields[i].dtype }
+                i = i + 1
+            }
+            return null
+        },
+
+        index_of: fn(self, name) {
+            let i = 0
+            while i < self._fields.len() {
+                if self._fields[i].name == name { return i }
+                i = i + 1
+            }
+            return -1
+        },
+
+        has: fn(self, name) {
+            let i = 0
+            while i < self._fields.len() {
+                if self._fields[i].name == name { return true }
+                i = i + 1
+            }
+            return false
+        },
+
+        # ── evolution ────────────────────────────────────────────────
+        with_column: fn(self, name, dtype) {
+            let new_fields = []
+            let i = 0
+            while i < self._fields.len() {
+                # overwrite existing if same name
+                if self._fields[i].name != name {
+                    new_fields.push(self._fields[i])
+                }
+                i = i + 1
+            }
+            new_fields.push({ name: name, dtype: dtype })
+            return Schema(new_fields)
+        },
+
+        drop_column: fn(self, name) {
+            let new_fields = []
+            let i = 0
+            while i < self._fields.len() {
+                if self._fields[i].name != name {
+                    new_fields.push(self._fields[i])
+                }
+                i = i + 1
+            }
+            return Schema(new_fields)
+        },
+
+        rename_column: fn(self, old_name, new_name) {
+            let new_fields = []
+            let i = 0
+            while i < self._fields.len() {
+                if self._fields[i].name == old_name {
+                    new_fields.push({ name: new_name, dtype: self._fields[i].dtype })
+                } else {
+                    new_fields.push(self._fields[i])
+                }
+                i = i + 1
+            }
+            return Schema(new_fields)
+        },
+
+        project: fn(self, names) {
+            let new_fields = []
+            let j = 0
+            while j < names.len() {
+                let i = 0
+                while i < self._fields.len() {
+                    if self._fields[i].name == names[j] {
+                        new_fields.push(self._fields[i])
+                    }
+                    i = i + 1
+                }
+                j = j + 1
+            }
+            return Schema(new_fields)
+        },
+
+        # ── equality ─────────────────────────────────────────────────
+        equals: fn(self, other) {
+            if self._fields.len() != other._fields.len() { return false }
+            let i = 0
+            while i < self._fields.len() {
+                if self._fields[i].name != other._fields[i].name { return false }
+                if self._fields[i].dtype != other._fields[i].dtype { return false }
+                i = i + 1
+            }
+            return true
+        },
+
+        to_string: fn(self) {
+            let parts = []
+            let i = 0
+            while i < self._fields.len() {
+                parts.push(self._fields[i].name + ":" + self._fields[i].dtype)
+                i = i + 1
+            }
+            return "Schema{" + std::string::join(parts, ", ") + "}"
+        }
+    }
+}
+
+# ── builders ──────────────────────────────────────────────────────────────────
+
+fn schema_from_columns(columns) {
+    let fields = []
+    let i = 0
+    while i < columns.len() {
+        fields.push({ name: columns[i]._name, dtype: columns[i]._dtype })
+        i = i + 1
+    }
+    return Schema(fields)
+}

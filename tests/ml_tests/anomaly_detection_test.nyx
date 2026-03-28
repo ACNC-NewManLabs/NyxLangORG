@@ -1,0 +1,108 @@
+import ml;
+import std::df;
+
+# --- Helper: Anomaly Detection ---
+
+fn get_stats(arr) {
+    let n = arr.len()
+    if n == 0 { return { mean: 0.0, std: 0.0 } }
+    
+    let sum = 0.0
+    let i = 0
+    while i < n { sum = sum + arr[i] i = i + 1 }
+    let mean = sum / n
+    
+    let sq_diff = 0.0
+    i = 0
+    while i < n {
+        let diff = arr[i] - mean
+        sq_diff = sq_diff + (diff * diff)
+        i = i + 1
+    }
+    let variance = sq_diff / n
+    let std = std::math::sqrt(variance)
+    return { mean: mean, std: std }
+}
+
+fn sort_array(arr) {
+    let indices = std::df::col_sort(arr, false)
+    let sorted = []
+    let i = 0
+    while i < indices.len() {
+        sorted.push(arr[indices[i]])
+        i = i + 1
+    }
+    return sorted
+}
+
+fn detect_zscore_outliers(arr, threshold) {
+    if threshold == null { threshold = 3.0 }
+    let stats = get_stats(arr)
+    let outliers = []
+    let i = 0
+    while i < arr.len() {
+        let z = (arr[i] - stats.mean) / stats.std
+        if z < 0 { z = 0.0 - z }
+        if z > threshold { outliers.push({ index: i, value: arr[i], z: z }) }
+        i = i + 1
+    }
+    return outliers
+}
+
+fn detect_iqr_outliers(arr) {
+    let n = arr.len()
+    if n < 4 { return [] }
+    let sorted = sort_array(arr)
+    
+    let q1_idx = n / 4
+    let q3_idx = (n * 3) / 4
+    let q1 = sorted[q1_idx]
+    let q3 = sorted[q3_idx]
+    let iqr = q3 - q1
+    
+    let lower = q1 - 1.5 * iqr
+    let upper = q3 + 1.5 * iqr
+    
+    let outliers = []
+    let i = 0
+    while i < arr.len() {
+        let val = arr[i]
+        if val < lower || val > upper {
+            outliers.push({ index: i, value: val })
+        }
+        i = i + 1
+    }
+    return outliers
+}
+
+# --- Test Case ---
+
+fn test_anomalies() {
+    println("--- Testing Outlier & Anomaly Detection (Z-Score & IQR) ---")
+    
+    # 1. Normal data with extreme outliers
+    let data = [1.0, 1.2, 0.9, 1.1, 1.0, 50.0, 0.8, 1.2, -40.0, 1.0]
+    
+    println("Checking Z-Score outliers (threshold=3.0)...")
+    let z_out = detect_zscore_outliers(data, 2.0) # lower threshold for small sample
+    let i = 0
+    while i < z_out.len() {
+        println("  FOUND: val=", z_out[i].value, " at index ", z_out[i].index)
+        i = i + 1
+    }
+    
+    println("Checking IQR outliers...")
+    let iqr_out = detect_iqr_outliers(data)
+    let i = 0
+    while i < iqr_out.len() {
+        println("  FOUND: val=", iqr_out[i].value, " at index ", iqr_out[i].index)
+        i = i + 1
+    }
+    
+    if z_out.len() >= 2 { println("SUCCESS: Z-Score detected extreme values") }
+    if iqr_out.len() >= 2 { println("SUCCESS: IQR detected extreme values") }
+}
+
+fn main() {
+    test_anomalies()
+}

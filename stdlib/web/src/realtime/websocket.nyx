@@ -1,0 +1,358 @@
+// Nyx Web Real-time - WebSocket
+// WebSocket connections and real-time communication
+
+// WebSocket message
+struct WSMessage {
+    type: string
+    payload: any
+    channel: string
+    timestamp: u64
+    sender: string
+}
+
+// WebSocket frame
+struct WSFrame {
+    opcode: u8
+    payload: bytes
+    fin: bool
+    rsv1: bool
+    rsv2: bool
+    rsv3: bool
+}
+
+// WebSocket opcodes
+enum WSOpcode {
+    Continuation = 0
+    Text = 1
+    Binary = 2
+    Close = 8
+    Ping = 9
+    Pong = 10
+}
+
+// WebSocket connection
+struct WSConnection {
+    id: string
+    socket: TcpSocket
+    state: WSState
+    channels: List<string>
+    metadata: Map<string, any>
+}
+
+// WebSocket state
+enum WSState {
+    Connecting
+    Open
+    Closing
+    Closed
+}
+
+// WebSocket server
+struct WebSocketServer {
+    host: string
+    port: u32
+    connections: Map<string, WSConnection>
+    channels: Map<string, List<string>>
+    handlers: Map<string, WSHandler>
+}
+
+// WebSocket handler
+type WSHandler = fn(WSConnection, WSMessage) -> ()
+
+// Channel subscriber
+struct Subscriber {
+    connection_id: string
+    channel: string
+    subscribed_at: u64
+}
+
+// Create new WebSocket server
+fn new_ws_server(host: string, port: u32) -> WebSocketServer {
+    return WebSocketServer {
+        host: host
+        port: port
+        connections: Map::new()
+        channels: Map::new()
+        handlers: Map::new()
+    }
+}
+
+// Handle new connection
+fn on_connection(server: WebSocketServer, handler: fn(WSConnection) -> ()) {
+    server.handlers.insert("connection", handler)
+}
+
+// Handle message
+fn on_message(server: WebSocketServer, handler: fn(WSConnection, WSMessage) -> ()) {
+    server.handlers.insert("message", handler)
+}
+
+// Handle close
+fn on_close(server: WebSocketServer, handler: fn(WSConnection) -> ()) {
+    server.handlers.insert("close", handler)
+}
+
+// Handle error
+fn on_error(server: WebSocketServer, handler: fn(WSConnection, Error) -> ()) {
+    server.handlers.insert("error", handler)
+}
+
+// Broadcast to channel
+fn broadcast(server: WebSocketServer, channel: string, message: WSMessage) {
+    let subscribers = server.channels.get(channel)
+    
+    match subscribers {
+        Some(subs) => {
+            for conn_id in subs {
+                let conn = server.connections.get(conn_id)
+                match conn {
+                    Some(c) => {
+                        send(c, message)
+                    }
+                    None => {}
+                }
+            }
+        }
+        None => {}
+    }
+}
+
+// Broadcast to all
+fn broadcast_all(server: WebSocketServer, message: WSMessage) {
+    for conn_id in server.connections.keys() {
+        let conn = server.connections.get(conn_id)
+        match conn {
+            Some(c) => {
+                send(c, message)
+            }
+            None => {}
+        }
+    }
+}
+
+// Send message to connection
+fn send(conn: WSConnection, message: WSMessage) {
+    let payload = json::serialize(message)
+    let frame = encode_frame(WSOpcode::Text, payload.to_bytes())
+    conn.socket.write(frame)
+}
+
+// Send text
+fn send_text(conn: WSConnection, text: string) {
+    let frame = encode_frame(WSOpcode::Text, text.to_bytes())
+    conn.socket.write(frame)
+}
+
+// Send binary
+fn send_binary(conn: WSConnection, data: bytes) {
+    let frame = encode_frame(WSOpcode::Binary, data)
+    conn.socket.write(frame)
+}
+
+// Send ping
+fn send_ping(conn: WSConnection) {
+    let frame = encode_frame(WSOpcode::Ping, bytes::new())
+    conn.socket.write(frame)
+}
+
+// Send pong
+fn send_pong(conn: WSConnection, data: bytes) {
+    let frame = encode_frame(WSOpcode::Pong, data)
+    conn.socket.write(frame)
+}
+
+// Close connection
+fn close(conn: WSConnection, code: u16 = 1000, reason: string = "") {
+    conn.state = WSState::Closing
+    
+    let payload = bytes::new()
+    // Add close code and reason
+    
+    let frame = encode_frame(WSOpcode::Close, payload)
+    conn.socket.write(frame)
+    conn.state = WSState::Closed
+}
+
+// Subscribe to channel
+fn subscribe(conn: WSConnection, channel: string) {
+    if !conn.channels.contains(channel) {
+        conn.channels.push(channel)
+    }
+}
+
+// Unsubscribe from channel
+fn unsubscribe(conn: WSConnection, channel: string) {
+    conn.channels = conn.channels.filter(fn(c: string) -> c != channel)
+}
+
+// Encode WebSocket frame
+fn encode_frame(opcode: WSOpcode, payload: bytes) -> bytes {
+    let frame = bytes::new()
+    
+    // First byte: FIN + RSV1-3 + OPCODE
+    let first: u8 = 0x80 | (opcode as u8)
+    frame.push(first)
+    
+    // Second byte: MASK + payload length
+    let payload_len = payload.length()
+    
+    if payload_len < 126 {
+        frame.push(payload_len as u8)
+    } else if payload_len < 65536 {
+        frame.push(126)
+        frame.push((payload_len >> 8) as u8)
+        frame.push((payload_len & 0xFF) as u8)
+    } else {
+        frame.push(127)
+        // 64-bit length
+        for i in 0..8 {
+            frame.push((payload_len >> (56 - i * 8)) as u8)
+        }
+    }
+    
+    // Add payload
+    frame.extend(payload)
+    
+    return frame
+}
+
+// Decode WebSocket frame
+fn decode_frame(data: bytes) -> Option<WSFrame> {
+    if data.length() < 2 {
+        return Option::none()
+    }
+    
+    let first = data[0]
+    let fin = (first & 0x80) != 0
+    let opcode = first & 0x0F
+    
+    let second = data[1]
+    let masked = (second & 0x80) != 0
+    let mut payload_len = (second & 0x7F) as u64
+    
+    let mut offset = 2
+    
+    // Extended payload length
+    if payload_len == 126 {
+        if data.length() < 4 { return Option::none() }
+        payload_len = ((data[2] as u64) << 8) | (data[3] as u64)
+        offset = 4
+    } else if payload_len == 127 {
+        if data.length() < 10 { return Option::none() }
+        payload_len = 0
+        for i in 0..8 {
+            payload_len = (payload_len << 8) | (data[2 + i] as u64)
+        }
+        offset = 10
+    }
+    
+    // Masking key
+    let mask_key = bytes::new()
+    if masked {
+        if data.length() < offset + 4 { return Option::none() }
+        for i in 0..4 {
+            mask_key.push(data[offset + i])
+        }
+        offset = offset + 4
+    }
+    
+    // Payload
+    if data.length() < offset + payload_len as usize {
+        return Option::none()
+    }
+    
+    let mut payload = data.slice(offset, offset + payload_len as usize)
+    
+    // Unmask
+    if masked {
+        for i in 0..payload.length() {
+            payload[i] = payload[i] ^ mask_key[i % 4]
+        }
+    }
+    
+    return Option::some(WSFrame {
+        opcode: opcode
+        payload: payload
+        fin: fin
+        rsv1: (first & 0x40) != 0
+        rsv2: (first & 0x20) != 0
+        rsv3: (first & 0x10) != 0
+    })
+}
+
+// Create WebSocket upgrade response
+fn create_upgrade_response(key: string) -> string {
+    let accept = base64_encode(sha1(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+    
+    return "HTTP/1.1 101 Switching Protocols\r\n" +
+        "Upgrade: websocket\r\n" +
+        "Connection: Upgrade\r\n" +
+        "Sec-WebSocket-Accept: " + accept + "\r\n" +
+        "\r\n"
+}
+
+// Parse WebSocket handshake request
+fn parse_handshake(request: string) -> Option<Map<string, string>> {
+    let headers = Map::new()
+    let lines = request.split("\r\n")
+    
+    for line in lines {
+        let parts = line.split(": ")
+        if parts.len() >= 2 {
+            headers.insert(parts[0].to_lower(), parts[1].trim())
+        }
+    }
+    
+    if headers.contains("upgrade") && headers.get("upgrade").to_lower() == "websocket" {
+        return Option::some(headers)
+    }
+    
+    return Option::none()
+}
+
+// Get connection ID
+fn get_connection_id(conn: WSConnection) -> string {
+    return conn.id
+}
+
+// Get connection state
+fn get_state(conn: WSConnection) -> WSState {
+    return conn.state
+}
+
+// Is connected
+fn is_connected(conn: WSConnection) -> bool {
+    return conn.state == WSState::Open
+}
+
+export WSMessage
+export WSFrame
+export WSOpcode
+export WSConnection
+export WSState
+export WebSocketServer
+export Subscriber
+export WSHandler
+export new_ws_server
+export on_connection
+export on_message
+export on_close
+export on_error
+export broadcast
+export broadcast_all
+export send
+export send_text
+export send_binary
+export send_ping
+export send_pong
+export close
+export subscribe
+export unsubscribe
+export encode_frame
+export decode_frame
+export create_upgrade_response
+export parse_handshake
+export get_connection_id
+export get_state
+export is_connected
+

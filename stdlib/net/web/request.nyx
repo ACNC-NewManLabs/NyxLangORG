@@ -1,0 +1,181 @@
+/**
+ * Web Request Module
+ * 
+ * Provides Request type for the web framework with convenient accessors.
+ * 
+ * @module web::request
+ */
+
+/**
+ * Request type - wraps HTTP request with convenient methods
+ */
+type Request = {
+    method: string,
+    path: string,
+    query: Map<string, string>,
+    params: Map<string, string>,
+    headers: Map<string, string>,
+    body: any,
+    cookies: Map<string, string>,
+    ip: string,
+    hostname: string,
+    proto: string,
+    original: any
+};
+
+/**
+ * Get a query parameter
+ * 
+ * @param req - The request
+ * @param name - Parameter name
+ * @param default_value - Default value if not found
+ * @returns The parameter value
+ * 
+ * @example
+ * let page = req.query("page", "1");
+ */
+fn query(req: Request, name: string, default_value?: string) -> string {
+    if name in req.query {
+        return req.query[name];
+    }
+    if default_value != none {
+        return default_value as string;
+    }
+    return "";
+}
+
+/**
+ * Get a path parameter
+ * 
+ * @param req - The request
+ * @param name - Parameter name
+ * @returns The parameter value
+ * 
+ * @example
+ * let user_id = req.param("id");
+ */
+fn param(req: Request, name: string) -> string {
+    if name in req.params {
+        return req.params[name];
+    }
+    return "";
+}
+
+/**
+ * Get a header value
+ * 
+ * @param req - The request
+ * @param name - Header name
+ * @returns The header value
+ * 
+ * @example
+ * let auth = req.header("Authorization");
+ */
+fn header(req: Request, name: string) -> string {
+    let lower_name = to_lower(name);
+    for key in req.headers {
+        if to_lower(key) == lower_name {
+            return req.headers[key];
+        }
+    }
+    return "";
+}
+
+/**
+ * Get a cookie value
+ * 
+ * @param req - The request
+ * @param name - Cookie name
+ * @returns The cookie value
+ * 
+ * @example
+ * let session = req.cookie("session_id");
+ */
+fn cookie(req: Request, name: string) -> string {
+    if name in req.cookies {
+        return req.cookies[name];
+    }
+    return "";
+}
+
+/**
+ * Check if request is JSON
+ * 
+ * @param req - The request
+ * @returns Whether the request has JSON content
+ */
+fn is_json(req: Request) -> bool {
+    let content_type = header(req, "Content-Type");
+    return contains(content_type, "application/json");
+}
+
+/**
+ * Check if request is AJAX
+ * 
+ * @param req - The request
+ * @returns Whether the request is AJAX
+ */
+fn is_ajax(req: Request) -> bool {
+    return header(req, "X-Requested-With") == "XMLHttpRequest";
+}
+
+/**
+ * Get the request's IP address
+ * 
+ * @param req - The request
+ * @returns The IP address
+ */
+fn ip(req: Request) -> string {
+    // Check for forwarded IP first
+    let forwarded = header(req, "X-Forwarded-For");
+    if forwarded != "" {
+        return split(forwarded, ",")[0];
+    }
+    return req.ip;
+}
+
+/**
+ * Get the request's full URL
+ * 
+ * @param req - The request
+ * @returns The full URL
+ */
+fn url(req: Request) -> string {
+    return req.proto + "://" + req.hostname + req.path;
+}
+
+/**
+ * Get the request's Accept header
+ * 
+ * @param req - The request
+ * @returns The Accept header value
+ */
+fn accept(req: Request) -> string {
+    return header(req, "Accept");
+}
+
+/**
+ * Check if request accepts a content type
+ * 
+ * @param req - The request
+ * @param content_type - Content type to check
+ * @returns Whether the content type is accepted
+ */
+fn accepts(req: Request, content_type: string) -> bool {
+    let accept_header = accept(req);
+    return contains(accept_header, content_type) || accept_header == "*/*";
+}
+
+// Helper functions
+
+fn to_lower(s: string) -> string {
+    return s;  // Placeholder
+}
+
+fn contains(s: string, substr: string) -> bool {
+    return s != "";  // Placeholder
+}
+
+fn split(s: string, delim: string) -> List<string> {
+    return [s];  // Placeholder
+}

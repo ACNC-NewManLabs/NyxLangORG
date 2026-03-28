@@ -1,0 +1,108 @@
+import ml;
+import std::df;
+
+# --- Helper: Data Preprocessing ---
+
+fn StandardScaler() {
+    return {
+        _means: {},
+        _stds: {},
+        
+        fit: fn(self, df, cols) {
+            let i = 0
+            while i < cols.len() {
+                let name = cols[i]
+                let col = df.col(name)
+                if col != null {
+                    let desc = std::df::col_describe(col._data)
+                    self._means[name] = desc.mean
+                    self._stds[name] = desc.std
+                    if self._stds[name] == 0 { self._stds[name] = 1.0 } # Avoid div by zero
+                }
+                i = i + 1
+            }
+        },
+        
+        transform: fn(self, df, cols) {
+            let new_cols = []
+            let i = 0
+            while i < df._columns.len() {
+                let col = df._columns[i]
+                let name = col._name
+                
+                # Check if this column should be transformed
+                let should_transform = false
+                let j = 0
+                while j < cols.len() { if cols[j] == name { should_transform = true } j = j + 1 }
+                
+                if should_transform && self._means[name] != null {
+                    let m = self._means[name]
+                    let s = self._stds[name]
+                    
+                    # (val - mean) / std
+                    let data = col._data
+                    let new_data = []
+                    let k = 0
+                    while k < data.len() {
+                        if data[k] == null { new_data.push(null) }
+                        else { new_data.push((data[k] - m) / s) }
+                        k = k + 1
+                    }
+                    new_cols.push(std::df::Column(name, "float", new_data, col._validity))
+                } else {
+                    new_cols.push(col)
+                }
+                i = i + 1
+            }
+            return std::df::DataFrame(new_cols, null)
+        }
+    }
+}
+
+# --- Test Case ---
+
+fn test_feature_consistency() {
+    println("--- Testing Feature Consistency Foundation ---")
+    
+    # 1. Training Data
+    let train_col = std::df::Column("feat", "float", [10.0, 20.0, 30.0], null)
+    let df_train = std::df::DataFrame([train_col], null)
+    
+    # 2. Fit Scaler
+    let scaler = StandardScaler()
+    scaler.fit(df_train, ["feat"])
+    println("Scaler fitted. Mean: ", scaler._means["feat"], ", Std: ", scaler._stds["feat"])
+    
+    # 3. Serving Data (single sample)
+    # Target value: 20.0 should become 0.0 (since mean is 20.0)
+    let serve_col = std::df::Column("feat", "float", [20.0], null)
+    let df_serve = std::df::DataFrame([serve_col], null)
+    
+    # 4. Transform
+    let df_transformed = scaler.transform(df_serve, ["feat"])
+    let result = df_transformed.col("feat").get(0)
+    
+    println("Serving value 20.0 transformed to: ", result)
+    
+    if result == 0.0 {
+        println("SUCCESS: Feature transformation is consistent")
+    } else {
+        println("FAIL: Transformation mismatch. Expected 0.0, got ", result)
+    }
+    
+    # 5. Out of distribution sample
+    let ood_col = std::df::Column("feat", "float", [40.0], null)
+    let df_ood = std::df::DataFrame([ood_col], null)
+    let res_ood = scaler.transform(df_ood, ["feat"]).col("feat").get(0)
+    # Expected: (40 - 20) / 10 = 2.0
+    println("Serving value 40.0 transformed to: ", res_ood)
+    if res_ood == 2.0 {
+        println("SUCCESS: Out-of-distribution consistency verified")
+    } else {
+        println("FAIL: OOD transformation mismatch")
+    }
+}
+
+fn main() {
+    test_feature_consistency()
+}

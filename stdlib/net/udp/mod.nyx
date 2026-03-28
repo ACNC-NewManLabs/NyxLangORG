@@ -1,0 +1,50 @@
+/**
+ * UDP Module
+ * 
+ * Provides UDP server and client functionality for datagram-based communication.
+ * 
+ * @module udp
+ * @version 1.0.0
+ */
+
+mod server;
+
+/**
+ * UDP Server type
+ */
+type UdpServer = server::UdpServer;
+
+/**
+ * UDP Packet type
+ */
+type UdpPacket = server::UdpPacket;
+
+/**
+ * UDP Client type
+ */
+type UdpClient = server::UdpClient;
+
+/**
+ * Create a new UDP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to bind to
+ * @returns A new UDP server instance
+ * 
+ * @example
+ * let server = UdpServer(host="0.0.0.0", port=9000);
+ * server.on_message(handle_packet);
+ * server.start();
+ */
+fn UdpServer(host: string, port: i64) -> UdpServer {
+    return server::create(host, port);
+}
+
+/**
+ * Create a UDP client
+ * 
+ * @returns A new UDP client
+ */
+fn UdpClient() -> UdpClient {
+    return server::create_client();
+}

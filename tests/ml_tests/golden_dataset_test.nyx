@@ -1,0 +1,54 @@
+import ml;
+import std::df;
+
+# --- Helper: Golden Test ---
+
+fn evaluate_golden(y_true, y_pred, name) {
+    let n = y_true.len()
+    let correct = 0
+    let i = 0
+    while i < n {
+        if y_true[i] == y_pred[i] { correct = correct + 1 }
+        i = i + 1
+    }
+    let acc = correct * 1.0 / n
+    println("Evaluation on Golden Dataset '", name, "':")
+    println("  Accuracy: ", acc)
+    return acc
+}
+
+# --- Test Case ---
+
+fn test_golden() {
+    println("--- Testing Golden Dataset Certification ---")
+    
+    # In a real scenario, this would load a fixed CSV or binary
+    let golden_feat = [0.1, 0.9, 0.4, 0.6, 0.2]
+    let golden_true = [0, 1, 0, 1, 0]
+    
+    # 1. Model A (Certified)
+    let pred_A = [0, 1, 0, 1, 0] # 100% accuracy
+    
+    # 2. Model B (Failing certification)
+    let pred_B = [0, 0, 0, 0, 0] # 60% accuracy
+    
+    let threshold = 0.9 # Min 90% required on golden set
+    
+    let acc_A = evaluate_golden(golden_true, pred_A, "Benchmark_v1.0")
+    if acc_A >= threshold {
+        println("SUCCESS: Model A certified on golden dataset")
+    } else {
+        println("FAIL: Model A failed certification")
+    }
+    
+    let acc_B = evaluate_golden(golden_true, pred_B, "Benchmark_v1.0")
+    if acc_B >= threshold {
+        println("SUCCESS: Model B certified on golden dataset")
+    } else {
+        println("FAIL: Model B failed certification (Below ", threshold, " threshold)")
+    }
+}
+
+fn main() {
+    test_golden()
+}

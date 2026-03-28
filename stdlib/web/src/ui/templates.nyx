@@ -1,0 +1,352 @@
+// Nyx Web UI - Templates
+// Template rendering engine
+
+// Template
+struct Template {
+    name: string
+    source: string
+    blocks: Map<string, TemplateBlock>
+    extends: string
+    imports: List<string>
+}
+
+// Template block
+struct TemplateBlock {
+    name: string
+    content: string
+    super_block: string
+}
+
+// Template context
+struct TemplateContext {
+    variables: Map<string, any>
+    helpers: Map<string, fn(any) -> string>
+    partials: Map<string, Template>
+    blocks: Map<string, TemplateBlock>
+}
+
+// Template engine
+struct TemplateEngine {
+    templates: Map<string, Template>
+    cache_enabled: bool
+    auto_escape: bool
+}
+
+// Create new template engine
+fn new_template_engine() -> TemplateEngine {
+    return TemplateEngine {
+        templates: Map::new()
+        cache_enabled: true
+        auto_escape: true
+    }
+}
+
+// Add template to engine
+fn add_template(engine: TemplateEngine, name: string, source: string) {
+    let template = parse_template(name, source)
+    engine.templates.insert(name, template)
+}
+
+// Parse template source
+fn parse_template(name: string, source: string) -> Template {
+    let template = Template {
+        name: name
+        source: source
+        blocks: Map::new()
+        extends: ""
+        imports: List::new()
+    }
+    
+    // Parse extends
+    if source.starts_with("{% extends ") {
+        let end = source.index_of("%}")
+        let extends_line = source.substring(11, end - 2).trim()
+        template.extends = parse_template_string(extends_line)
+    }
+    
+    // Parse blocks
+    let block_start = "{% block "
+    let block_end = "{% endblock %}"
+    let pos = 0
+    
+    while true {
+        let start = source.index_of_from(block_start, pos)
+        if start == -1 { break }
+        
+        let name_start = start + block_start.length()
+        let name_end = source.index_of_from("%}", name_start)
+        let block_name = source.substring(name_start, name_end).trim()
+        
+        let content_start = name_end + 2
+        let content_end = source.index_of_from(block_end, content_start)
+        let content = source.substring(content_start, content_end).trim()
+        
+        let block = TemplateBlock {
+            name: block_name
+            content: content
+            super_block: ""
+        }
+        
+        template.blocks.insert(block_name, block)
+        pos = content_end + block_end.length()
+    }
+    
+    return template
+}
+
+// Parse template string
+fn parse_template_string(s: string) -> string {
+    // Remove quotes
+    return s.trim().trim_start("\"").trim_end("\"")
+}
+
+// Render template
+fn render_template(engine: TemplateEngine, name: string, context: Map<string, any>) -> string {
+    let template = engine.templates.get(name)
+    
+    match template {
+        Some(t) => {
+            return render(t, context, engine)
+        }
+        None => {
+            return "Template not found: " + name
+        }
+    }
+}
+
+// Render template with context
+fn render(template: Template, context: Map<string, any>, engine: TemplateEngine) -> string {
+    // If extends another template
+    if template.extends != "" {
+        let parent = engine.templates.get(template.extends)
+        match parent {
+            Some(p) => {
+                // Merge blocks
+                let merged_context = Map::new()
+                for key in context.keys() {
+                    merged_context.insert(key, context.get(key))
+                }
+                merged_context.insert("_blocks", template.blocks)
+                return render(p, merged_context, engine)
+            }
+            None => {}
+        }
+    }
+    
+    let result = template.source
+    
+    // Replace variables {{ variable }}
+    result = replace_variables(result, context)
+    
+    // Process blocks
+    for block_name in template.blocks.keys() {
+        let block = template.blocks.get(block_name)
+        let block_pattern = "{% block " + block_name + "%}" + "[\\s\\S]*?" + "{% endblock %}"
+        // For simplicity, replace block tags with content
+        result = result.replace("{% block " + block_name + "%}", "")
+        result = result.replace("{% endblock %}", "")
+    }
+    
+    // Process includes
+    result = process_includes(result, context, engine)
+    
+    // Process conditionals {% if condition %} ... {% endif %}
+    result = process_conditionals(result, context)
+    
+    // Process loops {% for item in items %} ... {% endfor %}
+    result = process_loops(result, context)
+    
+    // Process filters {{ value | filter }}
+    result = process_filters(result, context)
+    
+    return result
+}
+
+// Replace variables in template
+fn replace_variables(source: string, context: Map<string, any>) -> string {
+    let result = source
+    let pattern = "\\{\\{([^}]+)\\}\\}"
+    
+    // Simple variable replacement
+    let start = 0
+    while true {
+        let var_start = result.index_of_from("{{", start)
+        if var_start == -1 { break }
+        
+        let var_end = result.index_of_from("}}", var_start)
+        if var_end == -1 { break }
+        
+        let var_name = result.substring(var_start + 2, var_end).trim()
+        let value = get_nested_value(context, var_name)
+        
+        result = result.substring(0, var_start) + value + result.substring(var_end + 2)
+        start = var_start + value.length()
+    }
+    
+    return result
+}
+
+// Process includes
+fn process_includes(source: string, context: Map<string, any>, engine: TemplateEngine) -> string {
+    let result = source
+    let pos = 0
+    
+    while true {
+        let include_start = result.index_of_from("{% include ", pos)
+        if include_start == -1 { break }
+        
+        let name_start = include_start + 11
+        let name_end = result.index_of_from("%}", name_start)
+        let template_name = parse_template_string(result.substring(name_start, name_end))
+        
+        let included = render_template(engine, template_name, context)
+        
+        result = result.substring(0, include_start) + included + result.substring(name_end + 2)
+        pos = include_start + included.length()
+    }
+    
+    return result
+}
+
+// Process conditionals
+fn process_conditionals(source: string, context: Map<string, any>) -> string {
+    let result = source
+    
+    // Simple if/else/endif processing
+    let if_pattern = "{% if ([^%]+) %}"
+    let elseif_pattern = "{% elseif ([^%]+) %}"
+    let else_pattern = "{% else %}"
+    let endif_pattern = "{% endif %}"
+    
+    // This is a simplified implementation
+    // Full implementation would require more complex parsing
+    
+    return result
+}
+
+// Process loops
+fn process_loops(source: string, context: Map<string, any>) -> string {
+    let result = source
+    
+    // Simple for loop processing
+    // {% for item in items %} ... {% endfor %}
+    
+    return result
+}
+
+// Process filters
+fn process_filters(source: string, context: Map<string, any>) -> string {
+    let result = source
+    
+    // Process filters like {{ name | upper }}
+    let filter_pattern = "\\|(\\w+)"
+    
+    return result
+}
+
+// Template helpers
+fn upper(value: string) -> string {
+    return value.to_upper()
+}
+
+fn lower(value: string) -> string {
+    return value.to_lower()
+}
+
+fn capitalize(value: string) -> string {
+    if value.length() == 0 { return value }
+    return value[0].to_upper() + value.substring(1).to_lower()
+}
+
+fn truncate(value: string, length: u32) -> string {
+    if value.length() <= length { return value }
+    return value.substring(0, length) + "..."
+}
+
+fn default(value: any, default_value: any) -> any {
+    if value == null || value == "" {
+        return default_value
+    }
+    return value
+}
+
+fn join(items: List<string>, separator: string) -> string {
+    return items.join(separator)
+}
+
+fn length(items: any) -> u32 {
+    match items {
+        List(l) => return l.len()
+        String(s) => return s.length()
+        Map(m) => return m.keys().len()
+        _ => return 0
+    }
+}
+
+fn escape_html(value: string) -> string {
+    return value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;")
+}
+
+fn escape_url(value: string) -> string {
+    return url_encode(value)
+}
+
+// Register helper
+fn register_helper(engine: TemplateEngine, name: string, helper: fn(any) -> string) {
+    engine.templates.insert("_helper:" + name, Template {
+        name: name
+        source: ""
+        blocks: Map::new()
+        extends: ""
+        imports: List::new()
+    })
+}
+
+// Template inheritance
+fn extends(parent: string) -> string {
+    return "{% extends " + parent + " %}"
+}
+
+fn block(name: string) -> string {
+    return "{% block " + name + " %}"
+}
+
+fn endblock() -> string {
+    return "{% endblock %}"
+}
+
+fn super_block() -> string {
+    return "{{ super() }}"
+}
+
+fn include(template: string) -> string {
+    return "{% include " + template + " %}"
+}
+
+export Template
+export TemplateBlock
+export TemplateContext
+export TemplateEngine
+export new_template_engine
+export add_template
+export render_template
+export render
+export upper
+export lower
+export capitalize
+export default as default_value
+export join
+export length
+export escape_html
+export escape_url
+export register_helper
+export extends
+export block
+export endblock
+export super_block
+export include

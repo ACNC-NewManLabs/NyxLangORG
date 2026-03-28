@@ -1,0 +1,49 @@
+import ml;
+import std::df;
+
+# --- Helper: Stress Simulation ---
+
+fn _randn() { return std::math::randn_array(1)[0] }
+
+fn stress_test_model(val) {
+    # Decision boundary 0.5
+    if val > 0.5 { return 1 }
+    return 0
+}
+
+# --- Test Case ---
+
+fn test_stress_simulation() {
+    println("--- Testing Real-World Stress & Chaos Simulation ---")
+    
+    # 1. Noisy Data Scenario (Gaussian noise injection)
+    let noise_lv = 0.5
+    println("Stress Scenario: High Noise (std=", noise_lv, ")")
+    let i = 0
+    let flips = 0
+    while i < 100 {
+        let base = 0.52
+        let noisy = base + (_randn() * noise_lv)
+        if stress_test_model(noisy) != stress_test_model(base) { flips = flips + 1 }
+        i = i + 1
+    }
+    println("  Prediction Drift: ", flips, "%")
+    
+    # 2. Sudden Spike Scenario (Outlier burst)
+    println("Stress Scenario: Sudden Distribution Spikes")
+    let spike_val = 100.0
+    let p_spike = stress_test_model(spike_val)
+    println("  Input Spiked to ", spike_val, " Pred: ", p_spike)
+    if p_spike == 1 { println("  SUCCESS: Model saturated gracefully at upper bound") }
+    
+    # 3. Missing Batch Scenario (Null injection)
+    println("Stress Scenario: Partial Batch Corruption (Nulls)")
+    let null_val = null
+    let p_null = stress_test_model(null_val)
+    println("  Input Null, Pred: ", p_null)
+    if p_null == 0 { println("  SUCCESS: Model defaulted safely to 0 (Negative/Safe default)") }
+}
+
+fn main() {
+    test_stress_simulation()
+}

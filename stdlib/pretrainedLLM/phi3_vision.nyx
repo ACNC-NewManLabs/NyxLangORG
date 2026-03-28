@@ -1,0 +1,5 @@
+use ml::multimodal;
+
+fn create(config) {
+    return ml::multimodal::Sequential([]);
+}

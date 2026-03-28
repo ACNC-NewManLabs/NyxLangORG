@@ -1,0 +1,32 @@
+// Nyx Security Suite: Adversarial Cryptography Fuzzing
+// This test ensures that the crypto stdlib handles corrupted payloads gracefully.
+
+fn test_malicious_seal() {
+    print("Generating keys...")
+    let alice_keys = std::crypto::x25519_generate()
+    let alice_priv = alice_keys[0]
+    let alice_pub = alice_keys[1]
+
+    let msg = bytes::from_str("Top Secret Intelligence")
+    print("Sealing message...")
+    let sealed = std::crypto::seal_ephemeral(msg, alice_pub)
+    
+    print("--- Valid Decryption ---")
+    let opened = std::crypto::open_ephemeral(sealed, alice_priv)
+    print("Success: Decryption works.")
+
+    print("--- Corrupted Ciphertext (MAC flip) ---")
+    let corrupted = sealed
+    let last_idx = corrupted.len() - 1
+    
+    // Corrupt the last byte to break the MAC
+    bytes::set(corrupted, last_idx, 170)
+    
+    print("Attempting to open corrupted seal (expecting Open Ephemeral Error)...")
+    // This will trigger a VM panic with a clear error message from the hardened crypto stack.
+    let fail_res = std::crypto::open_ephemeral(corrupted, alice_priv)
+}
+
+fn main() {
+    test_malicious_seal()
+}

@@ -1,0 +1,62 @@
+import ml;
+
+fn test_linear_regression() {
+    println("--- Linear Regression (100 samples) ---")
+    let x = ml::tensor::randn([100, 1], false)
+    
+    # y = 2x + 1
+    let w_true = ml::tensor::Tensor([2.0], [1, 1], false)
+    let b_true = ml::tensor::Tensor([1.0], [1], false)
+    
+    let target = x.matmul(w_true).add(b_true)
+    
+    let layer = ml::nn::Linear(1, 1, null)
+    let opt = ml::optim::SGD([layer], 0.01, 0.9)
+    
+    let i = 0
+    while i < 100 {
+        opt.zero_grad()
+        let pred = layer.forward(x)
+        let loss = ml::nn::mse_loss(pred, target)
+        loss.backward()
+        opt.step()
+        if i % 20 == 0 {
+            println("Iter ", i, " Loss: ", loss.item())
+        }
+        i = i + 1
+    }
+    let final_loss = ml::nn::mse_loss(layer.forward(x), target).item()
+    println("Final Loss: ", final_loss)
+}
+
+fn test_small_nn() {
+    println("--- Small NN (1000 samples) ---")
+    let x = ml::tensor::randn([1000, 10], false)
+    let y = ml::tensor::randn([1000, 1], false)
+    
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(10, 32, "relu"),
+        ml::nn::Linear(32, 1, null)
+    ])
+    let opt = ml::optim::Adam(model.layers, 0.01)
+    
+    let i = 0
+    while i < 50 {
+        opt.zero_grad()
+        let pred = model.forward(x)
+        let loss = ml::nn::mse_loss(pred, y)
+        loss.backward()
+        opt.step()
+        if i % 10 == 0 {
+            println("Iter ", i, " Loss: ", loss.item())
+        }
+        i = i + 1
+    }
+    let final_loss = ml::nn::mse_loss(model.forward(x), y).item()
+    println("Final Loss: ", final_loss)
+}
+
+fn main() {
+    test_linear_regression()
+    test_small_nn()
+}

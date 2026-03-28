@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(131072, 5120, 40, 32, null, null, "mistral-nemo", "cpu");
+}

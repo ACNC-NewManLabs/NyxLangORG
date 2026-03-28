@@ -1,0 +1,329 @@
+/**
+ * UDP Module
+ * 
+ * Provides UDP socket utilities.
+ * Re-exports and wraps the net_engine UDP functionality.
+ * 
+ * @module net::udp
+ */
+
+// Import from net_engine
+import udp.server;
+import udp.mod;
+
+/**
+ * UDP Socket type
+ */
+type UdpSocket = server::UdpSocket;
+
+/**
+ * UDP packet info
+ */
+type PacketInfo = {
+    data: string,
+    address: string,
+    port: i64
+};
+
+/**
+ * Create a UDP socket
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to bind to
+ * @returns A new UDP socket
+ */
+fn create(host: string = "0.0.0.0", port: i64 = 0) -> UdpSocket {
+    return server::create(host, port);
+}
+
+/**
+ * Bind socket to address
+ * 
+ * @param socket - UDP socket
+ * @param host - Host to bind to
+ * @param port - Port to bind to
+ */
+fn bind(socket: UdpSocket, host: string, port: i64) {
+    server::bind(socket, host, port);
+}
+
+/**
+ * Send data to address
+ * 
+ * @param socket - UDP socket
+ * @param address - Target address
+ * @param port - Target port
+ * @param data - Data to send
+ * @returns Number of bytes sent
+ */
+fn send_to(socket: UdpSocket, address: string, port: i64, data: string) -> i64 {
+    return server::send_to(socket, address, port, data);
+}
+
+/**
+ * Receive data
+ * 
+ * @param socket - UDP socket
+ * @param size - Max bytes to receive
+ * @returns Packet info with data and sender
+ */
+fn receive(socket: UdpSocket, size: i64 = 1024) -> PacketInfo {
+    return server::receive(socket, size);
+}
+
+/**
+ * Close UDP socket
+ * 
+ * @param socket - UDP socket
+ */
+fn close(socket: UdpSocket) {
+    server::close(socket);
+}
+
+/**
+ * Set socket option
+ * 
+ * @param socket - UDP socket
+ * @param option - Option name
+ * @param value - Option value
+ */
+fn set_option(socket: UdpSocket, option: string, value: any) {
+    server::set_option(socket, option, value);
+}
+
+/**
+ * Get socket option
+ * 
+ * @param socket - UDP socket
+ * @param option - Option name
+ * @returns Option value
+ */
+fn get_option(socket: UdpSocket, option: string) -> any {
+    return server::get_option(socket, option);
+}
+
+/**
+ * UDP socket with message queue
+ */
+type MessageSocket = {
+    socket: UdpSocket,
+    message_queue: List<PacketInfo>
+};
+
+/**
+ * Create a message-based UDP socket
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to bind to
+ * @returns A new message socket
+ */
+fn MessageSocket(host: string = "0.0.0.0", port: i64 = 0) -> MessageSocket {
+    return MessageSocket {
+        socket: create(host, port),
+        message_queue: []
+    };
+}
+
+/**
+ * Send message
+ * 
+ * @param socket - Message socket
+ * @param address - Target address
+ * @param port - Target port
+ * @param message - Message to send
+ */
+fn send_message(socket: MessageSocket, address: string, port: i64, message: string) {
+    send_to(socket.socket, address, port, message);
+}
+
+/**
+ * Receive message
+ * 
+ * @param socket - Message socket
+ * @returns Message and sender info
+ */
+fn receive_message(socket: MessageSocket) -> PacketInfo {
+    let packet = receive(socket.socket, 1024);
+    socket.message_queue.push(packet);
+    return packet;
+}
+
+/**
+ * Peek at next message without removing
+ * 
+ * @param socket - Message socket
+ * @returns Next message
+ */
+fn peek_message(socket: MessageSocket) -> PacketInfo {
+    if socket.message_queue.length() > 0 {
+        return socket.message_queue[0];
+    }
+    return receive(socket.socket, 1024);
+}
+
+/**
+ * Get queued message count
+ * 
+ * @param socket - Message socket
+ * @returns Number of queued messages
+ */
+fn message_count(socket: MessageSocket) -> i64 {
+    return socket.message_queue.length();
+}
+
+/**
+ * Clear message queue
+ * 
+ * @param socket - Message socket
+ */
+fn clear_queue(socket: MessageSocket) {
+    socket.message_queue = [];
+}
+
+/**
+ * UDP broadcaster for sending to multiple addresses
+ */
+type Broadcaster = {
+    socket: UdpSocket,
+    targets: List<PacketInfo>
+};
+
+/**
+ * Create a UDP broadcaster
+ * 
+ * @returns A new broadcaster
+ */
+fn Broadcaster() -> Broadcaster {
+    return Broadcaster {
+        socket: create(),
+        targets: []
+    };
+}
+
+/**
+ * Add target for broadcasting
+ * 
+ * @param broadcaster - Broadcaster
+ * @param address - Target address
+ * @param port - Target port
+ */
+fn add_target(broadcaster: Broadcaster, address: string, port: i64) {
+    broadcaster.targets.push(PacketInfo {
+        data: "",
+        address: address,
+        port: port
+    });
+}
+
+/**
+ * Broadcast to all targets
+ * 
+ * @param broadcaster - Broadcaster
+ * @param message - Message to broadcast
+ */
+fn broadcast(broadcaster: Broadcaster, message: string) {
+    let i = 0;
+    while i < broadcaster.targets.length() {
+        let target = broadcaster.targets[i];
+        send_to(broadcaster.socket, target.address, target.port, message);
+        i = i + 1;
+    }
+}
+
+/**
+ * Remove target
+ * 
+ * @param broadcaster - Broadcaster
+ * @param address - Target address
+ * @param port - Target port
+ */
+fn remove_target(broadcaster: Broadcaster, address: string, port: i64) {
+    let new_targets: List<PacketInfo> = [];
+    let i = 0;
+    while i < broadcaster.targets.length() {
+        let target = broadcaster.targets[i];
+        if target.address != address or target.port != port {
+            new_targets.push(target);
+        }
+        i = i + 1;
+    }
+    broadcaster.targets = new_targets;
+}
+
+/**
+ * UDP datagram socket options
+ */
+type SocketOptions = {
+    broadcast: bool,
+    reuse_address: bool,
+    receive_buffer_size: i64,
+    send_buffer_size: i64,
+    receive_timeout: i64,
+    send_timeout: i64
+};
+
+/**
+ * Default socket options
+ */
+let default_options = {
+    "broadcast": false,
+    "reuse_address": true,
+    "receive_buffer_size": 8192,
+    "send_buffer_size": 8192,
+    "receive_timeout": 0,
+    "send_timeout": 0
+};
+
+/**
+ * Apply options to socket
+ * 
+ * @param socket - UDP socket
+ * @param options - Options to apply
+ */
+fn apply_options(socket: UdpSocket, options: Map<string, any>) {
+    if "broadcast" in options {
+        set_option(socket, "broadcast", options["broadcast"]);
+    }
+    if "reuse_address" in options {
+        set_option(socket, "reuse_address", options["reuse_address"]);
+    }
+    if "receive_buffer_size" in options {
+        set_option(socket, "receive_buffer_size", options["receive_buffer_size"]);
+    }
+    if "send_buffer_size" in options {
+        set_option(socket, "send_buffer_size", options["send_buffer_size"]);
+    }
+    if "receive_timeout" in options {
+        set_option(socket, "receive_timeout", options["receive_timeout"]);
+    }
+    if "send_timeout" in options {
+        set_option(socket, "send_timeout", options["send_timeout"]);
+    }
+}
+
+export {
+    UdpSocket,
+    PacketInfo,
+    MessageSocket,
+    Broadcaster,
+    SocketOptions,
+    create,
+    bind,
+    send_to,
+    receive,
+    close,
+    set_option,
+    get_option,
+    MessageSocket as message_socket,
+    send_message,
+    receive_message,
+    peek_message,
+    message_count,
+    clear_queue,
+    Broadcaster as broadcaster,
+    add_target,
+    broadcast as broadcast_to,
+    remove_target,
+    apply_options,
+    default_options
+};

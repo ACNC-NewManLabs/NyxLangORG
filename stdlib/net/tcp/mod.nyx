@@ -1,0 +1,86 @@
+/**
+ * TCP Module
+ * 
+ * Provides TCP server and client functionality for the network engine.
+ * Supports connection handling, streaming, and lifecycle management.
+ * 
+ * @module tcp
+ * @version 1.0.0
+ */
+
+mod server;
+
+/**
+ * TCP Server type
+ */
+type TcpServer = server::TcpServer;
+
+/**
+ * TCP Connection type
+ */
+type TcpConnection = server::TcpConnection;
+
+/**
+ * TCP Client type
+ */
+type TcpClient = server::TcpClient;
+
+/**
+ * Create a new TCP server
+ * 
+ * @param host - Host to bind to (e.g., "0.0.0.0")
+ * @param port - Port to listen on
+ * @returns A new TCP server instance
+ * 
+ * @example
+ * let server = TcpServer(host="0.0.0.0", port=8080);
+ * server.on_connect(handle_client);
+ * server.start();
+ */
+fn TcpServer(host: string, port: i64) -> TcpServer {
+    return server::create(host, port);
+}
+
+/**
+ * Create a TCP client connection
+ * 
+ * @param host - Host to connect to
+ * @param port - Port to connect to
+ * @returns A new TCP client instance
+ * 
+ * @example
+ * let client = TcpClient(host="localhost", port=8080);
+ * client.connect();
+ */
+fn TcpClient(host: string, port: i64) -> TcpClient {
+    return server::create_client(host, port);
+}
+
+/**
+ * Connect to a TCP server
+ * 
+ * @param host - Host to connect to
+ * @param port - Port to connect to
+ * @returns Connection result
+ */
+fn connect(host: string, port: i64) -> TcpConnection? {
+    return server::connect(host, port);
+}
+
+/**
+ * Listen on a port for incoming connections
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @param handler - Connection handler function
+ */
+fn listen(host: string, port: i64, handler: fn(TcpConnection)) {
+    let server = TcpServer(host, port);
+    server.on_connect(handler);
+    server.start();
+}
+
+// Re-export types
+type ConnectionHandler = server::ConnectionHandler;
+type ReadHandler = server::ReadHandler;
+type WriteHandler = server::WriteHandler;

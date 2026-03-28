@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(2048, 1024, 24, 16, null, null, "musicgen", "cpu");
+}

@@ -1,0 +1,174 @@
+/**
+ * Database Module
+ * 
+ * Provides database connectivity for Nyx applications.
+ * Supports PostgreSQL, SQLite, and MySQL databases.
+ * 
+ * @module db
+ * @version 1.0.0
+ * 
+ * @example
+ * import db;
+ * 
+ * // Connect to PostgreSQL
+ * let pg = db.postgres("localhost", 5432, "mydb", "user", "pass");
+ * 
+ * // Connect to MySQL
+ * let mysql = db.mysql("localhost", 3306, "mydb", "user", "pass");
+ * 
+ * // Use SQLite (file-based)
+ * let sqlite = db.sqlite("./mydb.db");
+ * 
+ * // Execute queries
+ * let result = pg.query("SELECT * FROM users WHERE id = $1", [1]);
+ * let rows = result.rows;
+ */
+
+mod connection;
+mod postgres;
+mod mysql;
+mod sqlite;
+mod query;
+mod result;
+
+/**
+ * Database connection type
+ */
+type Database = 
+    | PostgresConnection
+    | MysqlConnection
+    | SqliteConnection;
+
+/**
+ * Create a PostgreSQL connection
+ * 
+ * @param host - Database host
+ * @param port - Database port
+ * @param database - Database name
+ * @param user - Username
+ * @param password - Password
+ * @returns PostgreSQL connection
+ * 
+ * @example
+ * let conn = db.postgres("localhost", 5432, "mydb", "user", "pass");
+ */
+fn postgres(host: string, port: i64, database: string, user: string, password: string) -> PostgresConnection {
+    return postgres::connect(host, port, database, user, password);
+}
+
+/**
+ * Create a MySQL connection
+ * 
+ * @param host - Database host
+ * @param port - Database port
+ * @param database - Database name
+ * @param user - Username
+ * @param password - Password
+ * @returns MySQL connection
+ * 
+ * @example
+ * let conn = db.mysql("localhost", 3306, "mydb", "user", "pass");
+ */
+fn mysql(host: string, port: i64, database: string, user: string, password: string) -> MysqlConnection {
+    return mysql::connect(host, port, database, user, password);
+}
+
+/**
+ * Create a SQLite connection (file-based)
+ * 
+ * @param path - Path to SQLite database file
+ * @returns SQLite connection
+ * 
+ * @example
+ * let conn = db.sqlite("./mydb.db");
+ */
+fn sqlite(path: string) -> SqliteConnection {
+    return sqlite::connect(path);
+}
+
+/**
+ * Execute a query on a database
+ * 
+ * @param conn - Database connection
+ * @param sql - SQL query
+ * @param params - Query parameters
+ * @returns Query result
+ * 
+ * @example
+ * let result = db.query(conn, "SELECT * FROM users", []);
+ */
+fn query(conn: Database, sql: string, params: List<any>) -> QueryResult {
+    if conn.type == "postgres" {
+        return postgres::query(conn as PostgresConnection, sql, params);
+    } else if conn.type == "mysql" {
+        return mysql::query(conn as MysqlConnection, sql, params);
+    } else if conn.type == "sqlite" {
+        return sqlite::query(conn as SqliteConnection, sql, params);
+    }
+    return result::empty();
+}
+
+/**
+ * Close a database connection
+ * 
+ * @param conn - Database connection
+ */
+fn close(conn: Database) {
+    if conn.type == "postgres" {
+        postgres::close(conn as PostgresConnection);
+    } else if conn.type == "mysql" {
+        mysql::close(conn as MysqlConnection);
+    } else if conn.type == "sqlite" {
+        sqlite::close(conn as SqliteConnection);
+    }
+}
+
+/**
+ * Begin a transaction
+ * 
+ * @param conn - Database connection
+ * @returns Transaction object
+ */
+fn begin(conn: Database) -> Transaction {
+    return Transaction {
+        conn: conn,
+        committed: false,
+        rolled_back: false
+    };
+}
+
+/**
+ * Transaction type
+ */
+type Transaction = {
+    conn: Database,
+    committed: bool,
+    rolled_back: bool
+};
+
+/**
+ * Commit a transaction
+ * 
+ * @param tx - Transaction
+ */
+fn commit(tx: Transaction) {
+    // Would commit the transaction
+    tx.committed = true;
+}
+
+/**
+ * Rollback a transaction
+ * 
+ * @param tx - Transaction
+ */
+fn rollback(tx: Transaction) {
+    // Would rollback the transaction
+    tx.rolled_back = true;
+}
+
+// Re-export types
+type QueryResult = result::QueryResult;
+type Row = result::Row;
+type PostgresConnection = postgres::Connection;
+type MysqlConnection = mysql::Connection;
+type SqliteConnection = sqlite::Connection;

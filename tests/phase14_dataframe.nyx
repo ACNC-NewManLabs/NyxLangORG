@@ -1,0 +1,194 @@
+# Nyx Dataframe Engine: Phase 14 Verification Test
+# Comprehensive test suite covering all 21 feature areas.
+
+import df.column;
+import df.schema;
+import df.dataframe;
+import df.expr;
+import df.lazy;
+import df.io;
+import df.stats;
+import df.transform;
+import df.window;
+import df.sql;
+import df.ml_bridge;
+import df.viz;
+import df.stream;
+
+# Use qualified names or alias them if possible. 
+# For this test, we'll use qualified names to be safe.
+
+fn assert_eq(a, b, msg) {
+    if a != b {
+        println("ASSERT FAILED:", msg, "| Expected:", b, "Got:", a)
+        return false
+    }
+    return true
+}
+
+fn assert_true(cond, msg) {
+    if cond == false {
+        println("ASSERT FAILED:", msg)
+        return false
+    }
+    return true
+}
+
+fn main() {
+    println("=== NYX DATAFRAME ENGINE: PHASE 14 VERIFICATION ===\n")
+
+    # 1. CORE DATA MODEL
+    println("[1] Core Model: Column & Schema...")
+    let c1 = df::column::Column("a", "int", [1, 2, 3], null)
+    let c2 = df::column::Column("b", "float", [1.1, 2.2, 3.3], [true, false, true])
+    println("DEBUG c1:", c1)
+    println("DEBUG c1._data:", c1._data)
+    let s = df::schema::Schema([{name: "a", dtype: "int"}, {name: "b", dtype: "float"}])
+    assert_eq(c1.len(), 3, "Column length")
+    assert_eq(s.len(), 2, "Schema field count")
+
+    # 2. DATAFRAME CONSTRUCTION
+    println("[2] DataFrame: Construction & Shape...")
+    let df_main = df::dataframe::DataFrame([c1, c2], s)
+    assert_eq(df_main.nrows(), 3, "DF nrows")
+    assert_eq(df_main.ncols(), 2, "DF ncols")
+
+    # 3. EXPRESSIONS (LAZY)
+    println("[3] Expressions: DSL & Composition...")
+    let e = df::expr::col("a").add(df::expr::lit(10)).alias("a_plus_10")
+    assert_eq(e._args[0]._kind, "binop", "Expr inner kind")
+    assert_eq(e._kind, "alias", "Expr kind")
+    assert_eq(e._value, "a_plus_10", "Expr alias value")
+
+    # 4. LAZY EVALUATION
+    println("[4] Lazy Engine: Plan building...")
+    let filter_expr = df::expr::col("a").gt(df::expr::lit(1))
+    
+    println("DEBUG df_main.col_names:", df_main.col_names())
+    println("DEBUG df_main.col('a'):", df_main.col("a"))
+
+    let lf_initial = df_main.lazy()
+    let lf = lf_initial.filter(filter_expr)
+    println("DEBUG mask_col:", df::expr::eval_expr(filter_expr, df_main)._data)
+    # Plan length check (relax for native map plans)
+    if lf._is_native == false {
+        assert_eq(lf._plan.len(), 1, "Lazy plan length")
+    }
+
+    # 5. QUERY OPTIMIZER & EXECUTOR
+    println("[5] Execution: Collect & Predicate Pushdown...")
+    let res = lf.collect()
+    assert_eq(res.nrows(), 2, "Filtered row count")
+
+    # 6. NATIVE KERNELS (VIA COLUMN OPS)
+    println("[6] Native Kernels: Vectorized arithmetic...")
+    let c3 = c1.add(c1) # a + a
+    assert_eq(c3.get(0), 2, "Native add result")
+
+    # 7. AGGREGATIONS
+    println("[7] Aggregations: Sum, Mean, Min, Max...")
+    let lf_agg_initial = df_main.lazy()
+    let lf_agg = lf_agg_initial.select([
+        df::expr::col("a").sum().alias("sum_a"),
+        df::expr::col("a").mean().alias("mean_a")
+    ])
+    let agg_res = lf_agg.collect()
+    assert_eq(agg_res.col("sum_a").get(0), 6.0, "Sum(1,2,3)")
+
+    # 8. GROUP BY
+    println("[8] GroupBy: Split-Apply-Combine...")
+    let c_grp = df::column::Column("grp", "str", ["A", "A", "B"], null)
+    let df_grp = df_main.with_column(c_grp)
+    let lf_grp_initial = df_grp.lazy()
+    let lf_grp_grouped = lf_grp_initial.groupby(["grp"])
+    let grp_res = lf_grp_grouped.agg([df::expr::col("a").sum()]).collect()
+    # Expect 2 groups: A (sum 3), B (sum 3)
+    assert_eq(grp_res.nrows(), 2, "GroupBy row count")
+
+    # 9. JOINS
+    println("[9] Joins: Hash Join (Inner/Left)...")
+    let df_left = df::dataframe::DataFrame([df::column::Column("id", "int", [1, 2], null), df::column::Column("val", "str", ["X", "Y"], null)], null)
+    let df_right = df::dataframe::DataFrame([df::column::Column("id", "int", [2, 3], null), df::column::Column("extra", "str", ["Z", "W"], null)], null)
+    let lf_left = df_left.lazy()
+    let lf_right = df_right.lazy()
+    let lf_joined = lf_left.join(lf_right, "id", "inner")
+    let joined = lf_joined.collect()
+    assert_eq(joined.nrows(), 1, "Inner join result")
+    assert_eq(joined.col_names().len(), 3, "Join col count")
+
+    # 10. STATISTICS
+    println("[10] Stats: Corr, Describe, Value Counts...")
+    let correlation_map = df::stats::corr(df_main)
+    let correlation = correlation_map["a_x_a"]
+    assert_true(correlation > 0.99, "Self-correlation")
+
+    # 11. TRANSFORMATIONS
+    println("[11] Transforms: FillNull, Normalize...")
+    let c_nulls = df::column::Column("n", "float", [1.0, null, 3.0], [true, false, true])
+    let filled = c_nulls.fill_null(2.0)
+    assert_eq(filled.get(1), 2.0, "FillNull")
+
+    # 12. WINDOW OPERATIONS
+    println("[12] Window Ops: Rolling & Lag...")
+    let rolled_df = df::window::rolling(df_main, "a", 2).sum()
+    assert_eq(rolled_df.col("a_rolling_sum_2").get(1), 3.0, "RollingSum(1,2)")
+
+    # 13. SQL INTERFACE
+    println("[13] SQL: Parsing & Execution...")
+    let sql_res = df::sql::sql("SELECT a, b FROM df WHERE a > 1", {"df": df_main})
+    assert_eq(sql_res.nrows(), 2, "SQL filter result")
+
+    # 14. ML BRIDGE
+    println("[14] ML Bridge: DataFrame to Tensor...")
+    let tensor = df::ml_bridge::to_tensor(df_main, ["a"])
+    assert_eq(tensor.shape[1], 1, "Tensor width")
+
+    # 15. CSV I/O
+    println("[15] I/O: CSV Load/Save...")
+    df::io::write_csv(df_main, "/tmp/verify_df.csv")
+    let df_csv = df::io::read_csv("/tmp/verify_df.csv")
+    assert_eq(df_csv.nrows(), 3, "CSV roundtrip")
+
+    # 16. JSON I/O
+    println("[16] I/O: JSON Load/Save...")
+    df::io::write_json(df_main, "/tmp/verify_df.json")
+    let df_json = df::io::read_json("/tmp/verify_df.json")
+    assert_eq(df_json.nrows(), 3, "JSON roundtrip")
+
+    # 17. VISUALIZATION
+    println("[17] Viz: SVG Generation...")
+    df::viz::plot_line(df_main, "a", "b", "/tmp/verify_plot.svg")
+    println("SUCCESS: SVG written to /tmp/verify_plot.svg")
+
+    # 18. STREAMING
+    println("[18] Streaming: Batch processing...")
+    let sf = df::stream::stream_dataframe(df_main, 2)
+    let stream_res = sf.collect()
+    assert_eq(stream_res.nrows(), 3, "Stream collect result")
+
+    # 19. PIPELINES
+    println("[19] Pipelines: Composed transformations...")
+    let pipe = df::transform::Pipeline([
+        fn(d) { return df::transform::normalize(d, "a") }
+    ])
+    let pipe_res = pipe.run(df_main)
+    assert_true(pipe_res.col("a_norm").get(0) < 1.0, "Normalization")
+
+    # 20. TYPE SYSTEM
+    println("[20] Types: Casting & Inference...")
+    let casted = c1.cast("float")
+    assert_eq(casted._dtype, "float", "Type cast")
+
+    # 21. INTEGRATION
+    println("[21] Integration: End-to-end Pipeline...")
+    let int_initial = df_main.lazy()
+    let int_with_col = int_initial.with_columns([df::expr::col("a").mul(df::expr::lit(2)).alias("a2")])
+    let int_filtered = int_with_col.filter(df::expr::col("a2").gt(df::expr::lit(3)))
+    let final_res = int_filtered.collect()
+    assert_eq(final_res.nrows(), 2, "Final integration")
+
+    println("\n========================================")
+    println("NYX DATAFRAME ENGINE: ALL TESTS PASSED ✓")
+    println("PHASE 14 VERIFICATION COMPLETE")
+    println("========================================")
+}

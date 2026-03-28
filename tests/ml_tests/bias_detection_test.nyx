@@ -1,0 +1,64 @@
+import ml;
+import std::df;
+
+# --- Helper: Bias Metrics ---
+
+fn statistical_parity(df, pred_col, group_col) {
+    let groups = ["A", "B"]
+    let rates = {}
+    
+    let nr = df.nrows()
+    let i = 0
+    while i < groups.len() {
+        let g = groups[i]
+        let total = 0
+        let positive = 0
+        
+        let j = 0
+        while j < nr {
+            if df.col(group_col)._data[j] == g {
+                total = total + 1
+                if df.col(pred_col)._data[j] == 1 {
+                    positive = positive + 1
+                }
+            }
+            j = j + 1
+        }
+        
+        rates[g] = positive * 1.0 / total
+        i = i + 1
+    }
+    return rates
+}
+
+# --- Test Case ---
+
+fn test_bias() {
+    println("--- Testing Statistical Parity & Selection Bias ---")
+    
+    # 1. Dataset where Group A is selected 50% and Group B 45%
+    let c_group = std::df::Column("group", "str", ["A", "A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "B", "B", "B", "B", "B", "B", "B"], null)
+    let c_pred  = std::df::Column("pred",  "int", [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0], null)
+    # Group A: 5/10 = 0.5  Group B: 4/10 = 0.4  Ratio = 0.8 (Edge of pass)
+    
+    let df = std::df::DataFrame([c_group, c_pred], null)
+    
+    let rates = statistical_parity(df, "pred", "group")
+    
+    println("Selection Rate Group A: ", rates["A"])
+    println("Selection Rate Group B: ", rates["B"])
+    
+    let ratio = rates["B"] / rates["A"]
+    println("Disparate Impact Ratio (B/A): ", ratio)
+    
+    # Four-fifths rule (0.8 threshold)
+    if ratio < 0.8 {
+        println("FAIL: Potential Bias Detected (Ratio < 0.8)")
+    } else {
+        println("SUCCESS: Selection rates are within fair bounds")
+    }
+}
+
+fn main() {
+    test_bias()
+}

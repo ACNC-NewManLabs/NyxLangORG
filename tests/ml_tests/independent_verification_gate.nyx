@@ -1,0 +1,31 @@
+import ml;
+
+# --- Nyx Independent Verification Gate (Single-System Bias Elimination) ---
+
+fn run_audit_gate(external_audit_pass) {
+    println("--- Nyx Release Engine: Independent Verification Gate ---")
+    
+    if external_audit_pass {
+        println("  Verify: External Audit (Runner B) = PASS")
+        println("  Verify: INTERNAL vs EXTERNAL consistency confirmed.")
+        println("  STATUS: RELEASE_APPROVED")
+        return true
+    } else {
+        println("  Verify: External Audit (Runner B) = FAIL")
+        println("  CRITICAL: Blocking deployment due to Single-System Bias risk.")
+        println("  STATUS: RELEASE_BLOCKED")
+        return false
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Audit Consensus")
+    run_audit_gate(true)
+    
+    println("")
+    
+    println("Scenario 2: Audit Conflict (Safety Gate Triggered)")
+    run_audit_gate(false)
+}

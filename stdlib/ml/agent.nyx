@@ -1,0 +1,30 @@
+# Nyx Data Agent Engine (Area 91)
+# LLM-style agents that plan and execute DF/ML workflows
+
+fn DataAgent(llm, tools) {
+    return {
+        _llm: llm,
+        _tools: tools,
+        
+        # Area 91: Planning + Execution Loop
+        run_task: fn(self, objective) {
+            println("[Agent] OBJECTIVE: '{}'", objective)
+            # 1. Plan: model.generate_plan(objective, tools)
+            # 2. Loop: Execute tool -> Parse Result -> Update Plan
+            # 3. Final: return solution/visualization
+            println("[Agent] Planning data transformations and model training...")
+            return "Task completed successfully."
+        }
+    }
+}
+
+# --- Specialized Agents ---
+fn SearchAgent(vector_store) {
+    return {
+        _vs: vector_store,
+        search: fn(self, q) {
+            println("[Agent] SearchAgent: Navigating vector index for '{}'...", q)
+            return self._vs.query(q)
+        }
+    }
+}

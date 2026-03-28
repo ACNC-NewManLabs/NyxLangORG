@@ -1,0 +1,123 @@
+//! Nyx Native UI STDLIB
+
+fn build_style(mods) {
+    let mut style_str = ""
+    let mut i = 0
+    if mods == null { return style_str }
+    while i < mods.len() {
+        style_str = style_str + mods[i]
+        i = i + 1
+    }
+    return style_str
+}
+
+fn build_children(children) {
+    let mut html = ""
+    let mut i = 0
+    if children == null { return html }
+    while i < children.len() {
+        // Assume children[i] is already a string of HTML
+        html = html + children[i]
+        i = i + 1
+    }
+    return html
+}
+
+pub fn VStack(mods, children) {
+    let style = "display:flex; flex-direction:column; " + build_style(mods)
+    return "<div style='" + style + "'>" + build_children(children) + "</div>"
+}
+
+pub fn HStack(mods, children) {
+    let style = "display:flex; flex-direction:row; align-items:center; " + build_style(mods)
+    return "<div style='" + style + "'>" + build_children(children) + "</div>"
+}
+
+pub fn Text(text, mods) {
+    let style = build_style(mods)
+    return "<span style='" + style + "'>" + text + "</span>"
+}
+
+pub fn Page(mods, children) {
+    let style = build_style(mods)
+    let inner = build_children(children)
+    return "<!doctype html><html><body style='margin:0; box-sizing:border-box; " + style + "'>" + inner + "</body></html>"
+}
+
+pub fn Table(mods, children) {
+    let style = "border-collapse:collapse; " + build_style(mods)
+    return "<table style='" + style + "'>" + build_children(children) + "</table>"
+}
+
+pub fn Row(mods, children) {
+    let style = build_style(mods)
+    return "<tr style='" + style + "'>" + build_children(children) + "</tr>"
+}
+
+pub fn Cell(mods, children) {
+    let style = build_style(mods)
+    return "<td style='" + style + "'>" + build_children(children) + "</td>"
+}
+
+pub fn HeaderCell(mods, children) {
+    let style = build_style(mods)
+    return "<th style='" + style + "'>" + build_children(children) + "</th>"
+}
+
+pub fn ScrollView(mods, children) {
+    let style = "overflow-y:auto; overflow-x:hidden; " + build_style(mods)
+    return "<div style='" + style + "'>" + build_children(children) + "</div>"
+}
+
+pub fn Form(mods, children) {
+    let style = build_style(mods)
+    // Note: A robust system would extract 'action' and 'method' accurately.
+    // For this lightweight runtime implementation, we treat mods as styles.
+    return "<form method='POST' style='" + style + "'>" + build_children(children) + "</form>"
+}
+
+pub fn TextField(name, placeholder, mods) {
+    let style = build_style(mods)
+    return "<input type='text' name='" + name + "' placeholder='" + placeholder + "' style='" + style + "'/>"
+}
+
+pub fn TextArea(name, placeholder, mods) {
+    let style = build_style(mods)
+    return "<textarea name='" + name + "' placeholder='" + placeholder + "' style='" + style + "'></textarea>"
+}
+
+pub fn Button(label, mods) {
+    let style = "cursor:pointer; border:none; text-align:center; " + build_style(mods)
+    return "<button style='" + style + "'>" + label + "</button>"
+}
+
+pub fn Image(src, mods) {
+    let style = build_style(mods)
+    return "<img src='" + src + "' style='" + style + "'/>"
+}
+
+pub fn Spacer() {
+    return "<div style='flex:1;'></div>"
+}
+
+pub fn Icon(name, mods) {
+    let style = build_style(mods)
+    return "<span class='icon icon-" + name + "' style='" + style + "'></span>"
+}
+
+export VStack
+export HStack
+export Text
+export Page
+export Table
+export Row
+export Cell
+export HeaderCell
+export ScrollView
+export Form
+export TextField
+export TextArea
+export Button
+export Image
+export Spacer
+export Icon

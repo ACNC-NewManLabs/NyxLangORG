@@ -1,0 +1,9 @@
+[package]
+name = "nyx-repl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nyx = { path = "../../" }
+nyx-vm = { path = "../../vm" }
+colored = "2.1"

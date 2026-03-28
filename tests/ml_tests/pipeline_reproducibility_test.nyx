@@ -1,0 +1,55 @@
+import ml;
+import std::df;
+
+# --- Helper: Pipeline Function ---
+
+fn run_pipeline(data_vals) {
+    let col = std::df::Column("feat", "float", data_vals, null)
+    let df = std::df::DataFrame([col], null)
+    
+    # Simple transformation: feat = feat * 2 + 1
+    let feat_data = df.col("feat")._data
+    let out_data = []
+    let i = 0
+    while i < feat_data.len() {
+        out_data.push(feat_data[i] * 2.0 + 1.0)
+        i = i + 1
+    }
+    return out_data
+}
+
+# --- Test Case: Reproducibility ---
+
+fn test_reproducibility() {
+    println("--- Testing Data Pipeline Reproducibility ---")
+    
+    let input = [1.0, 2.0, 3.0, 4.0, 5.0]
+    
+    println("Running pipeline (Run 1)...")
+    let run1 = run_pipeline(input)
+    
+    println("Running pipeline (Run 2)...")
+    let run2 = run_pipeline(input)
+    
+    # Compare
+    let identical = true
+    let i = 0
+    while i < run1.len() {
+        if run1[i] != run2[i] {
+            println("FAIL: Mismatch at index ", i, ": ", run1[i], " != ", run2[i])
+            identical = false
+            break
+        }
+        i = i + 1
+    }
+    
+    if identical {
+        println("SUCCESS: Pipeline is deterministic (bit-identical output)")
+    } else {
+        println("FAIL: Pipeline is non-deterministic")
+    }
+}
+
+fn main() {
+    test_reproducibility()
+}

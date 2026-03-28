@@ -1,0 +1,39 @@
+import ml;
+
+# --- Nyx DP Budget Governance (Privacy Lifecycle) ---
+
+fn main() {
+    println("--- Nyx Privacy Engine: Epsilon Budget Audit ---")
+    println("  Period: [2026-Q1]")
+    println("")
+
+    # 1. Budget Definition & Accrual
+    let governance = {
+        max_period_epsilon: 1.0,
+        accrued_epsilon: 0.95,
+        daily_limit: 0.1
+    }
+
+    println("PRIVACY BUDGET STATUS:")
+    println("  Max Epsilon (Q1):  ", governance.max_period_epsilon)
+    println("  Accrued Epsilon:   ", governance.accrued_epsilon)
+    
+    let remaining = governance.max_period_epsilon - governance.accrued_epsilon
+    println("  Budget Remaining:  ", remaining)
+    println("")
+
+    # 2. Enforcement Logic
+    if governance.accrued_epsilon > (governance.max_period_epsilon * 0.9) {
+        println("  WARNING: Privacy budget > 90% exhausted. Heightened scrutiny active.")
+    }
+
+    if governance.accrued_epsilon >= governance.max_period_epsilon {
+        println("  CRITICAL: Privacy budget EXHAUSTED.")
+        println("  ACTION: Automated Export Lock [ACTIVE]. Requires CPO approval.")
+    } else {
+        println("  STATUS: Privacy budget within safe bounds. Exports [ALLOWED].")
+    }
+
+    println("")
+    println("SUCCESS: DP budget governance verified. Privacy lifecycle is bounded.")
+}

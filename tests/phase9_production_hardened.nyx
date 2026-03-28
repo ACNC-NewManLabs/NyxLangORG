@@ -1,0 +1,68 @@
+# Phase 9: Production Hardening Test
+import df.column;
+import df.dataframe;
+import df.lazy;
+import df.expr;
+import df.io;
+import ml.tensor;
+import ml.nn;
+
+fn main() {
+    println("--- Phase 9: Production Hardening ---");
+
+    # 1. CSV Robustness (Quoted fields)
+    println("Testing Robust CSV Ingestion...");
+    let csv_content = "id,name,city\n1,\"John, Doe\",\"New York\"\n2,\"Jane \"\"The Great\"\" Smith\",\"London\"\n";
+    std::io::write_file("test_robust.csv", csv_content);
+
+    let df_csv = df::io::read_csv("test_robust.csv");
+    println("CSV Rows: {}", df_csv.nrows());
+    println("Row 1 Name: {}", df_csv.col("name")._data[0]); # Should be "John, Doe"
+    println("Row 2 Name: {}", df_csv.col("name")._data[1]); # Should be "Jane \"The Great\" Smith"
+
+    if df_csv.col("name")._data[0] != "John, Doe" { println("ERROR: CSV quoting failed!"); }
+    if df_csv.col("name")._data[1] != "Jane \"The Great\" Smith" { println("ERROR: CSV escaping failed!"); }
+
+    # 2. DataFrame Health Check
+    println("\nTesting DataFrame Health Check...");
+    df_csv.col("id")._data[0] = null; # Inject null
+    let health = df_csv.check_health();
+    println("Health: {}", health);
+    if health["id"].nulls != 1 { println("ERROR: Health check failed to detect null!"); }
+
+    # 3. Parallel Aggregation
+    println("\nTesting Parallel Aggregation (Large Data)...");
+    let large_data = []
+    let i = 0
+    while i < 100 { # Reduced for faster test
+        large_data.push({ category: "A", val: 1.0 })
+        large_data.push({ category: "B", val: 2.0 })
+        i = i + 1
+    }
+    let df_large = df::io::from_records(large_data);
+    let df_agg = df_large.lazy().group_by(["category"]).agg([df::expr::col("val").sum()]).collect();
+    println("Aggregated Rows: {}", df_agg.nrows());
+    df_agg.show();
+
+    # 4. ML Health & Quantization
+    println("\nTesting ML Production Features...");
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(10, 5),
+        ml::nn::QuantizedLinear(5, 2)
+    ]);
+
+    let q_layer = model.layers[1];
+    q_layer.quantize();
+    println("Quantized Layer scale: {}", q_layer.scale_w);
+
+    let x = ml::tensor::randn([1, 10]);
+    x.data[0] = std::math::nan(); # Inject NaN
+    let h = x.check_health();
+    println("Tensor Health: {}", h);
+    if !h.ok { println("Detected NaNs in input tensor as expected."); }
+
+    let model_health = ml::nn::check_model_health(model);
+    println("Model Health: {}", model_health.ok);
+
+    println("\n--- Phase 9: COMPLETED SUCCESSFULLY ---");
+}

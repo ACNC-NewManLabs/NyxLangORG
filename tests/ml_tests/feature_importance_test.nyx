@@ -1,0 +1,73 @@
+import ml;
+import std::df;
+
+# --- Helper: Model Importance (Permutation-based) ---
+
+fn predict_importance(x1, x2) {
+    # Model heavily depends on x1, less on x2
+    if (x1 * 0.9 + x2 * 0.1) > 0.5 { return 1 }
+    return 0
+}
+
+fn calculate_permutation_importance(df, target_col, feat_names) {
+    let base_preds = []
+    let nr = df.nrows()
+    let i = 0
+    while i < nr {
+        base_preds.push(predict_importance(df.col(feat_names[0])._data[i], df.col(feat_names[1])._data[i]))
+        i = i + 1
+    }
+    
+    let importances = {}
+    let f = 0
+    while f < feat_names.len() {
+        let name = feat_names[f]
+        let shuffled_preds = []
+        let i = 0
+        while i < nr {
+            # Shuffle simulated by zeroing out the feature (simplified permutation)
+            let x1 = df.col(feat_names[0])._data[i]
+            let x2 = df.col(feat_names[1])._data[i]
+            if f == 0 { x1 = 0.0 } else { x2 = 0.0 }
+            shuffled_preds.push(predict_importance(x1, x2))
+            i = i + 1
+        }
+        
+        # Calculate drift from base
+        let diffs = 0
+        let j = 0
+        while j < nr {
+            if base_preds[j] != shuffled_preds[j] { diffs = diffs + 1 }
+            j = j + 1
+        }
+        importances[name] = diffs * 1.0 / nr
+        f = f + 1
+    }
+    return importances
+}
+
+# --- Test Case ---
+
+fn test_importance() {
+    println("--- Testing Feature Importance Consistency ---")
+    
+    let c1 = std::df::Column("feat_x1", "float", [0.9, 0.1, 0.8, 0.2, 0.7], null)
+    let c2 = std::df::Column("feat_x2", "float", [0.5, 0.5, 0.5, 0.5, 0.5], null)
+    let df = std::df::DataFrame([c1, c2], null)
+    
+    let scores = calculate_permutation_importance(df, null, ["feat_x1", "feat_x2"])
+    
+    println("Importance Scores (Prediction Drift):")
+    println("  feat_x1 (Expected high): ", scores["feat_x1"])
+    println("  feat_x2 (Expected low):  ", scores["feat_x2"])
+    
+    if scores["feat_x1"] > scores["feat_x2"] {
+        println("SUCCESS: Feature importance aligned with model logic")
+    } else {
+        println("FAIL: Feature importance mismatch")
+    }
+}
+
+fn main() {
+    test_importance()
+}

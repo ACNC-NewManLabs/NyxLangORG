@@ -1,0 +1,36 @@
+//! Nyx UI Design Tokens
+//! Native design system variables for the Nyx UI Engine.
+
+pub fn color_background() { return "#0a0a0f" }
+pub fn color_surface() { return "#12121e" }
+pub fn color_primary() { return "#00f2ff" }
+pub fn color_secondary() { return "#0066ff" }
+pub fn color_text() { return "#ffffff" }
+pub fn color_text_dim() { return "rgba(255, 255, 255, 0.6)" }
+
+pub fn spacing_xs() { return "0.5rem" }
+pub fn spacing_sm() { return "1rem" }
+pub fn spacing_md() { return "1.5rem" }
+pub fn spacing_lg() { return "2rem" }
+pub fn spacing_xl() { return "3rem" }
+
+pub fn radius_sm() { return "8px" }
+pub fn radius_md() { return "16px" }
+pub fn radius_lg() { return "28px" }
+pub fn radius_full() { return "9999px" }
+
+export color_background
+export color_surface
+export color_primary
+export color_secondary
+export color_text
+export color_text_dim
+export spacing_xs
+export spacing_sm
+export spacing_md
+export spacing_lg
+export spacing_xl
+export radius_sm
+export radius_md
+export radius_lg
+export radius_full

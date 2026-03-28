@@ -1,0 +1,43 @@
+# 📄 Nyx Apex Toolchain: Proprietary Software License Agreement
+
+**Copyright (c) 2026 SURYA SEKHAR ROY. All Rights Reserved.**
+
+---
+
+### 1. OWNERSHIP AND INTELLECTUAL PROPERTY
+This software suite, known as the **Nyx Apex Toolchain** (including but not limited to Nyx Nexus, Nyx Formatter, Nyx Debugger, Nyx Profiler, Nyx AI, and all associated source code, binaries, documentation, and assets located within this directory), is the sole and exclusive intellectual property of **SURYA SEKHAR ROY** (the "Owner"). 
+
+This software is protected by international copyright laws, trademark laws, and other intellectual property rights. All rights not expressly granted in this Agreement are reserved by the Owner.
+
+### 2. TRADEMARK POLICY
+The names **Nyx™**, **Nyx Nexus™**, **Nyx Apex™**, and all associated logos are trademarks owned by **SURYA SEKHAR ROY**. 
+- This License does not grant you any rights to use these trademarks for commercial purposes or to imply endorsement by the Owner.
+- Any use of these trademarks in documentation or related works must include proper attribution to the Owner.
+- You may not register any domain names, social media handles, or business names that incorporate these trademarks without express written permission.
+
+### 3. LICENSE GRANT
+Subject to the terms and conditions of this Agreement, the Owner hereby grants to the authorized user a limited, non-exclusive, non-transferable, and revocable license to use the software for personal or internal evaluation purposes only. 
+
+### 3. RESTRICTIONS
+You are expressly prohibited from:
+- **Copying**: Creating copies of the software or any portion thereof for any purpose other than personal evaluation.
+- **Distribution**: Selling, leasing, sublicensing, redistributing, or otherwise transferring the software or any part of it to any third party.
+- **Modification**: Creating derivative works, modifying, or altering the internal logic, branding, or feature set of the toolchain.
+- **Reverse Engineering**: Decompiling, disassembling, or attempting to derive the source code or underlying algorithms of the JIT, Nexus, or VM-bridge components through reverse engineering.
+- **Branding Removal**: Removing or obscuring any copyright notices, trademarks, or authorship attributions (specifically those of SURYA SEKHAR ROY) from the software.
+
+### 4. TERMINATION
+The Owner reserves the right to terminate this license at any time if any provision of this Agreement is breached. Upon termination, you must immediately cease all use of the software and destroy all copies in your possession.
+
+### 5. NO WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL SURYA SEKHAR ROY BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### 6. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws of the jurisdiction of the Owner’s residence, without regard to conflict of law principles.
+
+---
+
+**BY USING THIS SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ THIS AGREEMENT, UNDERSTAND IT, AND AGREE TO BE BOUND BY ITS TERMS.**
+
+**AUTHOR & OWNER:** SURYA SEKHAR ROY
+**DATE:** March 14, 2026

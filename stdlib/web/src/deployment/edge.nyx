@@ -1,0 +1,480 @@
+// Nyx Web Deployment - Edge
+// Edge computing deployment
+
+// Edge location
+struct EdgeLocation {
+    id: string
+    name: string
+    region: string
+    city: string
+    country: string
+    latitude: f64
+    longitude: f64
+    provider: string
+    status: string
+}
+
+// Edge configuration
+struct EdgeConfig {
+    locations: List<EdgeLocation>
+    caching: CacheConfig
+    routing: RoutingConfig
+    security: EdgeSecurityConfig
+}
+
+// Cache configuration
+struct CacheConfig {
+    enabled: bool
+    default_ttl: u32
+    max_size: u32
+    rules: List<CacheRule>
+}
+
+// Cache rule
+struct CacheRule {
+    path_pattern: string
+    ttl: u32
+    browser_ttl: u32
+    stale_while_revalidate: u32
+    vary_headers: List<string>
+}
+
+// Routing configuration
+struct RoutingConfig {
+    origin: string
+    fallback: string
+    redirects: List<RedirectRule>
+    rewrite_rules: List<RewriteRule>
+}
+
+// Redirect rule
+struct RedirectRule {
+    from: string
+    to: string
+    status: u32
+    preserve_query: bool
+}
+
+// Rewrite rule
+struct RewriteRule {
+    from: string
+    to: string
+    flags: string
+}
+
+// Edge security configuration
+struct EdgeSecurityConfig {
+    waf_enabled: bool
+    ddos_protection: bool
+    rate_limiting: RateLimitingConfig
+    ip_whitelist: List<string>
+    ip_blacklist: List<string>
+}
+
+// Rate limiting config
+struct RateLimitingConfig {
+    enabled: bool
+    requests_per_second: u32
+    burst: u32
+    by_country: bool
+}
+
+// Edge deployment
+struct EdgeDeployment {
+    id: string
+    site_name: string
+    zones: List<EdgeZone>
+    deployed_at: u64
+    status: DeploymentStatus
+}
+
+// Edge zone
+struct EdgeZone {
+    id: string
+    name: string
+    location: EdgeLocation
+    functions: List<EdgeFunction>
+    routes: List<EdgeRoute>
+}
+
+// Edge function
+struct EdgeFunction {
+    name: string
+    code: string
+    runtime: string
+    memory: u32
+    timeout: u32
+    entry_point: string
+}
+
+// Edge route
+struct EdgeRoute {
+    path: string
+    origin: string
+    methods: List<string>
+    headers: Map<string, string>
+    cache_config: CacheRule
+}
+
+// Deployment status
+enum DeploymentStatus {
+    Pending
+    Deploying
+    Active
+    Failed
+    Rollback
+}
+
+// Edge provider
+enum EdgeProvider {
+    Cloudflare
+    Fastly
+    Akamai
+    AWSCloudFront
+    GoogleCloudCDN
+    AzureCDN
+    NyxEdge
+}
+
+// Create edge configuration
+fn new_edge_config() -> EdgeConfig {
+    return EdgeConfig {
+        locations: List::new()
+        caching: CacheConfig::default()
+        routing: RoutingConfig::default()
+        security: EdgeSecurityConfig::default()
+    }
+}
+
+// Default cache config
+fn CacheConfig::default() -> CacheConfig {
+    return CacheConfig {
+        enabled: true
+        default_ttl: 3600
+        max_size: 100
+        rules: List::new()
+    }
+}
+
+// Default routing config
+fn RoutingConfig::default() -> RoutingConfig {
+    return RoutingConfig {
+        origin: ""
+        fallback: ""
+        redirects: List::new()
+        rewrite_rules: List::new()
+    }
+}
+
+// Default security config
+fn EdgeSecurityConfig::default() -> EdgeSecurityConfig {
+    return EdgeSecurityConfig {
+        waf_enabled: false
+        ddos_protection: false
+        rate_limiting: RateLimitingConfig::default()
+        ip_whitelist: List::new()
+        ip_blacklist: List::new()
+    }
+}
+
+// Add edge location
+fn add_location(config: EdgeConfig, location: EdgeLocation) {
+    config.locations.push(location)
+}
+
+// Create edge location
+fn create_location(id: string, name: string, region: string, city: string, country: string) -> EdgeLocation {
+    return EdgeLocation {
+        id: id
+        name: name
+        region: region
+        city: city
+        country: country
+        latitude: 0.0
+        longitude: 0.0
+        provider: ""
+        status: "active"
+    }
+}
+
+// Add cache rule
+fn add_cache_rule(config: EdgeConfig, rule: CacheRule) {
+    config.caching.rules.push(rule)
+}
+
+// Create cache rule
+fn cache_rule(path_pattern: string, ttl: u32) -> CacheRule {
+    return CacheRule {
+        path_pattern: path_pattern
+        ttl: ttl
+        browser_ttl: ttl
+        stale_while_revalidate: 60
+        vary_headers: List::new()
+    }
+}
+
+// Add redirect rule
+fn add_redirect(config: EdgeConfig, from: string, to: string, status: u32 = 301) {
+    let rule = RedirectRule {
+        from: from
+        to: to
+        status: status
+        preserve_query: true
+    }
+    config.routing.redirects.push(rule)
+}
+
+// Add rewrite rule
+fn add_rewrite(config: EdgeConfig, from: string, to: string, flags: string = "") {
+    let rule = RewriteRule {
+        from: from
+        to: to
+        flags: flags
+    }
+    config.routing.rewrite_rules.push(rule)
+}
+
+// Deploy to edge
+fn deploy_to_edge(config: EdgeConfig, site_name: string, provider: EdgeProvider) -> EdgeDeployment {
+    console::log("Deploying " + site_name + " to edge using " + provider.to_string())
+    
+    let deployment = EdgeDeployment {
+        id: generate_id()
+        site_name: site_name
+        zones: List::new()
+        deployed_at: time::now()
+        status: DeploymentStatus::Deploying
+    }
+    
+    // Create edge zones for each location
+    for location in config.locations {
+        let zone = EdgeZone {
+            id: generate_id()
+            name: location.name
+            location: location
+            functions: List::new()
+            routes: List::new()
+        }
+        deployment.zones.push(zone)
+    }
+    
+    deployment.status = DeploymentStatus::Active
+    
+    return deployment
+}
+
+// Deploy edge function
+fn deploy_edge_function(zone: EdgeZone, function: EdgeFunction) -> Result<(), Error> {
+    console::log("Deploying function " + function.name + " to edge zone " + zone.name)
+    zone.functions.push(function)
+    return Result::ok(())
+}
+
+// Create edge function
+fn create_edge_function(name: string, code: string, runtime: string) -> EdgeFunction {
+    return EdgeFunction {
+        name: name
+        code: code
+        runtime: runtime
+        memory: 128
+        timeout: 30
+        entry_point: "handler"
+    }
+}
+
+// Add edge route
+fn add_edge_route(zone: EdgeZone, route: EdgeRoute) {
+    zone.routes.push(route)
+}
+
+// Create edge route
+fn create_edge_route(path: string, origin: string) -> EdgeRoute {
+    return EdgeRoute {
+        path: path
+        origin: origin
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        headers: Map::new()
+        cache_config: CacheRule::default()
+    }
+}
+
+// Get deployment status
+fn get_deployment_status(deployment: EdgeDeployment) -> DeploymentStatus {
+    return deployment.status
+}
+
+// Rollback deployment
+fn rollback(deployment: EdgeDeployment) -> Result<(), Error> {
+    console::log("Rolling back deployment: " + deployment.id)
+    deployment.status = DeploymentStatus::Rollback
+    // In production, would restore previous version
+    deployment.status = DeploymentStatus::Active
+    return Result::ok(())
+}
+
+// Purge cache
+fn purge_cache(deployment: EdgeDeployment, path: string = "") {
+    console::log("Purging cache for: " + path)
+    // In production, would call edge provider's API
+}
+
+// Get edge analytics
+struct EdgeAnalytics {
+    requests: u64
+    bandwidth_mb: f64
+    cache_hit_rate: f64
+    avg_latency_ms: f64
+    error_rate: f64
+    top_countries: Map<string, u64>
+    status_codes: Map<u16, u64>
+}
+
+// Get analytics
+fn get_analytics(deployment: EdgeDeployment) -> EdgeAnalytics {
+    return EdgeAnalytics {
+        requests: 0
+        bandwidth_mb: 0.0
+        cache_hit_rate: 0.0
+        avg_latency_ms: 0.0
+        error_rate: 0.0
+        top_countries: Map::new()
+        status_codes: Map::new()
+    }
+}
+
+// Generate edge configuration (Workers/KV/Durable Objects for Cloudflare)
+fn generate_worker_config(config: EdgeConfig) -> string {
+    let js = "// Edge Worker\n"
+    js = js + "addEventListener('fetch', event => {\n"
+    js = js + "  event.respondWith(handleRequest(event.request))\n"
+    js = js + "})\n\n"
+    js = js + "async function handleRequest(request) {\n"
+    js = js + "  const url = new URL(request.url)\n"
+    js = js + "  // Routing logic\n"
+    js = js + "  return fetch(request)\n"
+    js = js + "}\n"
+    
+    return js
+}
+
+// Generate Cloudflare Pages config
+fn generate_cloudflare_pages_config() -> string {
+    return "_routes.json:\n" +
+        "{\n" +
+        "  \"version\": 1,\n" +
+        "  \"include\": [\"/*\"],\n" +
+        "  \"exclude\": [\"/_worker.js\"]\n" +
+        "}\n"
+}
+
+// Edge middleware
+type EdgeMiddleware = fn(Request) -> Response
+
+// Create edge middleware chain
+fn create_edge_middleware_chain() -> List<EdgeMiddleware> {
+    return List::new()
+}
+
+// Add middleware to edge chain
+fn edge_use(chain: List<EdgeMiddleware>, middleware: EdgeMiddleware) {
+    chain.push(middleware)
+}
+
+// Cloudflare Workers specific: KV namespace
+struct KVNamespace {
+    id: string
+    name: string
+}
+
+// Create KV namespace
+fn create_kv_namespace(name: string) -> KVNamespace {
+    return KVNamespace {
+        id: generate_id()
+        name: name
+    }
+}
+
+// KV operations
+fn kv_get(namespace: KVNamespace, key: string) -> Option<string> {
+    // Would call Cloudflare API
+    return Option::none()
+}
+
+fn kv_put(namespace: KVNamespace, key: string, value: string, ttl: u32 = 0) {
+    // Would call Cloudflare API
+}
+
+fn kv_delete(namespace: KVNamespace, key: string) {
+    // Would call Cloudflare API
+}
+
+// Durable Objects
+struct DurableObject {
+    id: string
+    class_name: string
+    storage: DurableObjectStorage
+}
+
+// Durable object storage
+struct DurableObjectStorage {
+    data: Map<string, any>
+}
+
+fn storage_get(storage: DurableObjectStorage, key: string) -> Option<any> {
+    return storage.data.get(key)
+}
+
+fn storage_put(storage: DurableObjectStorage, key: string, value: any) {
+    storage.data.insert(key, value)
+}
+
+fn storage_delete(storage: DurableObjectStorage, key: string) {
+    storage.data.remove(key)
+}
+
+export EdgeLocation
+export EdgeConfig
+export CacheConfig
+export CacheRule
+export RoutingConfig
+export RedirectRule
+export RewriteRule
+export EdgeSecurityConfig
+export RateLimitingConfig
+export EdgeDeployment
+export EdgeZone
+export EdgeFunction
+export EdgeRoute
+export DeploymentStatus
+export EdgeProvider
+export EdgeAnalytics
+export EdgeMiddleware
+export KVNamespace
+export DurableObject
+export DurableObjectStorage
+export new_edge_config
+export create_location
+export add_location
+export cache_rule
+export add_cache_rule
+export add_redirect
+export add_rewrite
+export deploy_to_edge
+export deploy_edge_function
+export create_edge_function
+export add_edge_route
+export create_edge_route
+export get_deployment_status
+export rollback
+export purge_cache
+export get_analytics
+export generate_worker_config
+export generate_cloudflare_pages_config
+export create_kv_namespace
+export kv_get
+export kv_put
+export kv_delete
+export storage_get
+export storage_put
+export storage_delete
+

@@ -1,0 +1,55 @@
+// Nyx "Any Low-Level" Verification: Hardware Simulation
+// Tests Port I/O and Wide Memory Access (16/32/64-bit).
+
+fn main() {
+    println("--- Nyx Hardware Simulation Verification ---");
+
+    // 1. Port I/O (Simulating COM1/UART)
+    println("Simulating UART output to COM1 (0x3F8)...");
+    let COM1 = 0x3F8;
+    unsafe {
+        std::arch::outb(COM1, 72); // 'H'
+        std::arch::outb(COM1, 105); // 'i'
+        println("Sent 'Hi' to COM1.");
+    }
+
+    // 2. Wide Memory Access (16/32/64-bit)
+    let buf = std::mem::alloc(64);
+    let ptr = std::mem::addr_of(buf);
+    println("Buffer pointer: {}", ptr);
+
+    unsafe {
+        println("Writing 0xDEADBEEF as 32-bit uint...");
+        std::mem::poke32(ptr, 0xDEADBEEF);
+        
+        println("Reading back as 8 bit pokes...");
+        let b0 = std::mem::peek(buf, 0);
+        let b1 = std::mem::peek(buf, 1);
+        let b2 = std::mem::peek(buf, 2);
+        let b3 = std::mem::peek(buf, 3);
+        println("Bytes: 0x{:X} 0x{:X} 0x{:X} 0x{:X}", b0, b1, b2, b3);
+
+        println("Reading back as 32-bit peek...");
+        let val32 = std::mem::peek32(ptr);
+        println("Read 32-bit: 0x{:X}", val32);
+
+        if val32 == 0xDEADBEEF {
+            println("SUCCESS: 32-bit wide access verified.");
+        } else {
+            println("FAILURE: 32-bit value mismatch!");
+        }
+
+        println("Writing 64-bit value...");
+        std::mem::poke64(ptr, 0x1122334455667788);
+        let val64 = std::mem::peek64(ptr);
+        println("Read 64-bit: 0x{:X}", val64);
+    }
+
+    // 3. Type Metadata
+    println("Type Info:");
+    println("  size_of(u8):   {}", std::mem::size_of("u8"));
+    println("  size_of(u32):  {}", std::mem::size_of("u32"));
+    println("  size_of(ptr):  {}", std::mem::size_of("ptr"));
+
+    println("Verification complete.");
+}

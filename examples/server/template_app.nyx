@@ -1,0 +1,363 @@
+/**
+ * Template App Example
+ * 
+ * A dynamic HTML application demonstrating:
+ * - Template rendering
+ * - Data passing to templates
+ * - Layouts and partials
+ * - Dynamic content
+ * - Query parameters
+ * 
+ * Run with: nyx run template_app.nyx
+ * 
+ * @example
+ * import examples.server.template_app;
+ * template_app.main([]);
+ */
+
+import net.http;
+
+// Sample data
+let posts = [
+    {
+        "id": 1,
+        "title": "Welcome to Nyx",
+        "content": "Nyx is a modern programming language for building web applications.",
+        "author": "Nyx Team",
+        "date": "2024-01-15",
+        "tags": ["welcome", "nyx"]
+    },
+    {
+        "id": 2,
+        "title": "Getting Started with HTTP Servers",
+        "content": "Learn how to create HTTP servers and handle routing in Nyx.",
+        "author": "Nyx Team",
+        "date": "2024-01-20",
+        "tags": ["tutorial", "http"]
+    },
+    {
+        "id": 3,
+        "title": "Building REST APIs",
+        "content": "A comprehensive guide to building RESTful APIs with Nyx.",
+        "author": "Nyx Team",
+        "date": "2024-01-25",
+        "tags": ["tutorial", "rest", "api"]
+    }
+];
+
+let products = [
+    {"id": 1, "name": "Widget", "price": 29.99, "in_stock": true},
+    {"id": 2, "name": "Gadget", "price": 49.99, "in_stock": true},
+    {"id": 3, "name": "Gizmo", "price": 19.99, "in_stock": false},
+    {"id": 4, "name": "Thingamajig", "price": 99.99, "in_stock": true}
+];
+
+/**
+ * Main function
+ */
+fn main(args: List<string>) {
+    print("Starting Template App...");
+    print("");
+    
+    let server = net.HttpServer(port: 8080);
+    
+    // Home page with blog posts
+    server.get("/", fn(req        let html =, res) {
+ render_layout({
+            "title": "Nyx Template App",
+            "content": render_home(posts)
+        });
+        res.html(html);
+    });
+    
+    // Blog post page
+    server.get("/post/:id", fn(req, res) {
+        let id = parse_int(req.params["id"]);
+        let post = find_post(id);
+        
+        if post != none {
+            let html = render_layout({
+                "title": post["title"],
+                "content": render_post(post)
+            });
+            res.html(html);
+        } else {
+            res.status(404).html(render_error("Post not found"));
+        }
+    });
+    
+    // Products page
+    server.get("/products", fn(req, res) {
+        // Get category filter from query params
+        let category = req.query_params["category"] ?? "all";
+        
+        let html = render_layout({
+            "title": "Products - Nyx Template App",
+            "content": render_products(products, category)
+        });
+        res.html(html);
+    });
+    
+    // About page
+    server.get("/about", fn(req, res) {
+        let html = render_layout({
+            "title": "About - Nyx Template App",
+            "content": render_about()
+        });
+        res.html(html);
+    });
+    
+    // API endpoint for posts
+    server.get("/api/posts", fn(req, res) {
+        res.json({"posts": posts});
+    });
+    
+    // 404 handler
+    server.not_found(fn(req, res) {
+        res.status(404).html(render_error("Page not found"));
+    });
+    
+    // Start server
+    server.start();
+    
+    print("Template App running at http://localhost:8080");
+    print("");
+    print("Pages:");
+    print("  /              - Home (blog posts)");
+    print("  /post/:id      - Blog post");
+    print("  /products      - Products list");
+    print("  /about         - About page");
+    print("  /api/posts     - API (JSON)");
+    print("");
+    print("Press Ctrl+C to stop");
+}
+
+/**
+ * Render main layout
+ */
+fn render_layout(data: Map<string, any>) -> string {
+    let title = data["title"] ?? "Nyx App";
+    let content = data["content"] ?? "";
+    
+    let html = "<!DOCTYPE html>";
+    html = html + "<html lang=\"en\">";
+    html = html + "<head>";
+    html = html + "  <meta charset=\"utf-8\">";
+    html = html + "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">";
+    html = html + "  <title>" + escape_html(title) + "</title>";
+    html = html + "  <style>";
+    html = html + "    * { box-sizing: border-box; }";
+    html = html + "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }";
+    html = html + "    header { background: #2c3e50; color: white; padding: 20px; }";
+    html = html + "    nav { margin-top: 10px; }";
+    html = html + "    nav a { color: white; margin-right: 20px; text-decoration: none; }";
+    html = html + "    nav a:hover { text-decoration: underline; }";
+    html = html + "    main { max-width: 800px; margin: 30px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }";
+    html = html + "    footer { text-align: center; padding: 20px; color: #7f8c8d; }";
+    html = html + "    h1, h2, h3 { color: #2c3e50; }";
+    html = html + "    a { color: #3498db; }";
+    html = html + "    .post { border-bottom: 1px solid #eee; padding: 20px 0; }";
+    html = html + "    .post:last-child { border-bottom: none; }";
+    html = html + "    .post-title { margin: 0 0 10px 0; }";
+    html = html + "    .post-meta { color: #7f8c8d; font-size: 0.9em; }";
+    html = html + "    .tag { display: inline-block; background: #ecf0f1; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-right: 5px; }";
+    html = html + "    .product { display: inline-block; width: 45%; margin: 10px; padding: 15px; background: #f8f8f8; border-radius: 8px; }";
+    html = html + "    .price { color: #27ae60; font-weight: bold; font-size: 1.2em; }";
+    html = html + "    .out-of-stock { color: #e74c3c; }";
+    html = html + "    .in-stock { color: #27ae60; }";
+    html = html + "    .error { background: #ffe6e6; color: #c0392b; padding: 20px; border-radius: 8px; text-align: center; }";
+    html = html + "  </style>";
+    html = html + "</head>";
+    html = html + "<body>";
+    html = html + "  <header>";
+    html = html + "    <h1><a href=\"/\" style=\"color: white; text-decoration: none;\">Nyx Template App</a></h1>";
+    html = html + "    <nav>";
+    html = html + "      <a href=\"/\">Home</a>";
+    html = html + "      <a href=\"/products\">Products</a>";
+    html = html + "      <a href=\"/about\">About</a>";
+    html = html + "    </nav>";
+    html = html + "  </header>";
+    html = html + "  <main>";
+    html = html + content;
+    html = html + "  </main>";
+    html = html + "  <footer>";
+    html = html + "    <p>&copy; 2024 Nyx. Built with Nyx.</p>";
+    html = html + "  </footer>";
+    html = html + "</body>";
+    html = html + "</html>";
+    
+    return html;
+}
+
+/**
+ * Render home page
+ */
+fn render_home(posts: List<Map<string, any>>) -> string {
+    let html = "<h2>Latest Posts</h2>";
+    
+    let i = 0;
+    while i < posts.length() {
+        let post = posts[i];
+        html = html + "<div class=\"post\">";
+        html = html + "  <h3 class=\"post-title\"><a href=\"/post/" + to_string(post["id"]) + "\">" + escape_html(post["title"]) + "</a></h3>";
+        html = html + "  <p class=\"post-meta\">By " + escape_html(post["author"]) + " on " + post["date"] + "</p>";
+        html = html + "  <p>" + escape_html(post["content"]) + "</p>";
+        
+        // Render tags
+        if "tags" in post {
+            let tags = post["tags"];
+            let j = 0;
+            html = html + "  <div>";
+            while j < tags.length() {
+                html = html + "<span class=\"tag\">" + tags[j] + "</span>";
+                j = j + 1;
+            }
+            html = html + "</div>";
+        }
+        
+        html = html + "</div>";
+        i = i + 1;
+    }
+    
+    return html;
+}
+
+/**
+ * Render single post
+ */
+fn render_post(post: Map<string, any>) -> string {
+    let html = "<article>";
+    html = html + "  <h1>" + escape_html(post["title"]) + "</h1>";
+    html = html + "  <p class=\"post-meta\">By " + escape_html(post["author"]) + " on " + post["date"] + "</p>";
+    html = html + "  <div class=\"content\">";
+    html = html + "    <p>" + escape_html(post["content"]) + "</p>";
+    html = html + "  </div>";
+    html = html + "  <p><a href=\"/\">&larr; Back to home</a></p>";
+    html = html + "</article>";
+    
+    return html;
+}
+
+/**
+ * Render products page
+ */
+fn render_products(products: List<Map<string, any>>, category: string) -> string {
+    let html = "<h2>Products</h2>";
+    html = html + "<p>Category: " + escape_html(category) + "</p>";
+    html = html + "<div class=\"products\">";
+    
+    let i = 0;
+    while i < products.length() {
+        let product = products[i];
+        
+        html = html + "<div class=\"product\">";
+        html = html + "  <h3>" + escape_html(product["name"]) + "</h3>";
+        html = html + "  <p class=\"price\">$" + to_string(product["price"]) + "</p>";
+        
+        if product["in_stock"] {
+            html = html + "  <p class=\"in-stock\">✓ In Stock</p>";
+        } else {
+            html = html + "  <p class=\"out-of-stock\">✗ Out of Stock</p>";
+        }
+        
+        html = html + "</div>";
+        i = i + 1;
+    }
+    
+    html = html + "</div>";
+    
+    return html;
+}
+
+/**
+ * Render about page
+ */
+fn render_about() -> string {
+    let html = "<h2>About Nyx</h2>";
+    html = html + "<p>Nyx is a modern, expressive programming language designed for building web applications.</p>";
+    html = html + "<h3>Features</h3>";
+    html = html + "<ul>";
+    html = html + "  <li>Simple and expressive syntax</li>";
+    html = html + "  <li>Built-in HTTP server</li>";
+    html = html + "  <li>WebSocket support</li>";
+    html = html + "  <li>Template rendering</li>";
+    html = html + "  <li>JSON handling</li>";
+    html = html + "</ul>";
+    
+    return html;
+}
+
+/**
+ * Render error page
+ */
+fn render_error(message: string) -> string {
+    return render_layout({
+        "title": "Error",
+        "content": "<div class=\"error\"><h2>Error</h2><p>" + escape_html(message) + "</p><p><a href=\"/\">Go home</a></p></div>"
+    });
+}
+
+/**
+ * Find post by ID
+ */
+fn find_post(id: i64) -> Map<string, any> {
+    let i = 0;
+    while i < posts.length() {
+        if posts[i]["id"] == id {
+            return posts[i];
+        }
+        i = i + 1;
+    }
+    return none;
+}
+
+/**
+ * Escape HTML special characters
+ */
+fn escape_html(text: string) -> string {
+    let escaped = text;
+    escaped = replace_all(escaped, "&", "&");
+    escaped = replace_all(escaped, "<", "<");
+    escaped = replace_all(escaped, ">", ">");
+    escaped = replace_all(escaped, "\"", """);
+    return escaped;
+}
+
+/**
+ * Replace all occurrences
+ */
+fn replace_all(text: string, search: string, replace: string) -> string {
+    let result = "";
+    let i = 0;
+    
+    while i < text.length() {
+        if i + search.length() <= text.length() {
+            let match = true;
+            let j = 0;
+            while j < search.length() {
+                if text[i + j] != search[j] {
+                    match = false;
+                    j = search.length();
+                }
+                j = j + 1;
+            }
+            
+            if match {
+                result = result + replace;
+                i = i + search.length();
+            } else {
+                result = result + text[i];
+                i = i + 1;
+            }
+        } else {
+            result = result + text[i];
+            i = i + 1;
+        }
+    }
+    
+    return result;
+}
+
+export {
+    main
+};

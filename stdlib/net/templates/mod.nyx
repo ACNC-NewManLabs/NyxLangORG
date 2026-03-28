@@ -1,0 +1,61 @@
+/**
+ * Templates Module
+ * 
+ * Provides template rendering functionality for HTML and text templates.
+ * 
+ * @module templates
+ * @version 1.0.0
+ */
+
+mod engine;
+
+/**
+ * Template Engine type
+ */
+type TemplateEngine = engine::TemplateEngine;
+
+/**
+ * Template type
+ */
+type Template = engine::Template;
+
+/**
+ * Create a new template engine
+ * 
+ * @param directory - Template directory
+ * @returns A new template engine
+ * 
+ * @example
+ * let engine = TemplateEngine(directory="./templates");
+ */
+fn TemplateEngine(directory: string) -> TemplateEngine {
+    return engine::create(directory);
+}
+
+/**
+ * Render a template
+ * 
+ * @param name - Template name
+ * @param context - Template context/variables
+ * @returns Rendered template string
+ * 
+ * @example
+ * let html = render("index.html", {"name": "John"});
+ */
+fn render(name: string, context: Map<string, any>) -> string {
+    return engine::render_template(name, context);
+}
+
+/**
+ * Render template string directly
+ * 
+ * @param template - Template string
+ * @param context - Template context/variables
+ * @returns Rendered string
+ * 
+ * @example
+ * let html = render_string("Hello {{ name }}!", {"name": "World"});
+ */
+fn render_string(template: string, context: Map<string, any>) -> string {
+    return engine::render_string(template, context);
+}

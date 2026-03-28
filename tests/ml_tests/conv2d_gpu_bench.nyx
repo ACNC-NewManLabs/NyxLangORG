@@ -1,0 +1,43 @@
+import ml
+
+fn main() {
+    println("--- Nyx ML GPU Convolution Benchmark ---")
+    
+    let shape = [1, 64, 32, 32]
+    let w_shape = [64, 64, 3, 3]
+    let b_shape = [64]
+    
+    println("Setting up tensors...")
+    let t_cpu = ml::tensor::ones(shape, false)
+    let w_cpu = ml::tensor::ones(w_shape, false)
+    let b_cpu = ml::tensor::ones(b_shape, false)
+    
+    println("Benchmarking CPU Conv2D (Baseline) [1x64x32x32 -> 64x64x3x3]...")
+    let start = get_time()
+    let res_cpu = t_cpu.conv2d(w_cpu, b_cpu, 1, 1)
+    let end = get_time()
+    println("  CPU Latency: " + (end - start) + "ms")
+    
+    println("Moving tensors to GPU...")
+    let t_gpu = t_cpu.move_to("gpu")
+    let w_gpu = w_cpu.move_to("gpu")
+    let b_gpu = b_cpu.move_to("gpu")
+    
+    println("Benchmarking GPU Conv2D (Accelerated)...")
+    # Warmup
+    t_gpu.conv2d(w_gpu, b_gpu, 1, 1)
+    
+    let start_gpu = get_time()
+    let iterations = 10
+    let i = 0
+    while i < iterations {
+       t_gpu.conv2d(w_gpu, b_gpu, 1, 1)
+       i = i + 1
+    }
+    let end_gpu = get_time()
+    let avg_gpu = (end_gpu - start_gpu) / iterations
+    println("  GPU Avg Latency: " + avg_gpu + "ms")
+    
+    let speedup = (end - start) / avg_gpu
+    println("Speedup: " + speedup + "x")
+}

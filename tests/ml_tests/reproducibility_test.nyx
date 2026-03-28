@@ -1,0 +1,83 @@
+import ml;
+
+fn run_training_session(seed) {
+    ml::tensor::set_seed(seed)
+    
+    # 1. Create model and data
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(2, 4, "relu"),
+        ml::nn::Linear(4, 1, "sigmoid")
+    ])
+    
+    let x = ml::tensor::seeded_randn([10, 2], false)
+    let y = ml::tensor::seeded_randn([10, 1], false)
+    
+    let loader = ml::data::DataLoader(x, y, 2, true) # shuffle=true
+    let optimizer = ml::optim::SGD(model.layers, 0.1)
+    
+    let losses = []
+    let epoch = 0
+    while epoch < 3 {
+        loader.reset()
+        let epoch_loss = 0.0
+        let batch_count = 0
+        
+        let batch = loader.get_batch()
+        while batch != null {
+            optimizer.zero_grad()
+            let pred = model.forward(batch.x)
+            let loss = ml::nn::mse_loss(pred, batch.y)
+            loss.backward()
+            optimizer.step()
+            
+            epoch_loss = epoch_loss + loss.item()
+            batch_count = batch_count + 1
+            batch = loader.get_batch()
+        }
+        losses.push(epoch_loss / (batch_count * 1.0))
+        epoch = epoch + 1
+    }
+    return losses
+}
+
+fn test_reproducibility() {
+    println("--- Deterministic Training & Shuffling Test ---")
+    
+    let seed = 42
+    println("Running Session 1 with seed ", seed, "...")
+    let losses1 = run_training_session(seed)
+    println("Losses 1: ", losses1)
+    
+    println("Running Session 2 with seed ", seed, "...")
+    let losses2 = run_training_session(seed)
+    println("Losses 2: ", losses2)
+    
+    # Compare
+    let identical = true
+    let i = 0
+    while i < losses1.len() {
+        if losses1[i] != losses2[i] { identical = false }
+        i = i + 1
+    }
+    
+    if identical {
+        println("SUCCESS: Training and shuffling are perfectly reproducible")
+    } else {
+        println("FAIL: Training sessions diverged despite same seed")
+    }
+    
+    # Verify different seeds produce different results
+    println("Running Session 3 with seed 123...")
+    let losses3 = run_training_session(123)
+    println("Losses 3: ", losses3)
+    
+    if losses1[0] != losses3[0] {
+        println("SUCCESS: Different seeds produce different results")
+    } else {
+        println("WARN: Different seeds produced same results (unlikely but possible)")
+    }
+}
+
+fn main() {
+    test_reproducibility()
+}

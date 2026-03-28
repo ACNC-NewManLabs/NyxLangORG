@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+
+  <!-- background -->
+  <rect width="512" height="512" fill="#f4f3ff"/>
+
+  <defs>
+    <!-- purple → indigo → blue smooth gradient -->
+    <linearGradient id="nyxPurpleBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14002B"/>
+      <stop offset="12%" stop-color="#2A0057"/>
+      <stop offset="25%" stop-color="#3F007D"/>
+      <stop offset="40%" stop-color="#5A189A"/>
+      <stop offset="55%" stop-color="#6A1B9A"/>
+      <stop offset="70%" stop-color="#5E35B1"/>
+      <stop offset="82%" stop-color="#3949AB"/>
+      <stop offset="92%" stop-color="#1E5ED8"/>
+      <stop offset="100%" stop-color="#007BFF"/>
+    </linearGradient>
+
+    <!-- clip path for N -->
+    <clipPath id="nClip">
+      <path d="
+        M140 380
+        L140 130
+        L200 130
+        L310 300
+        L310 130
+        L370 130
+        L370 380
+        L310 380
+        L200 210
+        L200 380
+        Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- gradient fill -->
+  <g clip-path="url(#nClip)">
+    <rect x="0" y="0" width="512" height="512" fill="url(#nyxPurpleBlue)"/>
+  </g>
+
+  <!-- trademark -->
+  <text x="385" y="145"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="36"
+        font-weight="700"
+        fill="#1a1a1a">
+        ™
+  </text>
+
+</svg>

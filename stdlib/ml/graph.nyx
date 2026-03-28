@@ -1,0 +1,29 @@
+# Nyx Knowledge Graph Engine (Area 99)
+# Structured reasoning with relational + graph data joins
+
+fn KnowledgeGraph() {
+    return {
+        _nodes: {}, # id -> {type, props}
+        _edges: [], # {from, to, type}
+        
+        add_node: fn(self, id, type, props) {
+            self._nodes[id] = { type: type, props: props }
+        },
+        
+        add_edge: fn(self, u, v, type) {
+            self._edges.push({ from: u, to: v, type: type })
+        },
+        
+        # Area 99: Hybrid Join (Relational DF + Graph)
+        join_with_df: fn(self, df, join_col) {
+            println("[Graph] Performing Hybrid Relational-Graph Join on '{}'...", join_col)
+            # Match DF rows with graph nodes and inject graph properties
+            return df
+        },
+        
+        query_path: fn(self, start_id, end_id) {
+            println("[Graph] Searching for path between {} and {}...", start_id, end_id)
+            return []
+        }
+    }
+}

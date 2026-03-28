@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-03-09T06:31:56.539771623+00:00",
+  "analyzed_files": 27,
+  "total_lines": 144,
+  "average_lines": 5.333333333333333,
+  "high_complexity_files": [],
+  "duplicate_groups": [],
+  "suggestions": [
+    "no major structural issues detected"
+  ],
+  "dependency_findings": [
+    "nyx-http is pre-1.0 and dependency-light; validate stability guarantees",
+    "nyx-crypto is pre-1.0 and dependency-light; validate stability guarantees",
+    "nyx-testing is pre-1.0 and dependency-light; validate stability guarantees",
+    "installed dependency count: 1"
+  ],
+  "compatibility_risks": [
+    "package 'nyx-http' is pre-1.0; monitor breaking-change risk",
+    "package 'nyx-crypto' is pre-1.0; monitor breaking-change risk",
+    "package 'nyx-testing' is pre-1.0; monitor breaking-change risk"
+  ]
+}

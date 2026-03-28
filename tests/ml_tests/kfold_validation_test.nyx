@@ -1,0 +1,52 @@
+import ml;
+import std::df;
+
+# --- Helper: K-Fold Metrics ---
+
+fn mean(arr) {
+    let sum = 0.0
+    let i = 0
+    while i < arr.len() { sum = sum + arr[i] i = i + 1 }
+    return sum / arr.len()
+}
+
+fn std(arr) {
+    let m = mean(arr)
+    let sq_diff = 0.0
+    let i = 0
+    while i < arr.len() {
+        let diff = arr[i] - m
+        sq_diff = sq_diff + (diff * diff)
+        i = i + 1
+    }
+    return std::math::sqrt(sq_diff / arr.len())
+}
+
+# --- Test Case ---
+
+fn test_kfold() {
+    println("--- Testing K-Fold Validation Stability ---")
+    
+    # Mock fold results (Accuracy across 5 folds)
+    let fold_scores = [0.91, 0.89, 0.90, 0.92, 0.88]
+    
+    let avg = mean(fold_scores)
+    let s = std(fold_scores)
+    
+    println("Results over 5 Folds:")
+    println("  Mean Accuracy: ", avg)
+    println("  Std Deviation: ", s)
+    
+    # Stability Rule: Std < 0.05
+    if s < 0.02 {
+        println("SUCCESS: Model performance is highly stable across folds")
+    } else if s < 0.05 {
+        println("SUCCESS: Model performance is stable (acceptable variance)")
+    } else {
+        println("FAIL: Large variance across folds (Unreliable model)")
+    }
+}
+
+fn main() {
+    test_kfold()
+}

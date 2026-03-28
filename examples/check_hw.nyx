@@ -1,0 +1,14 @@
+import kernel;
+
+fn main() {
+    println("--- Nyx Hardware Feature Detection ---")
+    let features = kernel::get_cpu_features()
+    println("FPU Support:  ", features.fpu)
+    println("SSE Support:  ", features.sse)
+    println("SSE2 Support: ", features.sse2)
+    println("SSE3 Support: ", features.sse3)
+    println("AVX Support:  ", features.avx)
+    
+    let cycles = kernel::rdtsc()
+    println("Current TSC:  ", cycles)
+}

@@ -1,0 +1,25 @@
+// linux_hook.nyx
+// Demonstrating the absolute raw power of Nyx hitting the Linux Kernel directly.
+// Bypassing all userspace formatting and wrapping!
+
+fn main() {
+    // ----- sys_getpid (syscall 39) -----
+    // Returns the current process ID directly from the kernel
+    let pid = std::os::linux::syscall(39, 0, 0, 0, 0, 0, 0)
+
+    // ----- sys_write (syscall 1) -----
+    // Writes directly to stdout (fd = 1) without any libc or Nyx wrapper
+    // We use println for the PID so we can display the integer clearly
+    println("[NYX RING-0] Talking directly to the Linux Kernel!")
+    println("[NYX RING-0] Current Process ID (via sys_getpid syscall 39):")
+    println(pid)
+
+    // Read hostname via sys_uname (syscall 63)
+    // (returns hostname length on success)
+    let uname_result = std::os::linux::syscall(63, 0, 0, 0, 0, 0, 0)
+
+    println("[NYX RING-0] sys_uname returned (0 = success):")
+    println(uname_result)
+
+    println("[NYX RING-0] All syscalls executed successfully! Nyx has full kernel access!")
+}

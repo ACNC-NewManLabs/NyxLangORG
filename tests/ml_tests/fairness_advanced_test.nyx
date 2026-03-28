@@ -1,0 +1,69 @@
+import ml;
+import std::df;
+
+# --- Helper: Intersectional Fairness ---
+
+fn intersectional_fairness(df, target_col, pred_col, group_a_col, group_b_col) {
+    let nr = df.nrows()
+    let results = {}
+    
+    # 1. Individual Groups
+    let i = 0
+    while i < nr {
+        let ga = df.col(group_a_col)._data[i]
+        let gb = df.col(group_b_col)._data[i]
+        let key = ga + " AND " + gb
+        
+        if results[key] == null { 
+            results[key] = { count: 0, correct: 0, positives: 0 } 
+        }
+        
+        let target = df.col(target_col)._data[i]
+        let pred = df.col(pred_col)._data[i]
+        
+        results[key].count = results[key].count + 1
+        if target == pred { results[key].correct = results[key].correct + 1 }
+        if pred == 1 { results[key].positives = results[key].positives + 1 }
+        
+        i = i + 1
+    }
+    
+    return results
+}
+
+# --- Test Case ---
+
+fn test_fairness_advanced() {
+    println("--- Testing Advanced Intersectional Fairness & Audit ---")
+    
+    # Sex: M/F, Age: Young/Old
+    let c_sex = std::df::Column("sex", "str", ["M", "M", "M", "M", "F", "F", "F", "F"], null)
+    let c_age = std::df::Column("age", "str", ["Y", "O", "Y", "O", "Y", "O", "Y", "O"], null)
+    let c_lab = std::df::Column("label", "int", [1, 1, 0, 0, 1, 1, 0, 0], null)
+    let c_pre = std::df::Column("pred",  "int", [1, 1, 0, 0, 1, 1, 1, 0], null)
+    # Note: F AND Y has one false positive (pred=1, label=0)
+    
+    let df = std::df::DataFrame([c_sex, c_age, c_lab, c_pre], null)
+    let res = intersectional_fairness(df, "label", "pred", "sex", "age")
+    
+    println("Intersectional Analysis:")
+    let keys = ["M AND Y", "M AND O", "F AND Y", "F AND O"]
+    let k = 0
+    while k < keys.len() {
+        let key = keys[k]
+        let r = res[key]
+        let acc = r.correct * 1.0 / r.count
+        let s_rate = r.positives * 1.0 / r.count
+        
+        println("  ", key, ":")
+        println("    Accuracy:       ", acc * 100, "%")
+        println("    Selection Rate: ", s_rate * 100, "%")
+        
+        if acc < 0.7 { println("    WARN: Performance drop in intersectional group!") }
+        k = k + 1
+    }
+}
+
+fn main() {
+    test_fairness_advanced()
+}

@@ -1,0 +1,14 @@
+fn main() {
+    let start = __native_time_ms()
+    let mut i = 0
+    let mut sum = 0
+    while i < 10000000 {
+        sum = sum + i
+        i = i + 1
+    }
+    let end = __native_time_ms()
+    print("Sum: ")
+    print(sum)
+    print("Time (ms): ")
+    print(end - start)
+}

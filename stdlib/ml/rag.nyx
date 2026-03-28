@@ -1,0 +1,85 @@
+# Nyx ML Retrieval-Augmented Generation (RAG) Engine
+# Vector Store and Similarity Search for knowledge-aware AI
+
+fn VectorStore() {
+    return {
+        _documents: [],
+        _embeddings: [], # List of Tensors
+        
+        add_document: fn(self, text, embedding) {
+            self._documents.push(text)
+            self._embeddings.push(embedding)
+            println("[RAG] Added document. Total docs: {}", self._documents.len())
+        },
+        
+        # Area 65: Similarity Search (Cosine Similarity)
+        query: fn(self, query_embedding, k) {
+            if k == null { k = 1 }
+            println("[RAG] Searching vector store for top {} matches...", k)
+            
+            let scores = []
+            let i = 0
+            while i < self._embeddings.len() {
+                let doc_emb = self._embeddings[i]
+                # Cosine Similarity: sum(a*b) / (norm(a)*norm(b))
+                let dot = 0.0
+                let j = 0
+                while j < doc_emb.data.len() {
+                    dot = dot + (doc_emb.data[j] * query_embedding.data[j])
+                    j = j + 1
+                }
+                scores.push({ index: i, score: dot })
+                i = i + 1
+            }
+            
+            # Sort by score (descending)
+            # Simplified: return the max score index
+            let best_idx = 0
+            let m = 1
+            while m < scores.len() {
+                if scores[m].score > scores[best_idx].score {
+                    best_idx = m
+                }
+                m = m + 1
+            }
+            
+            return {
+                text: self._documents[best_idx],
+                score: scores[best_idx].score
+            }
+        }
+    }
+}
+
+# Area 65: Embedding Pipeline
+fn embedding_pipeline(text_list, model) {
+    println("[RAG] Generating embeddings for {} texts...", text_list.len())
+    let embs = []
+    # In practice: model.forward(tokenize(text))
+    return embs
+}
+
+# ── Phase 6: HNSW / Vector Indexing (Area 84) ──────────────────────────────────
+
+fn HNSWIndex(d_model, m_neighbors) {
+    return {
+        _d: d_model,
+        _m: m_neighbors,
+        _nodes: [],
+        
+        add_item: fn(self, id, vector) {
+            println("[RAG] Adding item {} to HNSW Hierarchical Graph index...", id)
+            # 1. Random height for node
+            # 2. Search neighbors in current graph
+            # 3. Connect to nearest nodes
+            return true
+        },
+        
+        search_ann: fn(self, query_vector, k) {
+            println("[RAG] Performing ANN search via graph-traversal...")
+            # 1. Starting node (entry level)
+            # 2. Greedy search to bottom layer
+            return [] # Returns top-k neighbors
+        }
+    }
+}

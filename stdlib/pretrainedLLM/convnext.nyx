@@ -1,0 +1,10 @@
+use ml::nn;
+
+fn create(config) {
+    return ml::nn::Sequential([
+        ml::nn::Conv2D(3, 96, 4, 4, 0),
+        ml::nn::AdaptiveAvgPool2d(1, 1),
+        ml::nn::Flatten(),
+        ml::nn::Linear(768, 1000, null, "cpu")
+    ]);
+}

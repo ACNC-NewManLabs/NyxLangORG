@@ -1,0 +1,72 @@
+import ml;
+import std::df;
+
+# --- Nyx Safety Envelope (Operational Domain Control) ---
+
+# Define the "Safe Zone" based on training data statistics
+# Features: [age, income_normalized]
+let envelope = {
+    age_min: 18.0,
+    age_max: 85.0,
+    inc_min: 0.0,
+    inc_max: 1.0
+}
+
+fn check_safety_envelope(features) {
+    println("Auditing Safety Envelope for Features: ", features)
+    
+    # 1. Age check
+    if features[0] < envelope.age_min || features[0] > envelope.age_max {
+        println("  OUTSIDE_ENVELOPE: Age ", features[0], " is outside [18, 85]")
+        return false
+    }
+    
+    # 2. Income check
+    if features[1] < envelope.inc_min || features[1] > envelope.inc_max {
+        println("  OUTSIDE_ENVELOPE: Income ", features[1], " is outside [0, 1]")
+        return false
+    }
+    
+    println("  INSIDE_ENVELOPE: Operating domain verified.")
+    return true
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("--- Testing Nyx Safety Envelope: Domain Enforcement ---")
+    
+    # 1. Valid Input
+    let in_1 = [25.0, 0.5]
+    let res_1 = check_safety_envelope(in_1)
+    println("  Result: ", res_1)
+    
+    # 2. Invalid Input (Age)
+    let in_2 = [10.0, 0.5]
+    let res_2 = check_safety_envelope(in_2)
+    println("  Result: ", res_2)
+    
+    # 3. Invalid Input (Extreme Outlier)
+    let in_3 = [45.0, 500.0]
+    let res_3 = check_safety_envelope(in_3)
+    println("  Result: ", res_3)
+}
+
+fn main() {
+    println("--- Testing Nyx Safety Envelope: Domain Enforcement ---")
+    
+    # 1. Valid Input
+    let in_1 = [25.0, 0.5]
+    let res_1 = check_safety_envelope(in_1)
+    println("  Result: ", res_1)
+    
+    # 2. Invalid Input (Age)
+    let in_2 = [10.0, 0.5]
+    let res_2 = check_safety_envelope(in_2)
+    println("  Result: ", res_2)
+    
+    # 3. Invalid Input (Extreme Outlier)
+    let in_3 = [45.0, 500.0]
+    let res_3 = check_safety_envelope(in_3)
+    println("  Result: ", res_3)
+}

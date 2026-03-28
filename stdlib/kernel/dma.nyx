@@ -1,0 +1,31 @@
+// DMA (Direct Memory Access) Support for Nyx
+// Interfaces with hardware DMA controllers or performs optimized memory copies with fencing.
+
+// Memory Fence to ensure DMA consistency
+fn fence() {
+    std::kernel::memory::fence()
+}
+
+# Aligned Memory Copy (DMA-style)
+// ensures data is flushed and synced before/after transfer
+fn transfer(src, dst, size) {
+    if size == 0 { return }
+    
+    fence() // Sync before transfer
+    
+    let i = 0
+    while i < size {
+        // Optimization: use 64-bit writes if possible for 8-byte aligned blocks
+        if (size - i >= 8) && ((src + i) % 8 == 0) && ((dst + i) % 8 == 0) {
+            let val = std::kernel::memory::read_u64(src + i)
+            std::kernel::memory::write_u64(dst + i, val)
+            i = i + 8
+        } else {
+            let val = std::kernel::memory::read_byte(src + i)
+            std::kernel::memory::write_byte(dst + i, val)
+            i = i + 1
+        }
+    }
+    
+    fence() // Sync after transfer
+}

@@ -1,0 +1,41 @@
+import ml;
+
+# --- Nyx Continuous Re-Certification Scheduler (Audit Lifecycle) ---
+
+fn main() {
+    println("--- Nyx Auditor: Continuous Re-Certification Hub ---")
+    println("")
+
+    # 1. Period Definition
+    let current_q = "2026-Q1"
+    let next_q = "2026-Q2"
+    
+    # 2. Re-Certification Task List
+    let recert_tasks = [
+        { task: "Evidence_Re_Signing", status: "PENDING", due: "2026-04-01" },
+        { task: "SLA_Contract_Validation", status: "WAITING", due: "2026-04-10" },
+        { task: "External_Audit_Concensus", status: "SCHEDULED", due: "2026-04-15" }
+    ]
+
+    println("RE-CERTIFICATION CADENCE: [QUARTERLY]")
+    println("  Active Quarter:   ", current_q)
+    println("  Upcoming Milestone:", next_q)
+    println("")
+
+    println("PENDING RECERTIFICATION TASKS:")
+    let i = 0
+    while i < std::list::len(recert_tasks) {
+        let t = recert_tasks[i]
+        println("  [", t.due, "] ", t.task, " -> ", t.status)
+        i = i + 1
+    }
+
+    # 3. Governance Alert
+    println("")
+    println("GOVERNANCE STATUS:")
+    println("  [ALERT] Re-certification window opens in 7 days.")
+    println("  [ACTION] Preparing automated evidence bundle for SIGNER_EXECUTIVE_001.")
+
+    println("")
+    println("SUCCESS: Re-certification scheduler verified. Assurance is eternal.")
+}

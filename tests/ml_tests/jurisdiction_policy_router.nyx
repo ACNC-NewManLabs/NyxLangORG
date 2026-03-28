@@ -1,0 +1,44 @@
+import ml;
+
+# --- Nyx Jurisdiction Policy Router (Regional AI Compliance) ---
+
+fn main() {
+    println("--- Nyx Auditor: Regional Compliance Router ---")
+    println("")
+
+    # 1. Define Regional Policy Sets
+    let policies = {
+        "EU_GDPR": {
+            fairness_parity_max: 0.05,
+            privacy_epsilon_max: 0.8,
+            explainability_req: "HIGH"
+        },
+        "US_FINRA": {
+            fairness_parity_max: 0.08,
+            privacy_epsilon_max: 1.2,
+            explainability_req: "MEDIUM"
+        }
+    }
+
+    # 2. Routing Logic
+    let active_jurisdiction = "EU_GDPR"
+    println("ACTIVE JURISDICTION: ", active_jurisdiction)
+
+    let active_rules = policies[active_jurisdiction]
+    println("  Constraint: Fairness Parity < ", active_rules.fairness_parity_max)
+    println("  Constraint: Privacy Epsilon < ", active_rules.privacy_epsilon_max)
+    println("  Constraint: Explainability:    ", active_rules.explainability_req)
+    println("")
+
+    # 3. Policy Enforcement Check
+    let current_metrics = { parity: 0.04, eps: 0.75 }
+    println("METRIC VALIDATION:")
+    if current_metrics.parity <= active_rules.fairness_parity_max {
+        println("  Fairness Status: ✅ COMPLIANT (", active_jurisdiction, ")")
+    } else {
+        println("  Fairness Status: ❌ VIOLATION")
+    }
+
+    println("")
+    println("SUCCESS: Jurisdiction-aware policy routing verified. Global deployment ready.")
+}

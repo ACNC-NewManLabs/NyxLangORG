@@ -1,0 +1,66 @@
+import ml;
+import std::df;
+
+# --- Helper: Regression Check ---
+
+fn accuracy(y_true, y_pred) {
+    let n = y_true.len()
+    if n == 0 { return 0.0 }
+    let correct = 0
+    let i = 0
+    while i < n {
+        if y_true[i] == y_pred[i] { correct = correct + 1 }
+        i = i + 1
+    }
+    return correct * 1.0 / n
+}
+
+fn compare_models(y_true, y_v1, y_v2) {
+    let acc_v1 = accuracy(y_true, y_v1)
+    let acc_v2 = accuracy(y_true, y_v2)
+    
+    # Prediction consistency: % predictions changed
+    let n = y_true.len()
+    let changed = 0
+    let i = 0
+    while i < n {
+        if y_v1[i] != y_v2[i] { changed = changed + 1 }
+        i = i + 1
+    }
+    let consistency = (n - changed) * 1.0 / n
+    
+    return {
+        acc_v1: acc_v1,
+        acc_v2: acc_v2,
+        delta: acc_v2 - acc_v1,
+        consistency: consistency
+    }
+}
+
+# --- Test Case ---
+
+fn test_regression() {
+    println("--- Testing Model Regression (v1 vs v2) ---")
+    
+    let y_true = [1, 0, 1, 1, 0]
+    let y_v1   = [1, 0, 0, 1, 0] # 80% accuracy
+    let y_v2   = [1, 0, 1, 1, 0] # 100% accuracy (Improvement)
+    
+    let res = compare_models(y_true, y_v1, y_v2)
+    
+    println("Baseline (v1) Accuracy: ", res.acc_v1)
+    println("New Model (v2) Accuracy: ", res.acc_v2)
+    println("Accuracy Delta:        ", res.delta)
+    println("Prediction Consistency: ", res.consistency)
+    
+    # Regression Rule: No degradation
+    if res.delta < 0 {
+        println("FAIL: Regression detected! Model v2 is worse than v1")
+    } else {
+        println("SUCCESS: No regression detected (Model v2 >= v1)")
+    }
+}
+
+fn main() {
+    test_regression()
+}

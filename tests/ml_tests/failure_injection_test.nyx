@@ -1,0 +1,76 @@
+import ml;
+import std::df;
+
+# --- Helper: Resilient Pipeline ---
+
+fn run_resilient_pipeline(df) {
+    let schema = df.schema()
+    
+    # 1. Check for required column
+    if schema.has("feat") == false {
+        return { status: "error", message: "MISSING_REQUIRED_COLUMN" }
+    }
+    
+    # 2. Check for correct type
+    if schema.dtype_of("feat") != "float" {
+        return { status: "error", message: "INVALID_DTYPE" }
+    }
+    
+    # 3. Process with null-safety
+    let col = df.col("feat")
+    let data = col._data
+    let out = []
+    let i = 0
+    let null_count = 0
+    while i < data.len() {
+        let val = data[i]
+        if val == null {
+            null_count = null_count + 1
+            out.push(0.0) # Impute with 0.0
+        } else {
+            out.push(val * 2.0)
+        }
+        i = i + 1
+    }
+    
+    return { status: "ok", output: out, nulls_imputed: null_count }
+}
+
+# --- Test Case: Failure Injection ---
+
+fn test_failure_injection() {
+    println("--- Testing Failure Injection & Robustness ---")
+    
+    # 1. Missing Column
+    let c_wrong = std::df::Column("not_feat", "float", [1.0], null)
+    let df_missing = std::df::DataFrame([c_wrong], null)
+    
+    # 2. Corrupted Dtype
+    let c_str = std::df::Column("feat", "str", ["hit"], null)
+    let df_corrupt = std::df::DataFrame([c_str], null)
+    
+    # 3. Partial Nulls
+    let c_nulls = std::df::Column("feat", "float", [1.0, null, 3.0], null)
+    let df_nulls = std::df::DataFrame([c_nulls], null)
+    
+    println("Injecting Missing Column...")
+    let res1 = run_resilient_pipeline(df_missing)
+    println("  Result: ", res1.status, " - ", res1.message)
+    if res1.status == "error" { println("  SUCCESS: Error caught gracefully") }
+    
+    println("Injecting Corrupted Dtype...")
+    let res2 = run_resilient_pipeline(df_corrupt)
+    println("  Result: ", res2.status, " - ", res2.message)
+    if res2.status == "error" { println("  SUCCESS: Type mismatch caught gracefully") }
+    
+    println("Injecting Partial Nulls (Imputation mode)...")
+    let res3 = run_resilient_pipeline(df_nulls)
+    println("  Result: ", res3.status, " - Imputed ", res3.nulls_imputed, " values")
+    if res3.status == "ok" && res3.nulls_imputed == 1 {
+        println("  SUCCESS: Nulls handled via imputation")
+    }
+}
+
+fn main() {
+    test_failure_injection()
+}

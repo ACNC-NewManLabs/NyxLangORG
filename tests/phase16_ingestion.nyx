@@ -1,0 +1,33 @@
+import df.io;
+import df.lazy;
+
+fn main() {
+    println("=== PHASE 16: HIGH-PERFORMANCE INGESTION TEST ===");
+    
+    let path = "tests/large_data.csv";
+    println("Scanning CSV:", path);
+    
+    # Using the new high-performance scanner
+    let lf = df::io::scan_csv(path, null);
+    
+    println("Applying Lazy Filter: val > 14990");
+    let result = lf.filter({ "_kind": "binop", "_value": ">", "_args": [
+        { "_kind": "col", "_value": "val" },
+        { "_kind": "lit", "_value": 14990.0 }
+    ]})
+    .collect();
+    
+    if result == null {
+        println("❌ Test Failed: Result is null");
+        return;
+    }
+    
+    println("Result Shape:", result.shape());
+    result.print(5);
+    
+    if result.nrows() > 0 {
+        println("✅ High-Performance Ingestion Test Passed!");
+    } else {
+        println("❌ Test Failed: No rows returned");
+    }
+}

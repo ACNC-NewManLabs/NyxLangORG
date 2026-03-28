@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(50277, 2560, 64, 1, null, null, "mamba", "cpu");
+}

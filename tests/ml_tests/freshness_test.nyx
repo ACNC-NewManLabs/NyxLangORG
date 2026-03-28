@@ -1,0 +1,58 @@
+import ml;
+import std::df;
+
+# --- Helper: Freshness Check ---
+
+fn check_freshness(df, threshold_ms) {
+    let ts_data = df.col("timestamp")._data
+    let max_ts = 0
+    let i = 0
+    while i < ts_data.len() {
+        if ts_data[i] > max_ts { max_ts = ts_data[i] }
+        i = i + 1
+    }
+    
+    let now = std::time::now()
+    let lag = now - max_ts
+    println("  Detected Lag: ", lag / 1000.0, " seconds")
+    
+    if lag > threshold_ms {
+        return false
+    }
+    return true
+}
+
+# --- Test Case: Data Freshness ---
+
+fn test_freshness() {
+    println("--- Testing Data Freshness & Pipeline Lag ---")
+    
+    let now_ms = std::time::now()
+    println("Current System Time (ms): ", now_ms)
+    
+    # 1. Fresh data (Generated 1 minute ago)
+    let fresh_ts = now_ms - 60000
+    let c_fresh = std::df::Column("timestamp", "int", [fresh_ts, fresh_ts + 1000], null)
+    let df_fresh = std::df::DataFrame([c_fresh], null)
+    
+    # 2. Stale data (Generated 2 hours ago)
+    let stale_ts = now_ms - (2 * 3600 * 1000)
+    let c_stale = std::df::Column("timestamp", "int", [stale_ts, stale_ts + 1000], null)
+    let df_stale = std::df::DataFrame([c_stale], null)
+    
+    let one_hour_ms = 3600 * 1000
+    
+    println("Checking fresh data (Threshold = 1 hour)...")
+    if check_freshness(df_fresh, one_hour_ms) {
+        println("SUCCESS: Fresh data accepted")
+    }
+    
+    println("Checking stale data (Threshold = 1 hour)...")
+    if check_freshness(df_stale, one_hour_ms) == false {
+        println("SUCCESS: Stale data rejected (Pipeline lag detected)")
+    }
+}
+
+fn main() {
+    test_freshness()
+}

@@ -1,0 +1,610 @@
+# Nyx Standard Library: ML Tensor
+# High-performance tensor operations wrapping native Rust kernels
+# Note: Methods return raw {data, shape} objects to avoid recursive constructor calls
+
+fn Tensor(data, shape, requires_grad, _ctx, device, strides, offset) {
+    if shape == null { println("DEBUG: Tensor() called with Null shape!") }
+    if requires_grad == null { requires_grad = false }
+    if device == null { device = "cpu" }
+    
+    if strides == null {
+        # Default: row-major strides
+        let s = []
+        let current_stride = 1
+        let i = shape.len() - 1
+        while i >= 0 {
+            s.push(current_stride)
+            current_stride = current_stride * shape[i]
+            i = i - 1
+        }
+        # Reverse to get [dim0_stride, dim1_stride, ...]
+        strides = []
+        let j = s.len() - 1
+        while j >= 0 {
+            strides.push(s[j])
+            j = j - 1
+        }
+    }
+    if offset == null { offset = 0 }
+
+    return {
+        data: data,
+        shape: shape,
+        strides: strides,
+        offset: offset,
+        requires_grad: requires_grad,
+        grad: null,
+        _ctx: _ctx,
+        device: device,
+        
+        move_to: move_to,
+        matmul_gpu: matmul_gpu,
+        matmul: matmul,
+        matmul_bias: matmul_bias,
+        matmul_fused: matmul_fused,
+        softmax: softmax,
+        add: add,
+        sub: sub,
+        mul: mul,
+        div: div,
+        relu: relu,
+        exp: exp,
+        fma: fma,
+        tanh: tanh,
+        sigmoid: sigmoid,
+        leaky_relu: leaky_relu,
+        elu: elu,
+        gelu: gelu,
+        hardswish: hardswish,
+        hardsigmoid: hardsigmoid,
+        mish: mish,
+        abs_max: abs_max,
+        is_finite: is_finite,
+        assert_finite: assert_finite,
+        check_health: check_health,
+        clone: clone,
+        item: item,
+        reshape: reshape,
+        transpose: transpose,
+        slice: slice,
+        flatten: flatten,
+        mean: mean,
+        sum: sum,
+        backward: backward,
+        clip_grad: clip_grad,
+        dropout: dropout,
+        layer_norm: layer_norm,
+        conv2d: conv2d,
+        maxpool2d: maxpool2d,
+        adaptive_avg_pool2d: adaptive_avg_pool2d,
+    }
+}
+
+fn move_to(self, new_device) {
+    if self.device == new_device { return self }
+    if new_device == "gpu" {
+        let res = std::math::to_gpu(self.data, self.shape)
+        if res != null { self.data = res }
+    } else {
+        let res = std::math::to_cpu(self.data)
+        if res != null { self.data = res }
+    }
+    self.device = new_device
+    return self
+}
+
+fn matmul(self, weights) {
+    let res_data = std::math::matmul(
+        self.data, self.shape[0], self.shape[1],
+        weights.data, weights.shape[0], weights.shape[1]
+    )
+    if res_data == null { return null }
+    let out_shape = [self.shape[0], weights.shape[1]]
+    let req = self.requires_grad || weights.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "matmul", parents: [self, weights] }
+    }
+    let dev = self.device
+    if weights.device == "gpu" { dev = "gpu" }
+    return ml::tensor::Tensor(res_data, out_shape, req, ctx, dev)
+}
+ 
+fn matmul_gpu(self, weights) {
+    let res_data = std::math::matmul_gpu(
+        self.data, self.shape[0], self.shape[1],
+        weights.data, weights.shape[1]
+    )
+    if res_data == null { return null }
+    let out_shape = [self.shape[0], weights.shape[1]]
+    let req = self.requires_grad || weights.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "matmul_gpu", parents: [self, weights] }
+    }
+    return ml::tensor::Tensor(res_data, out_shape, req, ctx, "gpu")
+}
+
+fn matmul_bias(self, weights, bias) {
+    # fused matmul + bias add in one operation
+    let res_data = std::math::matmul_bias(
+        self.data, self.shape[0], self.shape[1],
+        weights.data, weights.shape[0], weights.shape[1],
+        bias.data
+    )
+    if res_data == null {
+        # fallback: matmul then add
+        let h = self.matmul(weights)
+        if h == null { return null }
+        return h.add(bias)
+    }
+    let out_shape = [self.shape[0], weights.shape[1]]
+    let req = self.requires_grad || weights.requires_grad || bias.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "matmul_bias", parents: [self, weights, bias] }
+    }
+    let dev = self.device
+    if weights.device == "gpu" { dev = "gpu" }
+    return ml::tensor::Tensor(res_data, out_shape, req, ctx, dev)
+}
+
+fn matmul_fused(self, weights, bias) {
+    let res_data = std::math::matmul_bias(
+        self.data, self.shape[0], self.shape[1],
+        weights.data, weights.shape[0], weights.shape[1],
+        bias.data
+    )
+    if res_data == null { return null }
+    let out_shape = [self.shape[0], weights.shape[1]]
+    let req = self.requires_grad || weights.requires_grad || bias.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "matmul_fused", parents: [self, weights, bias] }
+    }
+    let dev = self.device
+    if weights.device == "gpu" { dev = "gpu" }
+    return ml::tensor::Tensor(res_data, out_shape, req, ctx, dev)
+}
+
+
+fn softmax(self) {
+    # std::math::softmax_native takes [data, rows]
+    # If 2D, rows = shape[0]. If 1D, rows = 1.
+    let rows = 1
+    if self.shape.len() > 1 { rows = self.shape[0] }
+    
+    let res_data = std::math::softmax(self.data, rows)
+    if res_data == null { return null }
+    
+    let req = self.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "softmax", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, req, ctx, self.device)
+}
+
+fn add(self, other) {
+    if self.device == "gpu" || other.device == "gpu" {
+        let len = self.shape[0] * self.shape[1]
+        let res_data = std::math::gpu_elementwise(self.data, other.data, 0, len) # 0: add
+        let req = self.requires_grad || other.requires_grad
+        let ctx = null
+        if req { ctx = { op: "add", parents: [self, other] } }
+        return ml::tensor::Tensor(res_data, self.shape, req, ctx, "gpu")
+    }
+    let res = std::math::add_broadcast(self.data, self.shape, other.data, other.shape)
+    if res == null { return null }
+    let req = self.requires_grad || other.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "add", parents: [self, other] }
+    }
+    return ml::tensor::Tensor(res.data, res.shape, req, ctx)
+}
+
+fn mul(self, other) {
+    if std::meta::typeof(other) == "number" {
+        let res_data = std::math::mul_scalar(self.data, other)
+        return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, null, self.device)
+    }
+    if self.device == "gpu" || other.device == "gpu" {
+        let len = self.shape[0] * self.shape[1]
+        let res_data = std::math::gpu_elementwise(self.data, other.data, 1, len) # 1: mul
+        let req = self.requires_grad || other.requires_grad
+        let ctx = null
+        if req { ctx = { op: "mul", parents: [self, other] } }
+        return ml::tensor::Tensor(res_data, self.shape, req, ctx, "gpu")
+    }
+    let res = std::math::mul_broadcast(self.data, self.shape, other.data, other.shape)
+    if res == null { return null }
+    let req = self.requires_grad || other.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "mul", parents: [self, other] }
+    }
+    return ml::tensor::Tensor(res.data, res.shape, req, ctx)
+}
+
+fn relu(self) {
+    let res_data = std::math::relu_array(self.data)
+    if res_data == null { return null }
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "relu", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx, self.device)
+}
+
+fn exp(self) {
+    if self.device == "gpu" {
+        let len = self.shape[0] * self.shape[1]
+        let res_data = std::math::gpu_elementwise(self.data, self.data, 3, len) # 3: exp
+        let ctx = null
+        if self.requires_grad { ctx = { op: "exp", parents: [self] } }
+        return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx, "gpu")
+    }
+    let res_data = std::math::exp_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "exp", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn fma(self, b, c) {
+    if self.device == "gpu" || b.device == "gpu" || c.device == "gpu" {
+        let len = self.shape[0] * self.shape[1]
+        let res_data = std::math::gpu_fma(self.data, b.data, c.data, len)
+        let req = self.requires_grad || b.requires_grad || c.requires_grad
+        let ctx = null
+        if req { ctx = { op: "fma", parents: [self, b, c] } }
+        return ml::tensor::Tensor(res_data, self.shape, req, ctx, "gpu")
+    }
+    # Fallback to a + b * c
+    return self.add(b.mul(c))
+}
+fn sub(self, other) {
+    let res = std::math::sub_broadcast(self.data, self.shape, other.data, other.shape)
+    if res == null { return null }
+    let req = self.requires_grad || other.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "sub", parents: [self, other] }
+    }
+    return ml::tensor::Tensor(res.data, res.shape, req, ctx)
+}
+
+fn div(self, other) {
+    let res = std::math::div_broadcast(self.data, self.shape, other.data, other.shape)
+    if res == null { return null }
+    let req = self.requires_grad || other.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "div", parents: [self, other] }
+    }
+    return ml::tensor::Tensor(res.data, res.shape, req, ctx)
+}
+
+fn tanh(self) {
+    let res_data = std::math::tanh_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "tanh", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn sigmoid(self) {
+    let res_data = std::math::sigmoid_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "sigmoid", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn leaky_relu(self, alpha) {
+    if alpha == null { alpha = 0.01 }
+    let res_data = std::math::leaky_relu_array(self.data, alpha)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "leaky_relu", parents: [self], alpha: alpha }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn elu(self, alpha) {
+    if alpha == null { alpha = 1.0 }
+    let res_data = std::math::elu_array(self.data, alpha)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "elu", parents: [self], alpha: alpha }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn gelu(self) {
+    let res_data = std::math::gelu_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "gelu", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn hardswish(self) {
+    let res_data = std::math::hardswish_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "hardswish", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn hardsigmoid(self) {
+    let res_data = std::math::hardsigmoid_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "hardsigmoid", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn mish(self) {
+    let res_data = std::math::mish_array(self.data)
+    let ctx = null
+    if self.requires_grad {
+        ctx = { op: "mish", parents: [self] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, self.requires_grad, ctx)
+}
+
+fn abs_max(self) {
+    return std::math::abs_max(self.data)
+}
+
+fn is_finite(self) {
+    return std::math::is_finite(self.data)
+}
+
+fn assert_finite(self, msg) {
+    if !self.is_finite() {
+        println("Finite check failed: ", msg)
+        exit(1)
+    }
+}
+
+fn check_health(self, name) {
+    let m = self.abs_max()
+    if m > 1e10 || m == null {
+        println("Health check failed for ", name, ": abs_max=", m)
+        self.assert_finite(name)
+    }
+}
+
+fn clone(self) {
+    let d = [] + self.data
+    return ml::tensor::Tensor(d, self.shape, self.requires_grad, self._ctx, self.device, self.strides, self.offset)
+}
+
+fn item(self) {
+    if self.data.len() == 1 { return self.data[0] }
+    return null
+}
+
+fn reshape(self, new_shape) {
+    return ml::tensor::Tensor(self.data, new_shape, self.requires_grad, self._ctx, self.device)
+}
+
+fn transpose(self, dim0, dim1) {
+    # Simple 2D transpose for now
+    if self.shape.len() != 2 { return null }
+    let new_shape = [self.shape[1], self.shape[0]]
+    let res_data = std::math::transpose_2d(self.data, self.shape[0], self.shape[1])
+    return ml::tensor::Tensor(res_data, new_shape, self.requires_grad, self._ctx, self.device)
+}
+
+fn slice(self, start_dims, end_dims) {
+    let res = std::math::slice_nd(self.data, self.shape, start_dims, end_dims)
+    if res == null { return null }
+    return ml::tensor::Tensor(res.data, res.shape, self.requires_grad, self._ctx, self.device)
+}
+
+fn flatten(self) {
+    let total = 1
+    for d in self.shape { total = total * d }
+    return self.reshape([total])
+}
+
+fn mean(self) {
+    let sum_val = 0
+    for x in self.data { sum_val = sum_val + x }
+    let m = sum_val / self.data.len()
+    
+    let req = self.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "mean", parents: [self] }
+    }
+    return ml::tensor::Tensor([m], [1], req, ctx)
+}
+
+fn sum(self) {
+    let s = 0
+    for x in self.data { s = s + x }
+    let req = self.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "sum", parents: [self] }
+    }
+    return ml::tensor::Tensor([s], [1], req, ctx)
+}
+
+fn backward(self, grad_output) {
+    if grad_output == null {
+        grad_output = ml::tensor::Tensor([1.0], [1], false)
+    }
+    
+    if self.grad == null {
+        self.grad = ml::tensor::zeros(self.shape)
+    }
+    
+    # Simple accumulation for terminal nodes
+    if self._ctx == null {
+        self.grad = self.grad.add(grad_output)
+        return null
+    }
+    
+    # Dispatch to autograd engine (abstracted here for brevity, implemented higher up)
+    std::math::backward(self, grad_output)
+}
+
+fn clip_grad(self, min_val, max_val) {
+    if self.grad != null {
+        self.grad.data = std::math::clip_array(self.grad.data, min_val, max_val)
+    }
+}
+
+fn dropout(self, p, training) {
+    if !training || p <= 0 { return self }
+    let res = std::math::dropout(self.data, p)
+    if res == null { return self }
+    let res_data = res.data
+    let mask = res.mask
+    let req = self.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "dropout", parents: [self], mask: mask }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, req, ctx, self.device)
+}
+
+fn layer_norm(self, normalized_shape, weight, bias, eps) {
+    if eps == null { eps = 1e-5 }
+    
+    let res_data = null
+    if self.device == "gpu" {
+        res_data = std::math::gpu_layer_norm(self.data, self.shape, normalized_shape, weight.data, bias.data, eps)
+    }
+    
+    if res_data == null {
+        res_data = std::math::layer_norm(self.data, self.shape, normalized_shape, weight.data, bias.data, eps)
+    }
+
+    
+    let req = self.requires_grad || weight.requires_grad
+    if bias != null { req = req || bias.requires_grad }
+    let ctx = null
+    if req {
+        ctx = { op: "layer_norm", parents: [self, weight, bias] }
+    }
+    return ml::tensor::Tensor(res_data, self.shape, req, ctx, self.device)
+}
+
+fn conv2d(self, weight, bias, stride, padding, dilation, groups) {
+    if stride == null { stride = 1 }
+    if padding == null { padding = 0 }
+    
+    let res_data = std::math::conv2d(
+        self.data, self.shape, 
+        weight.data, weight.shape, 
+        if bias != null { bias.data } else { null },
+        stride, padding
+    )
+    if res_data == null { return null }
+
+    # Shape calc: [N, OC, OH, OW]
+    let oh = (self.shape[2] + 2 * padding - weight.shape[2]) / stride + 1
+    let ow = (self.shape[3] + 2 * padding - weight.shape[3]) / stride + 1
+    let out_shape = [self.shape[0], weight.shape[0], oh, ow]
+
+    let req = self.requires_grad || weight.requires_grad
+    if bias != null { req = req || bias.requires_grad }
+    let ctx = null
+    if req {
+        ctx = { op: "conv2d", parents: [self, weight, bias], stride: stride, padding: padding }
+    }
+    let dev = self.device
+    if weight.device == "gpu" { dev = "gpu" }
+    return ml::tensor::Tensor(res_data, out_shape, req, ctx, dev)
+}
+
+fn maxpool2d(self, kernel_size, stride, padding, dilation, ceil_mode) {
+    let res = std::math::maxpool2d(self.data, self.shape, kernel_size, stride, padding, dilation, ceil_mode)
+    return ml::tensor::Tensor(res.data, res.shape, self.requires_grad, self._ctx, self.device)
+}
+
+fn adaptive_avg_pool2d(self, output_size) {
+    let res = std::math::adaptive_avg_pool2d(self.data, self.shape, output_size)
+    return ml::tensor::Tensor(res.data, res.shape, self.requires_grad, self._ctx, self.device)
+}
+
+fn set_seed(seed) {
+    ml::set_seed(seed)
+}
+
+fn _tensor_rand() {
+    let arr = std::math::random_array(1)
+    let val = arr[0]
+    return (val + 0.1) * 5.0 + 0.0001
+}
+
+# randn: standard normal random tensor (alias for seeded_randn)
+fn randn(shape, requires_grad, device) {
+    if requires_grad == null { requires_grad = false }
+    if device == null { device = "cpu" }
+    let size = 1
+    let i = 0
+    while i < shape.len() {
+        size = size * shape[i]
+        i = i + 1
+    }
+    # Use Box-Muller to produce normal-distributed data from uniform
+    let data = std::math::randn_array(size)
+    if data == null {
+        # Fallback: use random uniform (not truly normal but functional)
+        data = std::math::random_array(size)
+    }
+    return ml::tensor::Tensor(data, shape, requires_grad, null, device)
+}
+
+fn seeded_randn(shape, requires_grad, device) {
+    if requires_grad == null { requires_grad = false }
+    if device == null { device = "cpu" }
+    let size = 1
+    let i = 0
+    while i < shape.len() {
+        size = size * shape[i]
+        i = i + 1
+    }
+    let data = std::math::random_array(size)
+    return ml::tensor::Tensor(data, shape, requires_grad, null, device)
+}
+
+fn zeros(shape, requires_grad, device) {
+    if requires_grad == null { requires_grad = false }
+    if device == null { device = "cpu" }
+    let size = 1
+    let i = 0
+    while i < shape.len() {
+        size = size * shape[i]
+        i = i + 1
+    }
+    let data = std::math::full_array(size, 0.0)
+    return ml::tensor::Tensor(data, shape, requires_grad, null, device)
+}
+
+fn ones(shape, requires_grad, device) {
+    if requires_grad == null { requires_grad = false }
+    if device == null { device = "cpu" }
+    let size = 1
+    let i = 0
+    while i < shape.len() {
+        size = size * shape[i]
+        i = i + 1
+    }
+    let data = std::math::full_array(size, 1.0)
+    return ml::tensor::Tensor(data, shape, requires_grad, null, device)
+}

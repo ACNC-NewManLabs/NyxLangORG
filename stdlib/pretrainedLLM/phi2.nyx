@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(51200, 2560, 32, 32, null, null, "phi2", "cpu");
+}

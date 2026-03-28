@@ -1,0 +1,6 @@
+# Nyx Document Library: PDF
+# Provides PDF generation capabilities
+
+fn write(path, text) {
+    return std::doc::write_pdf(path, text)
+}

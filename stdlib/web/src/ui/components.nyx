@@ -1,0 +1,470 @@
+// Nyx Web UI - Components
+// Component-based UI framework for building web interfaces
+
+// UI Component base
+struct Component {
+    name: string
+    props: Map<string, any>
+    state: ComponentState
+    children: List<Component>
+    hooks: List<Hook>
+}
+
+// Component state
+struct ComponentState {
+    data: Map<string, any>
+    effects: List<Effect>
+    refs: Map<string, any>
+}
+
+// Effect for side effects
+struct Effect {
+    dependency: List<any>
+    callback: fn()
+    cleanup: fn()
+}
+
+// Hook types
+enum HookType {
+    UseState
+    UseEffect
+    UseRef
+    UseContext
+    UseReducer
+}
+
+// Hook
+struct Hook {
+    type: HookType
+    value: any
+}
+
+// UI Event
+struct UIEvent {
+    type: string
+    target: Component
+    data: any
+    bubbles: bool
+}
+
+// Component definition
+struct ComponentDef {
+    name: string
+    props_type: Map<string, string>
+    render: fn(any) -> VNode
+    styles: string
+}
+
+// Virtual Node (VNode)
+struct VNode {
+    tag: string
+    attrs: Map<string, any>
+    children: List<VNode>
+    text: string
+    component: ComponentDef
+    key: string
+}
+
+// Event handler
+type EventHandler = fn(UIEvent)
+
+// Create a new component definition
+fn component(name: string) -> ComponentBuilder {
+    return ComponentBuilder {
+        name: name
+        props: Map::new()
+        render_fn: null
+        styles: ""
+    }
+}
+
+// Component builder
+struct ComponentBuilder {
+    name: string
+    props: Map<string, string>
+    render_fn: fn(any) -> VNode
+    styles: string
+}
+
+// Define props
+fn props(builder: ComponentBuilder, props: Map<string, string>) -> ComponentBuilder {
+    builder.props = props
+    return builder
+}
+
+// Define render function
+fn render(builder: ComponentBuilder, render_fn: fn(any) -> VNode) -> ComponentBuilder {
+    builder.render_fn = render_fn
+    return builder
+}
+
+// Define styles
+fn styles(builder: ComponentBuilder, css: string) -> ComponentBuilder {
+    builder.styles = css
+    return builder
+}
+
+// Build component
+fn build_component(builder: ComponentBuilder) -> ComponentDef {
+    return ComponentDef {
+        name: builder.name
+        props_type: builder.props
+        render: builder.render_fn
+        styles: builder.styles
+    }
+}
+
+// Create element (h function)
+fn h(tag: string, attrs: Map<string, any>, children: List<VNode>) -> VNode {
+    return VNode {
+        tag: tag
+        attrs: attrs
+        children: children
+        text: ""
+        component: null
+        key: attrs.get("key").unwrap_or("")
+    }
+}
+
+// Create text node
+fn text_node(content: string) -> VNode {
+    return VNode {
+        tag: ""
+        attrs: Map::new()
+        children: List::new()
+        text: content
+        component: null
+        key: ""
+    }
+}
+
+// Create element with children
+fn h_children(tag: string, attrs: Map<string, any>, children: List<any>) -> VNode {
+    let vnode_children = List::new()
+    
+    for child in children {
+        if child.is_string() {
+            vnode_children.push(text_node(child))
+        } else if child.is_vnode() {
+            vnode_children.push(child)
+        }
+    }
+    
+    return h(tag, attrs, vnode_children)
+}
+
+// Common HTML elements as functions
+fn div(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("div", attrs, children)
+}
+
+fn span(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("span", attrs, children)
+}
+
+fn p(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("p", attrs, children)
+}
+
+fn a(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("a", attrs, children)
+}
+
+fn img(attrs: Map<string, any>) -> VNode {
+    return h("img", attrs, List::new())
+}
+
+fn ul(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("ul", attrs, children)
+}
+
+fn li(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("li", attrs, children)
+}
+
+fn table(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("table", attrs, children)
+}
+
+fn tr(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("tr", attrs, children)
+}
+
+fn th(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("th", attrs, children)
+}
+
+fn td(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("td", attrs, children)
+}
+
+// Form elements
+fn form(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("form", attrs, children)
+}
+
+fn input(attrs: Map<string, any>) -> VNode {
+    return h("input", attrs, List::new())
+}
+
+fn textarea(attrs: Map<string, any>) -> VNode {
+    return h("textarea", attrs, List::new())
+}
+
+fn select(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("select", attrs, children)
+}
+
+fn option(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("option", attrs, children)
+}
+
+fn button(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("button", attrs, children)
+}
+
+fn label(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("label", attrs, children)
+}
+
+// Heading elements
+fn h1(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("h1", attrs, children)
+}
+
+fn h2(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("h2", attrs, children)
+}
+
+fn h3(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("h3", attrs, children)
+}
+
+fn h4(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("h4", attrs, children)
+}
+
+fn h5(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("h5", attrs, children)
+}
+
+fn h6(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("h6", attrs, children)
+}
+
+// Semantic elements
+fn header(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("header", attrs, children)
+}
+
+fn footer(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("footer", attrs, children)
+}
+
+fn nav(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("nav", attrs, children)
+}
+
+fn main(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("main", attrs, children)
+}
+
+fn section(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("section", attrs, children)
+}
+
+fn article(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("article", attrs, children)
+}
+
+fn aside(attrs: Map<string, any>, children: List<any>) -> VNode {
+    return h_children("aside", attrs, children)
+}
+
+// Script and style
+fn script(attrs: Map<string, any>) -> VNode {
+    return h("script", attrs, List::new())
+}
+
+fn style(attrs: Map<string, any>, css: string) -> VNode {
+    return h("style", attrs, [text_node(css)])
+}
+
+fn link(attrs: Map<string, any>) -> VNode {
+    return h("link", attrs, List::new())
+}
+
+// List of hooks
+fn use_state(initial: any) -> Tuple<any, fn(any)> {
+    // Returns [value, setter]
+    return [initial, fn(new_value: any) {
+        // Update state - implementation depends on runtime
+    }]
+}
+
+fn use_effect(callback: fn(), deps: List<any>) {
+    // Register effect for execution
+}
+
+fn use_ref(initial: any) -> any {
+    return initial
+}
+
+fn use_context(context: any) -> any {
+    return context
+}
+
+fn use_reducer(reducer: fn(any, any) -> any, initial: any) -> Tuple<any, fn(any)> {
+    return [initial, fn(action: any) {
+        // Dispatch action
+    }]
+}
+
+// Render component to HTML string
+fn render_to_string(vnode: VNode) -> string {
+    if vnode.text != "" {
+        return vnode.text
+    }
+    
+    let html = "<" + vnode.tag
+    
+    // Add attributes
+    for key in vnode.attrs.keys() {
+        let value = vnode.attrs.get(key)
+        html = html + " " + key + "=\"" + value + "\""
+    }
+    
+    html = html + ">"
+    
+    // Add children
+    for child in vnode.children {
+        html = html + render_to_string(child)
+    }
+    
+    // Self-closing tags
+    let self_closing = ["img", "input", "br", "hr", "link", "meta"]
+    
+    if self_closing.contains(vnode.tag) {
+        return html  // Already closed
+    }
+    
+    return html + "</" + vnode.tag + ">"
+}
+
+// Conditional rendering
+fn if_(condition: bool, true_vnode: VNode, false_vnode: VNode = null) -> VNode {
+    if condition {
+        return true_vnode
+    }
+    return false_vnode
+}
+
+// List rendering
+fn for_(items: List<any>, render_fn: fn(any) -> VNode) -> List<VNode> {
+    let result = List::new()
+    
+    for item in items {
+        result.push(render_fn(item))
+    }
+    
+    return result
+}
+
+// Fragment (multiple elements without wrapper)
+fn fragment(children: List<VNode>) -> List<VNode> {
+    return children
+}
+
+// CSS class helper
+fn class(names: List<string>) -> string {
+    return names.filter(fn(n: string) -> n != "").join(" ")
+}
+
+fn class_list(classes: Map<string, bool>) -> string {
+    let result = List::new()
+    
+    for name in classes.keys() {
+        if classes.get(name) {
+            result.push(name)
+        }
+    }
+    
+    return result.join(" ")
+}
+
+// Style helper
+fn style_map(styles: Map<string, string>) -> string {
+    let result = List::new()
+    
+    for key in styles.keys() {
+        result.push(key + ": " + styles.get(key))
+    }
+    
+    return result.join("; ")
+}
+
+export Component
+export ComponentState
+export Effect
+export Hook
+export HookType
+export UIEvent
+export ComponentDef
+export VNode
+export EventHandler
+export ComponentBuilder
+export component
+export props
+export render
+export styles
+export build_component
+export h
+export h_children
+export text_node
+export div
+export span
+export p
+export a
+export img
+export ul
+export li
+export table
+export tr
+export th
+export td
+export form
+export input
+export textarea
+export select
+export option
+export button
+export label
+export h1
+export h2
+export h3
+export h4
+export h5
+export h6
+export header
+export footer
+export nav
+export main
+export section
+export article
+export aside
+export script
+export style
+export link
+export use_state
+export use_effect
+export use_ref
+export use_context
+export use_reducer
+export render_to_string
+export if_
+export for_
+export fragment
+export class
+export class_list
+export style_map
+

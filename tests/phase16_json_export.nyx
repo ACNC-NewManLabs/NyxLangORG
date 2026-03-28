@@ -1,0 +1,34 @@
+import df.io;
+import df.lazy;
+
+fn main() {
+    println("=== PHASE 16: JSON EXPORT TEST ===");
+    
+    let csv_path = "tests/large_data.csv";
+    let json_export_path = "tests/exported_data.json";
+    
+    println("1. Loading CSV and filtering...");
+    let df = df::io::scan_csv(csv_path, null)
+        .filter({ "_kind": "binop", "_value": ">", "_args": [
+            { "_kind": "col", "_value": "val" },
+            { "_kind": "lit", "_value": 14995.0 }
+        ]})
+        .collect();
+    
+    println("   Filtered rows:", df.nrows());
+    
+    println("2. Exporting to JSON:", json_export_path);
+    df.to_json(json_export_path);
+    
+    println("3. Scanning exported JSON...");
+    let df_json = df::io::scan_json(json_export_path).collect();
+    
+    println("   JSON row count:", df_json.nrows());
+    df_json.print(5);
+    
+    if df_json.nrows() == df.nrows() && df.nrows() > 0 {
+        println("✅ JSON Export Test Passed!");
+    } else {
+        println("❌ Test Failed: Row count mismatch or zero rows");
+    }
+}

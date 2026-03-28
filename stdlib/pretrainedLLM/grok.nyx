@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(131072, 6144, 64, 48, 8, 2, "grok", "cpu");
+}

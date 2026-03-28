@@ -1,0 +1,82 @@
+import ml;
+import std::df;
+
+# --- Helper: Classification Metrics ---
+
+fn accuracy(y_true, y_pred) {
+    let n = y_true.len()
+    if n == 0 { return 0.0 }
+    let correct = 0
+    let i = 0
+    while i < n {
+        if y_true[i] == y_pred[i] { correct = correct + 1 }
+        i = i + 1
+    }
+    return correct * 1.0 / n
+}
+
+fn _get_counts(y_true, y_pred, pos_label) {
+    let tp = 0 let fp = 0 let fn_count = 0 let tn = 0
+    let i = 0
+    while i < y_true.len() {
+        let t = y_true[i]
+        let p = y_pred[i]
+        if t == pos_label {
+            if p == pos_label { tp = tp + 1 }
+            else { fn_count = fn_count + 1 }
+        } else {
+            if p == pos_label { fp = fp + 1 }
+            else { tn = tn + 1 }
+        }
+        i = i + 1
+    }
+    return { tp: tp, fp: fp, fn: fn_count, tn: tn }
+}
+
+fn precision(y_true, y_pred, pos_label) {
+    let c = _get_counts(y_true, y_pred, pos_label)
+    if (c.tp + c.fp) == 0 { return 0.0 }
+    return c.tp * 1.0 / (c.tp + c.fp)
+}
+
+fn recall(y_true, y_pred, pos_label) {
+    let c = _get_counts(y_true, y_pred, pos_label)
+    if (c.tp + c.fn) == 0 { return 0.0 }
+    return c.tp * 1.0 / (c.tp + c.fn)
+}
+
+fn f1_score(y_true, y_pred, pos_label) {
+    let p = precision(y_true, y_pred, pos_label)
+    let r = recall(y_true, y_pred, pos_label)
+    if (p + r) == 0 { return 0.0 }
+    return 2.0 * (p * r) / (p + r)
+}
+
+# --- Test Case ---
+
+fn test_metrics() {
+    println("--- Testing Model KPI Thresholds (Accuracy, Precision, Recall, F1) ---")
+    
+    # 1. Mock predictions
+    let y_true = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1]
+    let y_pred = [1, 0, 0, 1, 0, 1, 1, 0, 1, 0] # 70% accuracy, some errors
+    
+    let acc = accuracy(y_true, y_pred)
+    let prec = precision(y_true, y_pred, 1)
+    let rec = recall(y_true, y_pred, 1)
+    let f1 = f1_score(y_true, y_pred, 1)
+    
+    println("Results:")
+    println("  Accuracy:  ", acc)
+    println("  Precision: ", prec)
+    println("  Recall:    ", rec)
+    println("  F1 Score:  ", f1)
+    
+    # Validation
+    if acc >= 0.7 { println("SUCCESS: Accuracy threshold (0.70) met") }
+    if f1 >= 0.6 { println("SUCCESS: F1 Score threshold (0.60) met") }
+}
+
+fn main() {
+    test_metrics()
+}

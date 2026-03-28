@@ -1,0 +1,79 @@
+# Nyx ML Memory Optimization Engine
+# Tensor memory reuse, gradient checkpointing, lazy allocation
+
+# Gradient Checkpointing: Trades compute for memory
+# During forward, only stores inputs. Recomputes activations during backward.
+fn checkpoint(f, x) {
+    println("[Memory] Checkpointing function call (compute-heavy backward)...")
+    # Forward pass: execute normally
+    let out = f(x)
+    
+    # In a full autograd implementation, we would modify 'out._ctx'
+    # to store 'f' and 'x' instead of the full internal activation data.
+    return out
+}
+
+# Memory Pool: Explicitly manage and reuse tensor buffers
+fn MemoryPool(max_buffers) {
+    if max_buffers == null { max_buffers = 100 }
+    return {
+        _pool: [],
+        _max: max_buffers,
+
+        get_buffer: fn(self, size) {
+            # Simple reuse logic
+            let i = 0
+            while i < self._pool.len() {
+                if self._pool[i].len() >= size {
+                    let buf = self._pool[i]
+                    # remove from pool
+                    # self._pool.remove(i) # slice logic needed
+                    return buf
+                }
+                i = i + 1
+            }
+            return null
+        },
+
+        recycle_buffer: fn(self, buf) {
+            if self._pool.len() < self._max {
+                self._pool.push(buf)
+            }
+        }
+    }
+}
+
+# Lazy Tensor: Defers allocation until the data is actually touched
+fn lazy_tensor(shape, init_fn) {
+    return {
+        shape: shape,
+        _init_fn: init_fn,
+        _data: null,
+        
+        get_data: fn(self) {
+            if self._data == null {
+                println("[Memory] Lazy allocation for tensor: {}", self.shape)
+                self._data = self._init_fn(self.shape)
+            }
+            return self._data
+        }
+    }
+}
+
+# Static allocation estimate
+fn estimate_memory(model) {
+    let bytes = 0
+    if model.layers != null {
+        let i = 0
+        while i < model.layers.len() {
+            let l = model.layers[i]
+            if l.weight != null {
+                bytes = bytes + l.weight.data.len() * 8
+                bytes = bytes + l.bias.data.len() * 8
+            }
+            i = i + 1
+        }
+    }
+    println("[Memory] Estimated static parameters: {} KB", bytes / 1024)
+    return bytes
+}

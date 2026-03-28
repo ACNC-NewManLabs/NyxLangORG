@@ -1,0 +1,66 @@
+# Nyx Dataframe Engine: Python Interop Bridge (Phase 6)
+# Exports DataFrames to Arrow IPC binary format for zero-copy Python consumption.
+# Full zero-copy requires PyO3 bindings (future: nyx-py crate).
+
+# export_arrow_ipc: serialize a DataFrame to Arrow IPC bytes
+# Returns a Bytes value that can be passed to Python via FFI or written to file.
+fn export_arrow_ipc(df) {
+    let bytes = std::df::export_arrow_ipc(df)
+    if bytes == null {
+        println("[df.python] export_arrow_ipc: failed (null result)")
+    }
+    return bytes
+}
+
+# write_arrow_ipc: serialize a DataFrame to an Arrow IPC file on disk
+fn write_arrow_ipc(df, path) {
+    let bytes = std::df::export_arrow_ipc(df)
+    if bytes == null { return false }
+    let ok = std::io::write_file(path, bytes)
+    return ok
+}
+
+# to_json_records: convert DataFrame to a JSON array-of-objects string (for Python json.loads)
+fn to_json_records(df) {
+    let col_names = df.col_names()
+    let nr = df.nrows()
+    let records = []
+    let r = 0
+    while r < nr {
+        let obj = {}
+        let c = 0
+        while c < col_names.len() {
+            let co = df.col(col_names[c])
+            if co != null { obj[col_names[c]] = co._data[r] }
+            c = c + 1
+        }
+        records.push(obj)
+        r = r + 1
+    }
+    return std::json::serialize(records)
+}
+
+# from_json_records: construct a DataFrame from a JSON array string
+fn from_json_records(json_str) {
+    let records = std::json::deserialize(json_str)
+    if records == null || records.len() == 0 { return null }
+    let keys = records[0].keys()
+    let cols = []
+    let k = 0
+    while k < keys.len() {
+        let name = keys[k]
+        let data = []
+        let r = 0
+        while r < records.len() {
+            data.push(records[r][name])
+            r = r + 1
+        }
+        cols.push(Column(name, "str", data, null))
+        k = k + 1
+    }
+    return DataFrame(cols, null)
+}
+
+# Future PyO3 bridge note:
+# The nyx-py crate (planned) will expose Nyx DataFrames as PyArrow tables directly
+# using the Arrow C Data Interface, enabling zero-copy Python ↔ Nyx data sharing.

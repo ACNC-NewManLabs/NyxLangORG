@@ -1,0 +1,95 @@
+import ml;
+import std::df;
+
+# --- Helper: Schema Validation ---
+
+fn validate_schema(df, contract) {
+    let schema = df.schema()
+    let passed = true
+    
+    let i = 0
+    let required = contract.required
+    while i < required.len() {
+        let field_name = required[i].name
+        let expected_type = required[i].dtype
+        
+        if schema.has(field_name) == false {
+            println("FAIL: Required field '", field_name, "' is missing")
+            passed = false
+        } else {
+            let actual_type = schema.dtype_of(field_name)
+            if actual_type != expected_type {
+                println("FAIL: Type mismatch for '", field_name, "'. Expected ", expected_type, ", got ", actual_type)
+                passed = false
+            }
+        }
+        i = i + 1
+    }
+    
+    # Check for optional fields (warn if type mismatch)
+    let optional = contract.optional
+    i = 0
+    while i < optional.len() {
+        let field_name = optional[i].name
+        if schema.has(field_name) {
+            let actual_type = schema.dtype_of(field_name)
+            if actual_type != optional[i].dtype {
+                println("WARN: Optional field '", field_name, "' type mismatch. Expected ", optional[i].dtype, ", got ", actual_type)
+            }
+        }
+        i = i + 1
+    }
+    
+    return passed
+}
+
+# --- Test Case ---
+
+fn test_schema_evolution() {
+    println("--- Testing Schema Evolution & Compatibility ---")
+    
+    # 1. Define Contract
+    let contract = {
+        required: [
+            { name: "id", dtype: "int" },
+            { name: "feature_x", dtype: "float" },
+            { name: "label", dtype: "int" }
+        ],
+        optional: [
+            { name: "metadata", dtype: "str" }
+        ]
+    }
+    
+    # 2. Valid evolution (New optional column)
+    let c1 = std::df::Column("id", "int", [1, 2], null)
+    let c2 = std::df::Column("feature_x", "float", [0.5, 1.5], null)
+    let c3 = std::df::Column("label", "int", [0, 1], null)
+    let c4 = std::df::Column("new_feature", "float", [10.0, 20.0], null)
+    let df_v1 = std::df::DataFrame([c1, c2, c3, c4], null)
+    
+    # 3. Invalid evolution (Missing required column)
+    let df_v2 = std::df::DataFrame([c1, c3], null) # No feature_x
+    
+    # 4. Invalid evolution (Type change)
+    let c2_wrong = std::df::Column("feature_x", "str", ["a", "b"], null)
+    let df_v3 = std::df::DataFrame([c1, c2_wrong, c3], null)
+    
+    println("Checking valid evolution (Added 'new_feature')...")
+    if validate_schema(df_v1, contract) {
+        println("SUCCESS: Evolution compatible")
+    }
+    
+    println("Checking invalid evolution (Missing 'feature_x')...")
+    if validate_schema(df_v2, contract) == false {
+        println("SUCCESS: Missing field detected")
+    }
+    
+    println("Checking invalid evolution (Type mismatch 'feature_x')...")
+    if validate_schema(df_v3, contract) == false {
+        println("SUCCESS: Type mismatch detected")
+    }
+}
+
+fn main() {
+    test_schema_evolution()
+}

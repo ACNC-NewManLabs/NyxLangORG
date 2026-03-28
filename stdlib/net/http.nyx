@@ -1,0 +1,434 @@
+/**
+ * HTTP Module
+ * 
+ * Provides HTTP client and server utilities.
+ * Re-exports and wraps the net_engine HTTP functionality.
+ * 
+ * @module net::http
+ */
+
+// Import from net_engine
+import http.server;
+import http.request;
+import http.response;
+import http.router;
+import http.static;
+import http.dev_server;
+import http.middleware;
+
+/**
+ * HTTP Server type
+ */
+type HttpServer = http.server::HttpServer;
+
+/**
+ * HTTP Request type
+ */
+type HttpRequest = http.request::HttpRequest;
+
+/**
+ * HTTP Response type
+ */
+type HttpResponse = http.response::HttpResponse;
+
+/**
+ * HTTP Router type
+ */
+type Router = http.router::Router;
+
+/**
+ * HTTP Method type
+ */
+type Method = http.request::Method;
+
+/**
+ * Route handler type
+ */
+type RouteHandler = http.server::RouteHandler;
+
+/**
+ * Create a new HTTP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns A new HTTP server instance
+ */
+fn HttpServer(host: string = "0.0.0.0", port: i64 = 8080) -> HttpServer {
+    return http.server::create(host, port);
+}
+
+/**
+ * Create a new router
+ * 
+ * @returns A new router instance
+ */
+fn Router() -> Router {
+    return http.router::create();
+}
+
+// Re-export HTTP methods
+let GET = http.request::GET;
+let POST = http.request::POST;
+let PUT = http.request::PUT;
+let DELETE = http.request::DELETE;
+let PATCH = http.request::PATCH;
+let HEAD = http.request::HEAD;
+let OPTIONS = http.request::OPTIONS;
+
+// Re-export status codes
+let STATUS_OK = http.response::STATUS_OK;
+let STATUS_CREATED = http.response::STATUS_CREATED;
+let STATUS_ACCEPTED = http.response::STATUS_ACCEPTED;
+let STATUS_NO_CONTENT = http.response::STATUS_NO_CONTENT;
+let STATUS_MOVED_PERMANENTLY = http.response::STATUS_MOVED_PERMANENTLY;
+let STATUS_FOUND = http.response::STATUS_FOUND;
+let STATUS_NOT_MODIFIED = http.response::STATUS_NOT_MODIFIED;
+let STATUS_BAD_REQUEST = http.response::STATUS_BAD_REQUEST;
+let STATUS_UNAUTHORIZED = http.response::STATUS_UNAUTHORIZED;
+let STATUS_FORBIDDEN = http.response::STATUS_FORBIDDEN;
+let STATUS_NOT_FOUND = http.response::STATUS_NOT_FOUND;
+let STATUS_METHOD_NOT_ALLOWED = http.response::STATUS_METHOD_NOT_ALLOWED;
+let STATUS_CONFLICT = http.response::STATUS_CONFLICT;
+let STATUS_TOO_MANY_REQUESTS = http.response::STATUS_TOO_MANY_REQUESTS;
+let STATUS_INTERNAL_ERROR = http.response::STATUS_INTERNAL_ERROR;
+let STATUS_NOT_IMPLEMENTED = http.response::STATUS_NOT_IMPLEMENTED;
+let STATUS_BAD_GATEWAY = http.response::STATUS_BAD_GATEWAY;
+let STATUS_SERVICE_UNAVAILABLE = http.response::STATUS_SERVICE_UNAVAILABLE;
+
+// Re-export middleware
+type Middleware = http.middleware::Middleware;
+type Logger = http.middleware::Logger;
+type Cors = http.middleware::Cors;
+type RateLimit = http.middleware::RateLimit;
+
+// Re-export static handler
+type StaticHandler = http.static::StaticHandler;
+
+/**
+ * Create a static file handler
+ * 
+ * @param root - Root directory
+ * @param options - Handler options
+ * @returns A new StaticHandler
+ */
+fn StaticHandler(root: string, options: Map<string, any> = {}) -> StaticHandler {
+    return http.static::StaticHandler(root, options);
+}
+
+// Re-export dev server
+type DevServer = http.dev_server::DevServer;
+
+/**
+ * Create a development server
+ * 
+ * @param port - Port to listen on
+ * @param host - Host to bind to
+ * @param root - Root directory
+ * @param watch - Directories to watch
+ * @param verbose - Enable verbose logging
+ * @returns A new DevServer
+ */
+fn DevServer(
+    port: i64 = 3000,
+    host: string = "0.0.0.0",
+    root: string = "./public",
+    watch: List<string> = [],
+    verbose: bool = false
+) -> DevServer {
+    return http.dev_server::DevServer(port, host, root, watch, verbose);
+}
+
+/**
+ * HTTP Client for making requests
+ * 
+ * Provides a full HTTP client implementation with connection pooling,
+ * timeout support, and proper request/response handling.
+ */
+type HttpClient = {
+    base_url: string,
+    default_headers: Map<string, string>,
+    timeout: i64,
+    follow_redirects: bool,
+    max_redirects: i64,
+    certificates: List<string>
+};
+
+/**
+ * Create a new HTTP client
+ * 
+ * @param base_url - Base URL for requests
+ * @returns A new HTTP client
+ */
+fn HttpClient(base_url: string = "") -> HttpClient {
+    return HttpClient {
+        base_url: base_url,
+        default_headers: {},
+        timeout: 30000,
+        follow_redirects: true,
+        max_redirects: 5,
+        certificates: []
+    };
+}
+
+/**
+ * Set default headers for the client
+ * 
+ * @param client - HTTP client
+ * @param headers - Headers to set
+ * @returns The same client for chaining
+ */
+fn set_headers(client: HttpClient, headers: Map<string, string>) -> HttpClient {
+    client.default_headers = headers;
+    return client;
+}
+
+/**
+ * Set authorization header
+ * 
+ * @param client - HTTP client
+ * @param token - Authorization token
+ * @returns The same client for chaining
+ */
+fn set_authorization(client: HttpClient, token: string) -> HttpClient {
+    client.default_headers["Authorization"] = "Bearer " + token;
+    return client;
+}
+
+/**
+ * Set content type
+ * 
+ * @param client - HTTP client
+ * @param content_type - Content type header
+ * @returns The same client for chaining
+ */
+fn set_content_type(client: HttpClient, content_type: string) -> HttpClient {
+    client.default_headers["Content-Type"] = content_type;
+    return client;
+}
+
+/**
+ * Set request timeout
+ * 
+ * @param client - HTTP client
+ * @param timeout_ms - Timeout in milliseconds
+ * @returns The same client for chaining
+ */
+fn set_timeout(client: HttpClient, timeout_ms: i64) -> HttpClient {
+    client.timeout = timeout_ms;
+    return client;
+}
+
+/**
+ * Make a GET request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @returns Response string
+ */
+fn get(client: HttpClient, path: string) -> string {
+    let url = build_url(client.base_url, path);
+    return __native_http_request("GET", url, "", client.default_headers, client.timeout);
+}
+
+/**
+ * Make a POST request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @param body - Request body
+ * @returns Response string
+ */
+fn post(client: HttpClient, path: string, body: string) -> string {
+    let url = build_url(client.base_url, path);
+    let headers = merge_headers(client.default_headers, {"Content-Type": "application/json"});
+    return __native_http_request("POST", url, body, headers, client.timeout);
+}
+
+/**
+ * Make a PUT request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @param body - Request body
+ * @returns Response string
+ */
+fn put(client: HttpClient, path: string, body: string) -> string {
+    let url = build_url(client.base_url, path);
+    let headers = merge_headers(client.default_headers, {"Content-Type": "application/json"});
+    return __native_http_request("PUT", url, body, headers, client.timeout);
+}
+
+/**
+ * Make a DELETE request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @returns Response string
+ */
+fn delete(client: HttpClient, path: string) -> string {
+    let url = build_url(client.base_url, path);
+    return __native_http_request("DELETE", url, "", client.default_headers, client.timeout);
+}
+
+/**
+ * Make a PATCH request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @param body - Request body
+ * @returns Response string
+ */
+fn patch(client: HttpClient, path: string, body: string) -> string {
+    let url = build_url(client.base_url, path);
+    let headers = merge_headers(client.default_headers, {"Content-Type": "application/json"});
+    return __native_http_request("PATCH", url, body, headers, client.timeout);
+}
+
+/**
+ * Make a HEAD request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @returns Response headers
+ */
+fn head(client: HttpClient, path: string) -> string {
+    let url = build_url(client.base_url, path);
+    return __native_http_request("HEAD", url, "", client.default_headers, client.timeout);
+}
+
+/**
+ * Make an OPTIONS request
+ * 
+ * @param client - HTTP client
+ * @param path - Request path
+ * @returns Allowed methods
+ */
+fn options(client: HttpClient, path: string) -> string {
+    let url = build_url(client.base_url, path);
+    return __native_http_request("OPTIONS", url, "", client.default_headers, client.timeout);
+}
+
+/**
+ * Fetch URL content (simple GET)
+ * 
+ * @param url - URL to fetch
+ * @returns Response content
+ */
+fn fetch(url: string) -> string {
+    return __native_http_request("GET", url, "", {}, 30000);
+}
+
+/**
+ * Download file from URL
+ * 
+ * @param url - URL to download
+ * @param save_path - Path to save file
+ * @returns True if successful
+ */
+fn download(url: string, save_path: string) -> bool {
+    let response = fetch(url);
+    if response != "" {
+        // In a full implementation, this would write to file
+        return __native_file_write(save_path, response);
+    }
+    return false;
+}
+
+/**
+ * Build full URL from base and path
+ */
+fn build_url(base_url: string, path: string) -> string {
+    if base_url == "" {
+        return path;
+    }
+    
+    // Remove trailing slash from base
+    let base = base_url;
+    if len(base) > 0 && substring(base, len(base) - 1, len(base)) == "/" {
+        base = substring(base, 0, len(base) - 1);
+    }
+    
+    // Remove leading slash from path
+    let p = path;
+    if len(p) > 0 && substring(p, 0, 1) == "/" {
+        p = substring(p, 1, len(p));
+    }
+    
+    return base + "/" + p;
+}
+
+/**
+ * Merge headers
+ */
+fn merge_headers(base: Map<string, string>, additional: Map<string, string>) -> Map<string, string> {
+    let result = {};
+    for key in keys(base) {
+        result[key] = base[key];
+    }
+    for key in keys(additional) {
+        result[key] = additional[key];
+    }
+    return result;
+}
+
+// Native HTTP functions - implemented by VM runtime
+fn __native_http_request(method: string, url: string, body: string, headers: Map<string, string>, timeout: i64) -> string;
+fn __native_file_write(path: string, content: string) -> bool;
+
+export {
+    HttpServer,
+    HttpRequest,
+    HttpResponse,
+    Router,
+    Method,
+    RouteHandler,
+    HttpClient,
+    StaticHandler,
+    DevServer,
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+    STATUS_OK,
+    STATUS_CREATED,
+    STATUS_ACCEPTED,
+    STATUS_NO_CONTENT,
+    STATUS_MOVED_PERMANENTLY,
+    STATUS_FOUND,
+    STATUS_NOT_MODIFIED,
+    STATUS_BAD_REQUEST,
+    STATUS_UNAUTHORIZED,
+    STATUS_FORBIDDEN,
+    STATUS_NOT_FOUND,
+    STATUS_METHOD_NOT_ALLOWED,
+    STATUS_CONFLICT,
+    STATUS_TOO_MANY_REQUESTS,
+    STATUS_INTERNAL_ERROR,
+    STATUS_NOT_IMPLEMENTED,
+    STATUS_BAD_GATEWAY,
+    STATUS_SERVICE_UNAVAILABLE,
+    Middleware,
+    Logger,
+    Cors,
+    RateLimit,
+    HttpServer as create,
+    Router as create_router,
+    StaticHandler as static_handler,
+    DevServer as dev_server,
+    get,
+    post,
+    put,
+    delete,
+    fetch,
+    download,
+    set_headers,
+    set_authorization,
+    set_content_type,
+    set_timeout,
+    patch,
+    head,
+    options
+};

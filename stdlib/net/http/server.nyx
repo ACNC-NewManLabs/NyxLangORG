@@ -1,0 +1,378 @@
+/**
+ * HTTP Server Implementation
+ * 
+ * Provides HTTP/1.1 server functionality with routing and middleware support.
+ * 
+ * @module http::server
+ */
+
+type HttpServer = {
+    host: string,
+    port: i64,
+    tcp_server: any,
+    router: Router,
+    middlewares: List<Middleware>,
+    handlers: Map<string, RouteHandler>,
+    not_found_handler: fn(HttpRequest) -> HttpResponse,
+    error_handler: fn(HttpRequest, any) -> HttpResponse,
+    tick_handler: fn()?,
+    running: bool
+};
+
+type RouteHandler = fn(HttpRequest) -> HttpResponse;
+
+let http_servers: List<HttpServer> = [];
+
+/**
+ * Create a new HTTP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns A new HTTP server instance
+ */
+fn create(host: string, port: i64) -> HttpServer {
+    return HttpServer {
+        host: host,
+        port: port,
+        tcp_server: none,
+        router: router::create(),
+        middlewares: [],
+        handlers: {},
+        not_found_handler: default_not_found,
+        error_handler: default_error,
+        tick_handler: none,
+        running: false
+    };
+}
+
+/**
+ * Add a route to the server
+ * 
+ * @param server - The HTTP server
+ * @param method - HTTP method (GET, POST, etc.)
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn route(server: HttpServer, method: string, path: string, handler: RouteHandler) -> HttpServer {
+    server.handlers[method + ":" + path] = handler;
+    router::add_route(server.router, method, path, handler);
+    return server;
+}
+
+/**
+ * Add a GET route
+ * 
+ * @param server - The HTTP server
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn get(server: HttpServer, path: string, handler: RouteHandler) -> HttpServer {
+    return route(server, "GET", path, handler);
+}
+
+/**
+ * Add a POST route
+ * 
+ * @param server - The HTTP server
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn post(server: HttpServer, path: string, handler: RouteHandler) -> HttpServer {
+    return route(server, "POST", path, handler);
+}
+
+/**
+ * Add a PUT route
+ * 
+ * @param server - The HTTP server
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn put(server: HttpServer, path: string, handler: RouteHandler) -> HttpServer {
+    return route(server, "PUT", path, handler);
+}
+
+/**
+ * Add a DELETE route
+ * 
+ * @param server - The HTTP server
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn delete(server: HttpServer, path: string, handler: RouteHandler) -> HttpServer {
+    return route(server, "DELETE", path, handler);
+}
+
+/**
+ * Add a PATCH route
+ * 
+ * @param server - The HTTP server
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn patch(server: HttpServer, path: string, handler: RouteHandler) -> HttpServer {
+    return route(server, "PATCH", path, handler);
+}
+
+/**
+ * Register a tick handler for background tasks
+ */
+fn on_tick(server: HttpServer, handler: fn()) -> HttpServer {
+    server.tick_handler = some(handler);
+    return server;
+}
+
+/**
+ * Add middleware to the server
+ * 
+ * @param server - The HTTP server
+ * @param middleware - Middleware function
+ * @returns The same server for chaining
+ */
+fn use(server: HttpServer, middleware: Middleware) -> HttpServer {
+    server.middlewares = server.middlewares + [middleware];
+    return server;
+}
+
+/**
+ * Set the not found handler
+ * 
+ * @param server - The HTTP server
+ * @param handler - Handler function for 404
+ * @returns The same server for chaining
+ */
+fn not_found(server: HttpServer, handler: fn(HttpRequest) -> HttpResponse) -> HttpServer {
+    server.not_found_handler = handler;
+    return server;
+}
+
+/**
+ * Set the error handler
+ * 
+ * @param server - The HTTP server
+ * @param handler - Handler function for errors
+ * @returns The same server for chaining
+ */
+fn error_handler(server: HttpServer, handler: fn(HttpRequest, any) -> HttpResponse) -> HttpServer {
+    server.error_handler = handler;
+    return server;
+}
+
+/**
+ * Start the HTTP server
+ * 
+ * @param server - The HTTP server to start
+ * @returns Whether the server started successfully
+ */
+fn start(server: HttpServer) -> bool {
+    if server.running {
+        return false;
+    }
+    
+    // Create TCP server
+    let tcp = tcp_server::create(server.host, server.port);
+    
+    if server.tick_handler != none {
+        tcp_server::on_tick(tcp, server.tick_handler as fn());
+    }
+    
+    // Set up connection handler
+    tcp_server::on_connect(tcp, fn(conn: tcp_server::TcpConnection) {
+        handle_connection(server, conn);
+    });
+    
+    // Start TCP server
+    if !tcp_server::start(tcp) {
+        return false;
+    }
+    
+    server.tcp_server = some(tcp);
+    server.running = true;
+    http_servers = http_servers + [server];
+    
+    return true;
+}
+
+/**
+ * Stop the HTTP server
+ * 
+ * @param server - The HTTP server to stop
+ */
+fn stop(server: HttpServer) {
+    if !server.running {
+        return;
+    }
+    
+    if server.tcp_server != none {
+        tcp_server::stop(server.tcp_server as any);
+    }
+    
+    server.running = false;
+}
+
+/**
+ * Handle incoming TCP connection
+ */
+fn handle_connection(server: HttpServer, conn: tcp_server::TcpConnection) {
+    // Read request data
+    let data = tcp_server::read(conn, 8192);
+    
+    if data == "" {
+        tcp_server::close_connection(conn);
+        return;
+    }
+    
+    // Parse request
+    let req = request::parse(data, conn);
+    
+    if req == none {
+        // Invalid request, send 400
+        let resp = response::bad_request();
+        send_response(conn, resp);
+        return;
+    }
+    
+    let http_req = req as HttpRequest;
+    
+    // Find handler
+    let handler = find_handler(server, http_req);
+    
+    // Execute middleware chain and handler
+    let resp = execute_handler(server, http_req, handler);
+    
+    // Send response
+    send_response(conn, resp);
+    
+    // Close connection if not keep-alive
+    let keep_alive = request::get_header(http_req, "Connection") == "keep-alive";
+    
+    if !keep_alive {
+        tcp_server::close_connection(conn);
+    }
+}
+
+/**
+ * Find the appropriate handler for a request
+ */
+fn find_handler(server: HttpServer, req: HttpRequest) -> RouteHandler {
+    let key = req.method + ":" + req.path;
+    
+    // Check exact match first
+    if key in server.handlers {
+        return server.handlers[key];
+    }
+    
+    // Try router (for parameterized routes)
+    let route_handler = router::match_route(server.router, req.method, req.path);
+    
+    if route_handler != none {
+        return route_handler as RouteHandler;
+    }
+    
+    // Return not found handler
+    return server.not_found_handler;
+}
+
+/**
+ * Execute middleware chain and handler
+ */
+fn execute_handler(server: HttpServer, req: HttpRequest, handler: RouteHandler) -> HttpResponse {
+    let resp: HttpResponse;
+    
+    // Execute middleware chain
+    let mut current_middleware = 0;
+    let mut current_req = req;
+    
+    // Build middleware chain
+    let chain = build_middleware_chain(server.middlewares);
+    
+    if len(chain) > 0 {
+        // Execute first middleware
+        let middleware = chain[0];
+        
+        let result = middleware(current_req, fn(r: HttpRequest) -> HttpResponse {
+            // Call remaining chain
+            execute_middleware_chain(server, r, chain, 1, handler)
+        });
+        
+        if result != none {
+            resp = result as HttpResponse;
+        } else {
+            // Middleware passed to next
+            resp = handler(current_req);
+        }
+    } else {
+        // No middleware, execute handler directly
+        resp = handler(current_req);
+    }
+    
+    return resp;
+}
+
+/**
+ * Execute remaining middleware chain
+ */
+fn execute_middleware_chain(server: HttpServer, req: HttpRequest, chain: List<fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse?>, index: i64, handler: RouteHandler) -> HttpResponse {
+    if index >= len(chain) {
+        // No more middleware, execute handler
+        return handler(req);
+    }
+    
+    let middleware = chain[index];
+    let result = middleware(req, fn(r: HttpRequest) -> HttpResponse {
+        execute_middleware_chain(server, r, chain, index + 1, handler)
+    });
+    
+    if result != none {
+        return result as HttpResponse;
+    }
+    
+    return handler(req);
+}
+
+/**
+ * Build middleware chain
+ */
+fn build_middleware_chain(middlewares: List<Middleware>) -> List<fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse?> {
+    let chain: List<fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse?> = [];
+    
+    for m in middlewares {
+        chain = chain + [m];
+    }
+    
+    return chain;
+}
+
+/**
+ * Send HTTP response
+ */
+fn send_response(conn: tcp_server::TcpConnection, resp: HttpResponse) {
+    let data = response::to_string(resp);
+    tcp_server::write(conn, data);
+}
+
+/**
+ * Default 404 handler
+ */
+fn default_not_found(req: HttpRequest) -> HttpResponse {
+    return response::not_found("<html><body><h1>404 Not Found</h1></body></html>");
+}
+
+/**
+ * Default error handler
+ */
+fn default_error(req: HttpRequest, err: any) -> HttpResponse {
+    return response::internal_error("Internal Server Error");
+}
+
+// Import TCP server module
+mod tcp_server;
+
+type TcpServer = any;
+type TcpConnection = any;

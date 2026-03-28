@@ -1,0 +1,250 @@
+// Nyx Cryptography Standard Library
+// High-level wrapper for native cryptographic primitives.
+
+# High-performance hashing
+pub fn sha256(data) -> bytes {
+    return std::crypto::hash_sha256(data)
+}
+
+pub fn sha3(data) -> bytes {
+    return std::crypto::hash_sha3(data)
+}
+
+pub fn blake3(data) -> bytes {
+    return std::crypto::hash_blake3(data)
+}
+
+# Symmetric encryption (AES-256-GCM)
+pub fn aes_encrypt(data: bytes, key: bytes) -> bytes {
+    return std::crypto::aes_encrypt(data, key)
+}
+
+pub fn aes_decrypt(data: bytes, key: bytes) -> bytes {
+    return std::crypto::aes_decrypt(data, key)
+}
+
+# Symmetric encryption (ChaCha20-Poly1305)
+pub fn chacha_encrypt(data: bytes, key: bytes) -> bytes {
+    return std::crypto::chacha_encrypt(data, key)
+}
+
+pub fn chacha_decrypt(data: bytes, key: bytes) -> bytes {
+    return std::crypto::chacha_decrypt(data, key)
+}
+
+# Cryptographically secure randomness
+pub fn random_bytes(len: int) -> bytes {
+    return std::crypto::random_bytes(len)
+}
+
+# Digital Signatures (Ed25519)
+pub fn sign(data: bytes, key: bytes) -> bytes {
+    return std::crypto::sign_ed25519(data, key)
+}
+
+pub fn verify(data: bytes, signature: bytes, public_key: bytes) -> bool {
+    return std::crypto::verify_ed25519(data, signature, public_key)
+}
+
+# Key Derivation Functions (KDF)
+pub fn argon2_hash(password: bytes, salt: bytes) -> string {
+    return std::crypto::argon2_hash(password, salt)
+}
+
+pub fn argon2_verify(password: bytes, hash: string) -> bool {
+    return std::crypto::argon2_verify(password, hash)
+}
+
+pub fn hkdf_expand(ikm: bytes, salt: any, info: bytes, len: int) -> bytes {
+    return std::crypto::hkdf_expand(ikm, salt, info, len)
+}
+
+pub fn pbkdf2_hmac(password: bytes, salt: bytes, rounds: int, len: int) -> bytes {
+    return std::crypto::pbkdf2_hmac(password, salt, rounds, len)
+}
+
+# Key Exchange (X25519)
+pub fn x25519_generate() -> Array {
+    return std::crypto::x25519_generate()
+}
+
+pub fn x25519_dh(secret_key: bytes, public_key: bytes) -> bytes {
+    return std::crypto::x25519_dh(secret_key, public_key)
+}
+
+# Message Authentication (HMAC)
+pub fn hmac_sha256(key: bytes, data: bytes) -> bytes {
+    return std::crypto::hmac_sha256(key, data)
+}
+
+# Encoding & Formats
+pub fn to_base64(data: bytes) -> string {
+    return std::crypto::to_base64(data)
+}
+
+pub fn from_base64(encoded: string) -> bytes {
+    return std::crypto::from_base64(encoded)
+}
+
+pub fn to_hex(data: bytes) -> string {
+    return std::crypto::to_hex(data)
+}
+
+pub fn from_hex(encoded: string) -> bytes {
+    return std::crypto::from_hex(encoded)
+}
+
+# Key Management Layer
+pub fn SecretKey(raw: bytes) {
+    return {
+        data: raw,
+        bytes: fn(self) { return self.data },
+        wipe: fn(self) { std::crypto::zeroize_bytes(self.data) },
+        to_hex: fn(self) { return std::crypto::to_hex(self.data) }
+    }
+}
+
+pub fn PublicKey(raw: bytes) {
+    return {
+        data: raw,
+        bytes: fn(self) { return self.data },
+        to_hex: fn(self) { return std::crypto::to_hex(self.data) }
+    }
+}
+
+pub fn KeyPair(sec, pub_key) {
+    return {
+        secret: sec,
+        public: pub_key
+    }
+}
+
+# Streaming API
+pub fn StreamingHash() {
+    return {
+        _id: std::crypto::sha256_init(),
+        update: fn(self, chunk) { std::crypto::sha256_update(self._id, chunk) },
+        finalize: fn(self) { return std::crypto::sha256_finalize(self._id) }
+    }
+}
+
+# Authenticated Data Structures (Merkle Tree)
+pub fn MerkleTree(data_list) {
+    let leaves = []
+    # Domain Separation: leaf hash = H('0' | data)
+    let lead_leaf = std::string::as_bytes("0")
+    for it in data_list {
+        let h = std::crypto::hash_sha256(std::bytes::concat(lead_leaf, it))
+        std::list::push(leaves, h)
+    }
+    
+    let levels = [leaves]
+    let current_level = leaves
+    
+    while std::list::len(current_level) > 1 {
+        let next_level = []
+        let i = 0
+        let n = std::list::len(current_level)
+        # Domain Separation: node hash = H('1' | left | right)
+        let lead_node = std::string::as_bytes("1")
+        
+        while i < n {
+            let left = std::list::at(current_level, i)
+            let right = left
+            if i + 1 < n {
+                right = std::list::at(current_level, i+1)
+            }
+            let combined = std::bytes::concat(lead_node, std::bytes::concat(left, right))
+            std::list::push(next_level, std::crypto::hash_sha256(combined))
+            i = i + 2
+        }
+        current_level = next_level
+        std::list::push(levels, current_level)
+    }
+    
+    let root = null
+    if std::list::len(current_level) > 0 {
+        root = std::list::at(current_level, 0)
+    }
+    
+    return {
+        _levels: levels,
+        get_root: fn(self) {
+            return root
+        },
+        prove: fn(self, index) {
+            let proof = []
+            let idx = index
+            let i = 0
+            while i < std::list::len(self._levels) - 1 {
+                let lvl = std::list::at(self._levels, i)
+                let n = std::list::len(lvl)
+                
+                let sibling_idx = idx + 1
+                if idx - (idx / 2) * 2 == 1 {
+                    sibling_idx = idx - 1
+                }
+                
+                if sibling_idx < n {
+                    std::list::push(proof, std::list::at(lvl, sibling_idx))
+                } else {
+                    # If no sibling (odd count), property of Merkle Tree is to duplicate or use zero.
+                    # Our implementation uses duplication (right = left).
+                    std::list::push(proof, std::list::at(lvl, idx))
+                }
+                
+                idx = idx / 2
+                i = i + 1
+            }
+            return proof
+        },
+        verify: fn(self, proof, root, leaf_data, index) {
+            let lead_leaf = std::string::as_bytes("0")
+            let current = std::crypto::hash_sha256(std::bytes::concat(lead_leaf, leaf_data))
+            let idx = index
+            let lead_node = std::string::as_bytes("1")
+            
+            for p in proof {
+                let combined = null
+                if idx - (idx / 2) * 2 == 0 {
+                    combined = std::bytes::concat(lead_node, std::bytes::concat(current, p))
+                } else {
+                    combined = std::bytes::concat(lead_node, std::bytes::concat(p, current))
+                }
+                current = std::crypto::hash_sha256(combined)
+                idx = idx / 2
+            }
+            return secure_eq(current, root)
+        }
+    }
+}
+
+# Secure Defaults & Protocols (Layer 24)
+pub fn seal(message: bytes, password: bytes) -> bytes {
+    return std::crypto::seal(message, password)
+}
+
+pub fn open(sealed: bytes, password: bytes) -> bytes {
+    return std::crypto::open(sealed, password)
+}
+
+pub fn seal_ephemeral(message: bytes, peer_public_key: bytes) -> bytes {
+    return std::crypto::seal_ephemeral(message, peer_public_key)
+}
+
+pub fn open_ephemeral(sealed: bytes, my_secret_key: bytes) -> bytes {
+    return std::crypto::open_ephemeral(sealed, my_secret_key)
+}
+
+pub fn secure_eq(a: bytes, b: bytes) -> bool {
+    return std::crypto::secure_eq(a, b)
+}
+
+# Post-Quantum Cryptography (PQC) - Stubs
+pub fn kyber_generate() -> Array {
+    return [std::crypto::random_bytes(32), std::crypto::random_bytes(32)]
+}
+
+pub fn dilithium_sign(data: bytes, key: bytes) -> bytes {
+    return std::crypto::random_bytes(64)
+}

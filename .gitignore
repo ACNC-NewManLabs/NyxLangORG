@@ -1,0 +1,20 @@
+# Build artifacts
+/target
+**/*.rs.bk
+*.pdb
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Nyx specific
+*.nyx.bc
+*.nyx.cache
+

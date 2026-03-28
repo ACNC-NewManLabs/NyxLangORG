@@ -1,0 +1,54 @@
+import ml;
+
+fn test_filter_grad() {
+    println("--- Filter Gradient Test ---")
+    
+    # 1. Create a simple DataFrame
+    let c1 = std::df::Column("col1", "float", [1.0, 10.0, 2.0, 20.0], null)
+    let c2 = std::df::Column("col2", "float", [1.0, 2.0, 3.0, 4.0], null)
+    let df_raw = std::df::DataFrame([c1, c2], null)
+    
+    let d_df = ml::query::DifferentiableDataFrame(df_raw, true, null)
+    println("DF col1: ", df_raw.col("col1"))
+    println("DF col2: ", df_raw.col("col2"))
+    
+    # 2. Filter col1 > 5 (should pick indices 1 and 3)
+    let filtered = d_df.filter("col1", ">", 5.0)
+    println("Filtered mask: ", filtered._mask)
+    
+    # 3. Mean of col2
+    # Selected values: 2.0, 4.0. Mean = 3.0
+    let loss = filtered.agg_mean("col2")
+    println("Filtered mean: ", loss.item())
+    
+    # 4. Backward
+    println("Running backward...")
+    loss.backward()
+    
+    # Check column gradients in the filtered DifferentiableDataFrame
+    let grads = filtered["_grads"]
+    if grads == null {
+        println("FAIL: No gradients found in filtered DataFrame")
+        # println("Filtered keys: ", filtered.keys()) # If keys() existed
+        return
+    }
+    
+    let col2_grad = grads["col2"]
+    println("col2_grad: ", col2_grad)
+    
+    # Expected grad for col2:
+    # row 0: 0 (filtered out)
+    # row 1: 1/2 = 0.5
+    # row 2: 0 (filtered out)
+    # row 3: 1/2 = 0.5
+    
+    if col2_grad[1] == 0.5 && col2_grad[3] == 0.5 && col2_grad[0] == 0.0 && col2_grad[2] == 0.0 {
+        println("SUCCESS: Filter gradient masking verified")
+    } else {
+        println("FAIL: Incorrect filter gradients")
+    }
+}
+
+fn main() {
+    test_filter_grad()
+}

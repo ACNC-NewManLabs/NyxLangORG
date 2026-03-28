@@ -1,0 +1,117 @@
+# VGA Text Mode Driver for Nyx Bare-Metal
+# Standard 80x25 characters with base address 0xB8000.
+
+# [VGA Constants]
+let _VGA_BUF    = 0xB8000
+let _VGA_WIDTH  = 80
+let _VGA_HEIGHT = 25
+
+# [State]
+let _cursor_x = 0
+let _cursor_y = 0
+let _color    = 0x0F # White on Black
+
+fn get_cursor_x() { return _cursor_x }
+fn get_cursor_y() { return _cursor_y }
+fn set_cursor_x(x) { _cursor_x = x }
+fn set_cursor_y(y) { _cursor_y = y }
+
+# Set the current drawing color: (bg << 4 | fg)
+fn set_color(fg, bg) {
+    _color = (bg << 4) | (fg & 0x0F)
+}
+
+# Clear the entire screen
+fn clear() {
+    let i = 0
+    let total = _VGA_WIDTH * _VGA_HEIGHT
+    while i < total {
+        std::kernel::memory::write_byte(_VGA_BUF + i * 2, 0x20) # space
+        std::kernel::memory::write_byte(_VGA_BUF + i * 2 + 1, _color)
+        i = i + 1
+    }
+    _cursor_x = 0
+    _cursor_y = 0
+    update_cursor()
+}
+
+# Update the hardware cursor position via VGA ports
+fn update_cursor() {
+    let pos = _cursor_y * _VGA_WIDTH + _cursor_x
+    
+    # Cursor Low byte
+    std::kernel::ports::outb(0x3D4, 0x0F)
+    std::kernel::ports::outb(0x3D5, pos & 0xFF)
+    
+    # Cursor High byte
+    std::kernel::ports::outb(0x3D4, 0x0E)
+    std::kernel::ports::outb(0x3D5, (pos >> 8) & 0xFF)
+}
+
+# Scroll the screen up by one line
+fn scroll() {
+    let y = 1
+    while y < _VGA_HEIGHT {
+        let x = 0
+        while x < _VGA_WIDTH {
+            let src = _VGA_BUF + (y * _VGA_WIDTH + x) * 2
+            let dst = _VGA_BUF + ((y - 1) * _VGA_WIDTH + x) * 2
+            
+            let ch = std::kernel::memory::read_byte(src)
+            let cl = std::kernel::memory::read_byte(src + 1)
+            
+            std::kernel::memory::write_byte(dst, ch)
+            std::kernel::memory::write_byte(dst + 1, cl)
+            x = x + 1
+        }
+        y = y + 1
+    }
+    
+    # Clear the last line
+    let x = 0
+    while x < _VGA_WIDTH {
+        let addr = _VGA_BUF + ((_VGA_HEIGHT - 1) * _VGA_WIDTH + x) * 2
+        std::kernel::memory::write_byte(addr, 0x20)
+        std::kernel::memory::write_byte(addr + 1, _color)
+        x = x + 1
+    }
+}
+
+# Principal output function
+fn print_char(ch) {
+    if ch == 10 { # '\n'
+        _cursor_x = 0
+        _cursor_y = _cursor_y + 1
+    } else {
+        let addr = _VGA_BUF + (_cursor_y * _VGA_WIDTH + _cursor_x) * 2
+        std::kernel::memory::write_byte(addr, ch)
+        std::kernel::memory::write_byte(addr + 1, _color)
+        _cursor_x = _cursor_x + 1
+    }
+    
+    if _cursor_x >= _VGA_WIDTH {
+        _cursor_x = 0
+        _cursor_y = _cursor_y + 1
+    }
+    
+    if _cursor_y >= _VGA_HEIGHT {
+        scroll()
+        _cursor_y = _VGA_HEIGHT - 1
+    }
+    
+    update_cursor()
+}
+
+fn print_str(s) {
+    let i = 0
+    let l = len(s) # AOT compiler handles len(str)
+    while i < l {
+        print_char(char_at(s, i))
+        i = i + 1
+    }
+}
+
+fn println(s) {
+    print_str(s)
+    print_char(10)
+}

@@ -1,0 +1,56 @@
+import ml;
+import std::df;
+
+# --- Helper: Noise Stability ---
+
+fn _randn() { return std::math::randn_array(1)[0] }
+
+fn predict_noisy(val, noise_level) {
+    let noisy_val = val + (_randn() * noise_level)
+    # Simple threshold model
+    if noisy_val > 0.5 { return 1 }
+    return 0
+}
+
+# --- Test Case ---
+
+fn test_noise_stability() {
+    println("--- Testing Model Stability to Input Noise ---")
+    
+    let base_val = 0.52 # Close to decision boundary
+    let noise_std = 0.01 # Small noise
+    
+    println("Input Value: ", base_val, " (Noise Std: ", noise_std, ")")
+    
+    let trials = 100
+    let predictions = []
+    let i = 0
+    while i < trials {
+        predictions.push(predict_noisy(base_val, noise_std))
+        i = i + 1
+    }
+    
+    # Count flips
+    let ones = 0
+    let j = 0
+    while j < trials {
+        if predictions[j] == 1 { ones = ones + 1 }
+        j = j + 1
+    }
+    let zeros = trials - ones
+    
+    println("Predictions over ", trials, " trials:")
+    println("  Class 1: ", ones)
+    println("  Class 0: ", zeros)
+    
+    # Stability: If majority > 90%
+    if ones > 90 || zeros > 90 {
+        println("SUCCESS: Model is stable under noise")
+    } else {
+        println("FAIL: Model is fragile (too many flips under small noise)")
+    }
+}
+
+fn main() {
+    test_noise_stability()
+}

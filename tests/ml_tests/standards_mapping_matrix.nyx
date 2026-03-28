@@ -1,0 +1,56 @@
+import ml;
+
+# --- Nyx Standards Mapping Matrix (Audit Traceability) ---
+
+fn generate_compliance_report(release_v) {
+    println("--- Nyx Audit Engine: Generating Standards Mapping Matrix ---")
+    println("  Release: ", release_v)
+    println("")
+
+    let mapping = {
+        "ISO_42001_A.8.2": {
+            Requirement: "Model Risk Management",
+            Control: "Nyx Safety Envelope & Contracts",
+            Evidence: "tests/ml_tests/safety_contracts.nyx",
+            Status: "CERTIFIED"
+        },
+        "NIST_AI_RMF_MEASURE_2.1": {
+            Requirement: "Fairness & Bias Audit",
+            Control: "Runtime Fairness Guard & Impact Monitor",
+            Evidence: "tests/ml_tests/runtime_fairness_guard.nyx",
+            Status: "ENFORCED"
+        },
+        "GDPR_Art_22": {
+            Requirement: "Right to Explanation / Traceability",
+            Control: "Decision Trace Log (Forensics)",
+            Evidence: "tests/ml_tests/decision_trace_log.nyx",
+            Status: "LOGGED"
+        },
+        "ISO_27001_A.12.4": {
+            Requirement: "Logging & Monitoring",
+            Control: "Append-Only Hash-Chained Audit Log",
+            Evidence: "tests/ml_tests/audit_hash_chain.nyx",
+            Status: "IMMUTABLE"
+        }
+    }
+
+    let keys = mapping.keys()
+    let i = 0
+    while i < std::list::len(keys) {
+        let req_id = keys[i]
+        let entry = mapping[req_id]
+        println("[ ", req_id, " ] -> ", entry.Requirement)
+        println("  Control:  ", entry.Control)
+        println("  Artifact: ", entry.Evidence)
+        println("  Status:   ", entry.Status)
+        println("")
+        i = i + 1
+    }
+
+    println("SUCCESS: Regulatory Compliance Matrix generated for ", release_v)
+    return mapping
+}
+
+fn main() {
+    generate_compliance_report("v1.0.2-Defensible")
+}

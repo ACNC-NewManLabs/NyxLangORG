@@ -1,0 +1,330 @@
+/**
+ * TCP Module
+ * 
+ * Provides TCP client and server utilities.
+ * Re-exports and wraps the net_engine TCP functionality.
+ * 
+ * @module net::tcp
+ */
+
+// Import from net_engine
+import tcp.server;
+import tcp.mod;
+
+/**
+ * TCP Server type
+ */
+type TcpServer = server::TcpServer;
+
+/**
+ * TCP Client type (connection to server)
+ */
+type TcpClient = server::TcpClient;
+
+/**
+ * TCP connection info
+ */
+type ConnectionInfo = {
+    host: string,
+    port: i64,
+    remote_host: string,
+    remote_port: i64
+};
+
+/**
+ * Start a TCP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @param handler - Connection handler
+ * @returns A new TCP server
+ */
+fn listen(host: string, port: i64, handler: fn(TcpClient) -> void) -> TcpServer {
+    return server::listen(host, port, handler);
+}
+
+/**
+ * Connect to a TCP server
+ * 
+ * @param host - Server host
+ * @param port - Server port
+ * @returns A new TCP client
+ */
+fn connect(host: string, port: i64) -> TcpClient {
+    return server::connect(host, port);
+}
+
+/**
+ * Read data from TCP client
+ * 
+ * @param client - TCP client
+ * @param size - Number of bytes to read
+ * @returns Data read
+ */
+fn read(client: TcpClient, size: i64 = 1024) -> string {
+    return server::read(client, size);
+}
+
+/**
+ * Write data to TCP client
+ * 
+ * @param client - TCP client
+ * @param data - Data to write
+ * @returns Number of bytes written
+ */
+fn write(client: TcpClient, data: string) -> i64 {
+    return server::write(client, data);
+}
+
+/**
+ * Close TCP client connection
+ * 
+ * @param client - TCP client
+ */
+fn close(client: TcpClient) {
+    server::close(client);
+}
+
+/**
+ * Get peer address of client
+ * 
+ * @param client - TCP client
+ * @returns Connection info
+ */
+fn peer_address(client: TcpClient) -> ConnectionInfo {
+    return server::peer_address(client);
+}
+
+/**
+ * TCP client with buffering
+ */
+type BufferedClient = {
+    client: TcpClient,
+    buffer: string,
+    buffer_size: i64
+};
+
+/**
+ * Create a buffered TCP client
+ * 
+ * @param client - Underlying TCP client
+ * @param buffer_size - Buffer size
+ * @returns Buffered client
+ */
+fn BufferedClient(client: TcpClient, buffer_size: i64 = 4096) -> BufferedClient {
+    return BufferedClient {
+        client: client,
+        buffer: "",
+        buffer_size: buffer_size
+    };
+}
+
+/**
+ * Read a line from buffered client
+ * 
+ * @param client - Buffered client
+ * @returns Line read (without newline)
+ */
+fn read_line(client: BufferedClient) -> string {
+    // Read until newline
+    let line = "";
+    let found = false;
+    
+    while not found {
+        // Check if we have a newline in buffer
+        let i = 0;
+        while i < client.buffer.length() {
+            if client.buffer[i] == "\n" {
+                found = true;
+                line = substring(client.buffer, 0, i);
+                client.buffer = substring(client.buffer, i + 1, client.buffer.length());
+                i = client.buffer.length();
+            }
+            i = i + 1;
+        }
+        
+        if not found {
+            // Read more data
+            let data = read(client.client, client.buffer_size);
+            if data.length() == 0 {
+                // End of stream
+                if client.buffer.length() > 0 {
+                    line = client.buffer;
+                    client.buffer = "";
+                    found = true;
+                }
+                break;
+            }
+            client.buffer = client.buffer + data;
+        }
+    }
+    
+    // Remove carriage return if present
+    if line.length() > 0 and line[line.length() - 1] == "\r" {
+        line = substring(line, 0, line.length() - 1);
+    }
+    
+    return line;
+}
+
+/**
+ * Write line to buffered client
+ * 
+ * @param client - Buffered client
+ * @param line - Line to write
+ */
+fn write_line(client: BufferedClient, line: string) {
+    write(client.client, line + "\n");
+}
+
+/**
+ * Flush write buffer
+ * 
+ * @param client - Buffered client
+ */
+fn flush(client: BufferedClient) {
+    // In this would flush any a full implementation, pending writes
+}
+
+/**
+ * TCP server utilities
+ */
+type ServerUtils = {
+    server: TcpServer,
+    connections: List<TcpClient>
+};
+
+/**
+ * Create a TCP server utility
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns Server utilities
+ */
+fn ServerUtils(host: string, port: i64) -> ServerUtils {
+    return ServerUtils {
+        server: none,
+        connections: []
+    };
+}
+
+/**
+ * Start server and run forever
+ * 
+ * @param utils - Server utilities
+ * @param handler - Connection handler
+ */
+fn serve(utils: ServerUtils, handler: fn(TcpClient) -> void) {
+    utils.server = listen("0.0.0.0", 8080, handler);
+}
+
+/**
+ * Broadcast to all connections
+ * 
+ * @param utils - Server utilities
+ * @param data - Data to broadcast
+ */
+fn broadcast(utils: ServerUtils, data: string) {
+    let i = 0;
+    while i < utils.connections.length() {
+        write(utils.connections[i], data);
+        i = i + 1;
+    }
+}
+
+/**
+ * Close all connections
+ * 
+ * @param utils - Server utilities
+ */
+fn close_all(utils: ServerUtils) {
+    let i = 0;
+    while i < utils.connections.length() {
+        close(utils.connections[i]);
+        i = i + 1;
+    }
+    utils.connections = [];
+}
+
+/**
+ * TCP stream wrapper for easy streaming
+ */
+type Stream = {
+    client: TcpClient,
+    eof: bool
+};
+
+/**
+ * Create a TCP stream
+ * 
+ * @param client - TCP client
+ * @returns Stream wrapper
+ */
+fn Stream(client: TcpClient) -> Stream {
+    return Stream {
+        client: client,
+        eof: false
+    };
+}
+
+/**
+ * Check if stream is at end
+ * 
+ * @param stream - TCP stream
+ * @returns True if at end of stream
+ */
+fn eof(stream: Stream) -> bool {
+    return stream.eof;
+}
+
+/**
+ * Read from stream
+ * 
+ * @param stream - TCP stream
+ * @param size - Number of bytes
+ * @returns Data read
+ */
+fn read_stream(stream: Stream, size: i64 = 1024) -> string {
+    let data = read(stream.client, size);
+    if data.length() == 0 {
+        stream.eof = true;
+    }
+    return data;
+}
+
+/**
+ * Write to stream
+ * 
+ * @param stream - TCP stream
+ * @param data - Data to write
+ */
+fn write_stream(stream: Stream, data: string) {
+    write(stream.client, data);
+}
+
+export {
+    TcpServer,
+    TcpClient,
+    ConnectionInfo,
+    BufferedClient,
+    ServerUtils,
+    Stream,
+    listen,
+    connect,
+    read,
+    write,
+    close,
+    peer_address,
+    BufferedClient as buffer,
+    read_line,
+    write_line,
+    flush,
+    ServerUtils as server_utils,
+    serve,
+    broadcast,
+    close_all,
+    Stream as stream,
+    eof,
+    read_stream,
+    write_stream
+};

@@ -1,0 +1,532 @@
+/**
+ * Development Server
+ * 
+ * Provides development server functionality with:
+ * - File watching (monitor file changes)
+ * - Hot reload (automatically reload on changes)
+ * - Auto restart
+ * - Helpful error displays
+ * - Live reload for browsers (optional)
+ * 
+ * @module http::dev_server
+ */
+
+import http.server;
+import http.static;
+import http.request;
+import http.response;
+
+/**
+ * Change callback type
+ */
+type ChangeCallback = fn(string) -> void;
+
+/**
+ * Watch event type
+ */
+type WatchEvent = {
+    event_type: string,
+    path: string,
+    timestamp: i64
+};
+
+/**
+ * Development server configuration
+ */
+type DevServer = {
+    port: i64,
+    host: string,
+    root: string,
+    watch: List<string>,
+    verbose: bool,
+    auto_reload: bool,
+    show_errors: bool,
+    live_reload: bool,
+    server: any,
+    watcher: any,
+    running: bool,
+    change_callbacks: List<ChangeCallback>,
+    last_error: string,
+    reload_count: i64
+};
+
+/**
+ * Create a new development server
+ * 
+ * @param port - Port to listen on
+ * @param host - Host to bind to
+ * @param root - Root directory for static files
+ * @param watch - Directories to watch for changes
+ * @param verbose - Enable verbose logging
+ * @returns A new DevServer instance
+ */
+fn DevServer(
+    port: i64 = 3000,
+    host: string = "0.0.0.0",
+    root: string = "./public",
+    watch: List<string> = [],
+    verbose: bool = false
+) -> DevServer {
+    let default_watch = [root];
+    if watch.length() > 0 {
+        default_watch = watch;
+    }
+    
+    return DevServer {
+        port: port,
+        host: host,
+        root: root,
+        watch: default_watch,
+        verbose: verbose,
+        auto_reload: true,
+        show_errors: true,
+        live_reload: true,
+        server: none,
+        watcher: none,
+        running: false,
+        change_callbacks: [],
+        last_error: "",
+        reload_count: 0
+    };
+}
+
+/**
+ * Start the development server
+ * 
+ * @param dev_server - The development server
+ */
+fn start(dev_server: DevServer) {
+    if dev_server.running {
+        print("[DEV] Server is already running");
+        return;
+    }
+    
+    print("[DEV] Starting development server...");
+    print("[DEV] Root: " + dev_server.root);
+    print("[DEV] Watching: " + to_string(dev_server.watch.length()) + " directories");
+    
+    // Create HTTP server
+    let server = server::create(dev_server.host, dev_server.port);
+    
+    // Poll file watcher events inside server loop
+    server::on_tick(server, fn() {
+        poll_file_watcher(dev_server);
+    });
+    
+    // Mount static files
+    let static_handler = static::StaticHandler(dev_server.root, {
+        "index_file": "index.html",
+        "show_listing": false,
+        "cache_max_age": 0
+    });
+    
+    server.get("/*", fn(req, res) {
+        return static::handle(static_handler, req);
+    });
+    
+    // Add live reload script injection
+    if dev_server.live_reload {
+        inject_live_reload_script(server);
+    }
+    
+    // Add error display middleware
+    if dev_server.show_errors {
+        add_error_display_middleware(server);
+    }
+    
+    // Store server reference
+    dev_server.server = server;
+    
+    // Start file watcher
+    start_file_watcher(dev_server);
+    
+    // Start the HTTP server
+    server::start(server);
+    
+    dev_server.running = true;
+    
+    print("[DEV] Server running at http://" + dev_server.host + ":" + to_string(dev_server.port));
+    print("[DEV] Press Ctrl+C to stop");
+}
+
+/**
+ * Stop the development server
+ * 
+ * @param dev_server - The development server
+ */
+fn stop(dev_server: DevServer) {
+    if not dev_server.running {
+        return;
+    }
+    
+    print("[DEV] Stopping development server...");
+    
+    // Stop file watcher
+    stop_file_watcher(dev_server);
+    
+    // Stop HTTP server
+    if dev_server.server != none {
+        server::stop(dev_server.server);
+    }
+    
+    dev_server.running = false;
+    
+    print("[DEV] Server stopped");
+}
+
+/**
+ * Reload the server/application
+ * 
+ * @param dev_server - The development server
+ */
+fn reload(dev_server: DevServer) {
+    dev_server.reload_count = dev_server.reload_count + 1;
+    
+    if dev_server.verbose {
+        print("[DEV] Reloading... (count: " + to_string(dev_server.reload_count) + ")");
+    }
+    
+    // In a full implementation, this would:
+    // 1. Save current application state
+    // 2. Stop the current server
+    // 3. Re-load the application file
+    // 4. Re-initialize routes
+    // 5. Restart the server
+    
+    // Notify change callbacks
+    notify_change_callbacks(dev_server, "reload");
+}
+
+/**
+ * Register a change callback
+ * 
+ * @param dev_server - The development server
+ * @param callback - Callback function
+ */
+fn on_change(dev_server: DevServer, callback: ChangeCallback) {
+    dev_server.change_callbacks.push(callback);
+}
+
+/**
+ * Notify all change callbacks
+ * 
+ * @param dev_server - The development server
+ * @param file - File that changed
+ */
+fn notify_change_callbacks(dev_server: DevServer, file: string) {
+    let i = 0;
+    while i < dev_server.change_callbacks.length() {
+        let callback = dev_server.change_callbacks[i];
+        callback(file);
+        i = i + 1;
+    }
+}
+
+/**
+ * Start the file watcher
+ * 
+ * @param dev_server - The development server
+ */
+fn start_file_watcher(dev_server: DevServer) {
+    if dev_server.verbose {
+        print("[DEV] Starting file watcher...");
+    }
+    
+    dev_server.watcher = create_file_watcher(dev_server.watch);
+    
+    if dev_server.verbose {
+        print("[DEV] File watcher started");
+    }
+}
+
+/**
+ * Stop the file watcher
+ * 
+ * @param dev_server - The development server
+ */
+fn stop_file_watcher(dev_server: DevServer) {
+    if dev_server.watcher != none {
+        // Stop watching
+        destroy_file_watcher(dev_server.watcher);
+        dev_server.watcher = none;
+    }
+    
+    if dev_server.verbose {
+        print("[DEV] File watcher stopped");
+    }
+}
+
+/**
+ * Handle file change event
+ * 
+ * @param dev_server - The development server
+ * @param event - Watch event
+ */
+fn handle_file_change(dev_server: DevServer, event: WatchEvent) {
+    let file = event.path;
+    
+    // Ignore temporary files and common non-source files
+    if is_ignored_file(file) {
+        return;
+    }
+    
+    if dev_server.verbose {
+        print("[DEV] File changed: " + event.event_type + " - " + file);
+    }
+    
+    // Trigger reload
+    if dev_server.auto_reload {
+        reload(dev_server);
+    }
+    
+    // Notify callbacks
+    notify_change_callbacks(dev_server, file);
+}
+
+/**
+ * Poll native file watcher for events
+ */
+fn poll_file_watcher(dev_server: DevServer) {
+    if dev_server.watcher == none {
+        return;
+    }
+    
+    let events = poll_watcher_events(dev_server.watcher as any);
+    for event in events {
+        handle_file_change(dev_server, event);
+    }
+}
+
+/**
+ * Check if a file should be ignored
+ * 
+ * @param path - File path
+ * @returns True if should be ignored
+ */
+fn is_ignored_file(path: string) -> bool {
+    let ignored_patterns = [
+        ".git",
+        ".svn",
+        "node_modules",
+        ".nyx_modules",
+        ".cache",
+        ".tmp",
+        ".log",
+        ".DS_Store",
+        "Thumbs.db",
+        ".env",
+        ".env.local",
+        "dist",
+        "build",
+        "target"
+    ];
+    
+    let i = 0;
+    while i < ignored_patterns.length() {
+        if contains(path, ignored_patterns[i]) {
+            return true;
+        }
+        i = i + 1;
+    }
+    
+    // Ignore hidden files
+    if path.length() > 0 and path[0] == "." {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Inject live reload script into HTML responses
+ * 
+ * @param server - HTTP server
+ */
+fn inject_live_reload_script(server: any) {
+    let live_reload_script = `
+        <script>
+        (function() {
+            var ws = new WebSocket('ws://' + location.host + '/__live_reload');
+            ws.onmessage = function(event) {
+                if (event.data === 'reload') {
+                    console.log('[Nyx] Reloading...');
+                    location.reload();
+                }
+            };
+            ws.onclose = function() {
+                console.log('[Nyx] Live reload disconnected, reconnecting...');
+                setTimeout(function() {
+                    location.reload();
+                }, 1000);
+            };
+        })();
+        </script>
+    `;
+    
+    // Add a WebSocket endpoint for live reload
+    // In a full implementation, this would be added to the server
+}
+
+/**
+ * Add error display middleware
+ * 
+ * @param server - HTTP server
+ */
+fn add_error_display_middleware(server: any) {
+    // In a full implementation, this would add middleware
+    // that catches errors and displays them in a nice format
+}
+
+/**
+ * Display error to user
+ * 
+ * @param dev_server - The development server
+ * @param error - Error message
+ * @param request - HTTP request
+ */
+fn display_error(dev_server: DevServer, error: string, request: http.request.HttpRequest) {
+    dev_server.last_error = error;
+    
+    let error_html = "<!DOCTYPE html>\n";
+    error_html = error_html + "<html>\n<head>\n";
+    error_html = error_html + "  <meta charset=\"utf-8\">\n";
+    error_html = error_html + "  <title>Error - Nyx Development Server</title>\n";
+    error_html = error_html + "  <style>\n";
+    error_html = error_html + "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }\n";
+    error_html = error_html + "    .error-container { max-width: 800px; margin: 50px auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }\n";
+    error_html = error_html + "    .error-header { background: #ff4757; color: white; padding: 20px; }\n";
+    error_html = error_html + "    .error-header h1 { margin: 0; font-size: 24px; }\n";
+    error_html = error_html + "    .error-body { padding: 20px; }\n";
+    error_html = error_html + "    .error-message { background: #fff3f3; border-left: 4px solid #ff4757; padding: 15px; font-family: monospace; white-space: pre-wrap; word-break: break-all; }\n";
+    error_html = error_html + "    .error-hint { margin-top: 20px; color: #666; }\n";
+    error_html = error_html + "  </style>\n";
+    error_html = error_html + "</head>\n<body>\n";
+    error_html = error_html + "  <div class=\"error-container\">\n";
+    error_html = error_html + "    <div class=\"error-header\">\n";
+    error_html = error_html + "      <h1>Error</h1>\n";
+    error_html = error_html + "    </div>\n";
+    error_html = error_html + "    <div class=\"error-body\">\n";
+    error_html = error_html + "      <div class=\"error-message\">" + escape_html(error) + "</div>\n";
+    error_html = error_html + "      <p class=\"error-hint\">Check your code and try again. The server will automatically reload when the error is fixed.</p>\n";
+    error_html = error_html + "    </div>\n";
+    error_html = error_html + "  </div>\n";
+    error_html = error_html + "</body>\n</html>";
+    
+    if dev_server.verbose {
+        print("[DEV ERROR] " + error);
+    }
+}
+
+/**
+ * Escape HTML special characters
+ * 
+ * @param text - Text to escape
+ * @returns Escaped text
+ */
+fn escape_html(text: string) -> string {
+    let escaped = text;
+    escaped = replace_all(escaped, "&", "&amp;");
+    escaped = replace_all(escaped, "<", "&lt;");
+    escaped = replace_all(escaped, ">", "&gt;");
+    escaped = replace_all(escaped, "\"", "&quot;");
+    escaped = replace_all(escaped, "'", "&#39;");
+    return escaped;
+}
+
+/**
+ * Replace all occurrences of a string
+ * 
+ * @param text - Text to search
+ * @param search - String to find
+ * @param replace - String to replace with
+ * @returns Result text
+ */
+fn replace_all(text: string, search: string, replace: string) -> string {
+    let result = "";
+    let i = 0;
+    let found = false;
+    
+    while i < text.length() {
+        if i + search.length() <= text.length() {
+            let is_match = true;
+            let j = 0;
+            while j < search.length() {
+                if text[i + j] != search[j] {
+                    is_match = false;
+                    j = search.length();
+                }
+                j = j + 1;
+            }
+            
+            if is_match {
+                result = result + replace;
+                i = i + search.length();
+            } else {
+                result = result + text[i];
+                i = i + 1;
+            }
+        } else {
+            result = result + text[i];
+            i = i + 1;
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Check if string contains substring
+ * 
+ * @param text - Text to search
+ * @param search - String to find
+ * @returns True if found
+ */
+fn contains(text: string, search: string) -> bool {
+    let i = 0;
+    while i < text.length() - search.length() + 1 {
+        let is_match = true;
+        let j = 0;
+        while j < search.length() {
+            if text[i + j] != search[j] {
+                is_match = false;
+                j = search.length();
+            }
+            j = j + 1;
+        }
+        if is_match {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+// File watcher bindings
+fn create_file_watcher(paths: List<string>) -> any {
+    return __native_fs_watch_create(paths);
+}
+
+fn destroy_file_watcher(watcher: any) {
+    __native_fs_watch_destroy(watcher);
+}
+
+fn poll_watcher_events(watcher: any) -> List<WatchEvent> {
+    return __native_fs_watch_poll(watcher);
+}
+
+fn __native_fs_watch_create(paths: List<string>) -> any;
+fn __native_fs_watch_poll(watcher: any) -> List<WatchEvent>;
+fn __native_fs_watch_destroy(watcher: any);
+
+// Export functions
+export {
+    DevServer,
+    WatchEvent,
+    ChangeCallback,
+    start,
+    stop,
+    reload,
+    on_change,
+    display_error,
+    handle_file_change
+};

@@ -1,0 +1,43 @@
+// Nyx Modern Landing Page Template
+// Build: nyx web build examples/website.nyx
+// Serve: nyx web serve dist/
+
+fn App() {
+    let html = "<!DOCTYPE html>";
+    html = html + "<html style='background: #0a0a0a; color: white; font-family: sans-serif; height: 100%; margin: 0;'>";
+    html = html + "<head>";
+    html = html + "  <title>NYX | The Performance Era</title>";
+    html = html + "  <meta charset='utf-8'>";
+    html = html + "  <meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    html = html + "</head>";
+    html = html + "<body style='margin: 0; padding: 0;'>";
+    
+    // Navbar
+    html = html + "<nav style='display:flex; justify-content:space-between; align-items:center; padding: 1.5rem 5%; background: rgba(10, 10, 10, 0.9); border-bottom: 1px solid #222;'>";
+    html = html + "  <div style='font-size: 1.5rem; font-weight: 800;'>NYX<span style='color: #00f2ff;'>.</span></div>";
+    html = html + "  <div style='display: flex; gap: 2rem;'>";
+    html = html + "    <a href='#' style='color: #888; text-decoration: none;'>Engine</a>";
+    html = html + "    <a href='#' style='color: #888; text-decoration: none;'>Docs</a>";
+    html = html + "    <a href='#' style='color: #00f2ff; text-decoration: none; font-weight: 700;'>Get Started</a>";
+    html = html + "  </div>";
+    html = html + "</nav>";
+    
+    // Hero
+    html = html + "<section style='padding: 8rem 5%; text-align: center; background: radial-gradient(circle at top, #1a1a2e 0%, #0a0a0a 100%);'>";
+    html = html + "  <h1 style='font-size: 4rem; font-weight: 900; margin-bottom: 1rem; line-height: 1;'>Powering the <br/><span style='color: #00f2ff;'>Data Economy.</span></h1>";
+    html = html + "  <p style='font-size: 1.25rem; color: #a0a0a0; max-width: 600px; margin: 0 auto 3rem;'>Vectorized SQL. Raft Consensus. Zero-Copy ML. <br/> Built for the speed of thought.</p>";
+    html = html + "  <div>";
+    html = html + "    <button style='padding: 1rem 2.5rem; font-size: 1.1rem; font-weight: 700; background: #00f2ff; color: #0a0a0a; border: none; border-radius: 8px; cursor: pointer;'>Deploy v1.0</button>";
+    html = html + "  </div>";
+    html = html + "</section>";
+    
+    // Footer
+    html = html + "<footer style='padding: 4rem 5%; text-align: center; border-top: 1px solid #222; color: #444; font-size: 0.9rem;'>";
+    html = html + "  (c) 2026 SURYA SEKHAR ROY. Powered by Nyx Web Module.";
+    html = html + "</footer>";
+    
+    html = html + "</body>";
+    html = html + "</html>";
+    
+    return html;
+}

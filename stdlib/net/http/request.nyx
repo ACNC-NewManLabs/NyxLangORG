@@ -1,0 +1,433 @@
+/**
+ * HTTP Request Module
+ * 
+ * Provides HTTP request parsing and handling utilities.
+ * 
+ * @module http::request
+ */
+
+type HttpRequest = {
+    method: string,
+    path: string,
+    version: string,
+    headers: Headers,
+    body: string,
+    query_params: QueryParams,
+    path_params: Map<string, string>,
+    connection: any,
+    parsed: bool
+};
+
+type Headers = Map<string, string>;
+
+type QueryParams = Map<string, string>;
+
+type Method = string;
+
+// HTTP Methods
+let GET = "GET";
+let POST = "POST";
+let PUT = "PUT";
+let DELETE = "DELETE";
+let PATCH = "PATCH";
+let HEAD = "HEAD";
+let OPTIONS = "OPTIONS";
+
+/**
+ * Parse HTTP request from raw data
+ * 
+ * @param data - Raw HTTP request data
+ * @param connection - TCP connection
+ * @returns Parsed HTTP request or none
+ */
+fn parse(data: string, connection: any) -> HttpRequest? {
+    let lines = split_lines(data);
+    
+    if len(lines) == 0 {
+        return none;
+    }
+    
+    // Parse request line
+    let request_line = split(lines[0], " ");
+    
+    if len(request_line) < 3 {
+        return none;
+    }
+    
+    let method = trim(request_line[0]);
+    let path = trim(request_line[1]);
+    let version = trim(request_line[2]);
+    
+    // Parse headers
+    let headers: Headers = {};
+    let mut body_start = 1;
+    
+    for i in range(1, len(lines)) {
+        let line = lines[i];
+        
+        if line == "" {
+            body_start = i + 1;
+            break;
+        }
+        
+        let parts = split(line, ":");
+        
+        if len(parts) >= 2 {
+            let key = trim(parts[0]);
+            let value = trim(join(parts[1:], ":"));
+            headers[key] = value;
+        }
+    }
+    
+    // Parse body
+    let mut body = "";
+    
+    if body_start < len(lines) {
+        body = join(lines[body_start:], "\n");
+    }
+    
+    // Parse path and query string
+    let path_parts = parse_path(path);
+    let path_without_query = path_parts[0];
+    let query_string = path_parts[1];
+    
+    // Parse query parameters
+    let query_params = parse_query_string(query_string);
+    
+    return some(HttpRequest {
+        method: method,
+        path: path_without_query,
+        version: version,
+        headers: headers,
+        body: body,
+        query_params: query_params,
+        path_params: {},
+        connection: some(connection),
+        parsed: true
+    });
+}
+
+/**
+ * Parse path and query string
+ */
+fn parse_path(path: string) -> (string, string) {
+    let query_index = find(path, "?");
+    
+    if query_index < 0 {
+        return (path, "");
+    }
+    
+    let path_part = substring(path, 0, query_index);
+    let query_part = substring(path, query_index + 1, len(path));
+    
+    return (path_part, query_part);
+}
+
+/**
+ * Parse query string into parameters
+ */
+fn parse_query_string(query: string) -> QueryParams {
+    let params: QueryParams = {};
+    
+    if query == "" {
+        return params;
+    }
+    
+    let pairs = split(query, "&");
+    
+    for pair in pairs {
+        let kv = split(pair, "=");
+        
+        if len(kv) >= 2 {
+            let key = url_decode(kv[0]);
+            let value = url_decode(kv[1]);
+            params[key] = value;
+        } else if len(kv) == 1 {
+            let key = url_decode(kv[0]);
+            params[key] = "";
+        }
+    }
+    
+    return params;
+}
+
+/**
+ * Get header value
+ * 
+ * @param request - The HTTP request
+ * @param name - Header name
+ * @returns Header value or empty string
+ */
+fn get_header(request: HttpRequest, name: string) -> string {
+    // Case-insensitive lookup
+    for key in keys(request.headers) {
+        if to_lower(key) == to_lower(name) {
+            return request.headers[key];
+        }
+    }
+    
+    return "";
+}
+
+/**
+ * Set header value
+ * 
+ * @param request - The HTTP request
+ * @param name - Header name
+ * @param value - Header value
+ */
+fn set_header(request: HttpRequest, name: string, value: string) {
+    request.headers[name] = value;
+}
+
+/**
+ * Get query parameter
+ * 
+ * @param request - The HTTP request
+ * @param name - Parameter name
+ * @returns Parameter value or empty string
+ */
+fn get_query_param(request: HttpRequest, name: string) -> string {
+    if name in request.query_params {
+        return request.query_params[name];
+    }
+    
+    return "";
+}
+
+/**
+ * Get path parameter
+ * 
+ * @param request - The HTTP request
+ * @param name - Parameter name
+ * @returns Parameter value or empty string
+ */
+fn get_path_param(request: HttpRequest, name: string) -> string {
+    if name in request.path_params {
+        return request.path_params[name];
+    }
+    
+    return "";
+}
+
+/**
+ * Set path parameter
+ * 
+ * @param request - The HTTP request
+ * @param name - Parameter name
+ * @param value - Parameter value
+ */
+fn set_path_param(request: HttpRequest, name: string, value: string) {
+    request.path_params[name] = value;
+}
+
+/**
+ * Get request body
+ * 
+ * @param request - The HTTP request
+ * @returns Request body
+ */
+fn get_body(request: HttpRequest) -> string {
+    return request.body;
+}
+
+/**
+ * Get request method
+ * 
+ * @param request - The HTTP request
+ * @returns HTTP method
+ */
+fn get_method(request: HttpRequest) -> string {
+    return request.method;
+}
+
+/**
+ * Get request path
+ * 
+ * @param request - The HTTP request
+ * @returns Request path
+ */
+fn get_path(request: HttpRequest) -> string {
+    return request.path;
+}
+
+/**
+ * Get content type
+ * 
+ * @param request - The HTTP request
+ * @returns Content-Type header value
+ */
+fn get_content_type(request: HttpRequest) -> string {
+    return get_header(request, "Content-Type");
+}
+
+/**
+ * Get content length
+ * 
+ * @param request - The HTTP request
+ * @returns Content-Length header value
+ */
+fn get_content_length(request: HttpRequest) -> i64 {
+    let length = get_header(request, "Content-Length");
+    
+    if length != "" {
+        return parse_int(length);
+    }
+    
+    return 0;
+}
+
+/**
+ * Get request body as JSON
+ * 
+ * @param request - The HTTP request
+ * @returns Parsed JSON as map/list
+ */
+fn get_json(request: HttpRequest) -> any? {
+    let content_type = get_content_type(request);
+    
+    if !contains(content_type, "application/json") {
+        return none;
+    }
+    
+    // Would use JSON parser here
+    return none;
+}
+
+/**
+ * Check if request is JSON
+ * 
+ * @param request - The HTTP request
+ * @returns Whether the request is JSON
+ */
+fn is_json(request: HttpRequest) -> bool {
+    let content_type = get_content_type(request);
+    return contains(content_type, "application/json");
+}
+
+/**
+ * Get all query parameters
+ * 
+ * @param request - The HTTP request
+ * @returns All query parameters
+ */
+fn get_all_query_params(request: HttpRequest) -> QueryParams {
+    return request.query_params;
+}
+
+/**
+ * Get all headers
+ * 
+ * @param request - The HTTP request
+ * @returns All headers
+ */
+fn get_all_headers(request: HttpRequest) -> Headers {
+    return request.headers;
+}
+
+/**
+ * Get host header
+ * 
+ * @param request - The HTTP request
+ * @returns Host value
+ */
+fn get_host(request: HttpRequest) -> string {
+    return get_header(request, "Host");
+}
+
+/**
+ * Get user agent
+ * 
+ * @param request - The HTTP request
+ * @returns User-Agent header value
+ */
+fn get_user_agent(request: HttpRequest) -> string {
+    return get_header(request, "User-Agent");
+}
+
+/**
+ * Get referer
+ * 
+ * @param request - The HTTP request
+ * @returns Referer header value
+ */
+fn get_referer(request: HttpRequest) -> string {
+    return get_header(request, "Referer");
+}
+
+/**
+ * Get accept header
+ * 
+ * @param request - The HTTP request
+ * @returns Accept header value
+ */
+fn get_accept(request: HttpRequest) -> string {
+    return get_header(request, "Accept");
+}
+
+/**
+ * Get authorization header
+ * 
+ * @param request - The HTTP request
+ * @returns Authorization header value
+ */
+fn get_authorization(request: HttpRequest) -> string {
+    return get_header(request, "Authorization");
+}
+
+// Helper functions
+
+fn split_lines(s: string) -> List<string> {
+    // Would be native implementation
+    return [];  // Placeholder
+}
+
+fn split(s: string, delimiter: string) -> List<string> {
+    // Would be native implementation
+    return [];  // Placeholder
+}
+
+fn join(list: List<string>, separator: string) -> string {
+    // Would be native implementation
+    return "";  // Placeholder
+}
+
+fn trim(s: string) -> string {
+    // Would be native implementation
+    return s;
+}
+
+fn find(s: string, substr: string) -> i64 {
+    // Would be native implementation
+    return -1;
+}
+
+fn substring(s: string, start: i64, end: i64) -> string {
+    // Would be native implementation
+    return "";
+}
+
+fn to_lower(s: string) -> string {
+    // Would be native implementation
+    return s;
+}
+
+fn contains(s: string, substr: string) -> bool {
+    // Would be native implementation
+    return false;
+}
+
+fn parse_int(s: string) -> i64 {
+    // Would be native implementation
+    return 0;
+}
+
+fn url_decode(s: string) -> string {
+    // Would be native implementation
+    return s;
+}
+
+fn keys(m: Map<string, string>) -> List<string> {
+    // Would be native implementation
+    return [];
+}

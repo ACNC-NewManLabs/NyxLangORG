@@ -1,0 +1,17 @@
+fn create_obj() {
+    return {
+        test: fn(self) {
+            let i = 0
+            while i < 3 {
+                println("Inside while! i = {}", i)
+                i = i + 1
+            }
+            println("Done!")
+        }
+    }
+}
+
+fn main() {
+    let obj = create_obj()
+    obj.test()
+}

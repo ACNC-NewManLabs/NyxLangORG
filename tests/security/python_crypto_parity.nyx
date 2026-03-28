@@ -1,0 +1,42 @@
+fn main() {
+    print("--- Nyx Comprehensive Crypto Parity Test (Python Equivalence) ---")
+
+    # 1. hashlib (MD5, SHA1)
+    let md5_hash = std::crypto::to_hex(std::crypto::md5("hello world"))
+    print("[hashlib MD5] 'hello world' -> " + md5_hash)
+
+    let sha1_hash = std::crypto::to_hex(std::crypto::sha1("hello world"))
+    print("[hashlib SHA1] 'hello world' -> " + sha1_hash)
+
+    # 2. Fernet (High-Level Symmetric Encryption)
+    let fernet_key = std::crypto::fernet_generate()
+    print("\n[Fernet] Generated Key: " + fernet_key)
+    let fernet_token = std::crypto::fernet_encrypt(fernet_key, "super secret payload")
+    print("[Fernet] Encrypted Token: " + fernet_token)
+    let fernet_decrypted = std::crypto::fernet_decrypt(fernet_key, fernet_token)
+    print("[Fernet] Decrypted: " + std::bytes::as_string(fernet_decrypted))
+
+    # 3. RSA (cryptography / PyCryptodome)
+    print("\n[RSA] Generating 1024-bit Keypair (fast generation)...")
+    let keypair = std::crypto::rsa_generate(1024)
+    let priv_pem = keypair[0]
+    let pub_pem = keypair[1]
+
+    print("[RSA] Encrypting payload with Public Key...")
+    let rsa_cipher = std::crypto::rsa_encrypt(pub_pem, "classified RSA payload")
+    
+    print("[RSA] Decrypting payload with Private Key...")
+    let rsa_plain = std::crypto::rsa_decrypt(priv_pem, rsa_cipher)
+    print("[RSA] Decrypted: " + std::bytes::as_string(rsa_plain))
+
+    print("[RSA] Signing payload with Private Key...")
+    let rsa_signature = std::crypto::rsa_sign(priv_pem, "document to sign")
+    let is_valid = std::crypto::rsa_verify(pub_pem, "document to sign", rsa_signature)
+    print("[RSA] Signature Verification: " + is_valid)
+
+    # 4. SSL (HTTPS Secure Socket Simulator)
+    print("\n[SSL] Testing Secure Socket (HTTPS GET example.com:443)...")
+    let ssl_res = std::net::tls_connect("example.com", 443)
+    let ssl_text = std::bytes::as_string(std::bytes::slice(ssl_res, 0, 15))
+    print("[SSL] Received: " + ssl_text + "...")
+}

@@ -1,0 +1,91 @@
+import std;
+import ml;
+
+fn generate_df1(rows) {
+    let ids = []
+    let f1 = []
+    let f2 = []
+    let i = 0
+    while i < rows {
+        ids.push(i)
+        f1.push(i * 0.1)
+        f2.push(i * 0.2)
+        i = i + 1
+    }
+    return std::df::DataFrame([
+        std::df::Column("id", "int", ids, null),
+        std::df::Column("f1", "float", f1, null),
+        std::df::Column("f2", "float", f2, null)
+    ], null)
+}
+
+fn generate_df2(rows) {
+    let ids = []
+    let labels = []
+    let i = 0
+    while i < rows {
+        ids.push(i)
+        labels.push(i * 0.3)
+        i = i + 1
+    }
+    return std::df::DataFrame([
+        std::df::Column("id", "int", ids, null),
+        std::df::Column("label", "float", labels, null)
+    ], null)
+}
+
+fn test_join_pipeline(rows) {
+    println("--- Testing Join + ML Pipeline for ", rows, " rows ---")
+    
+    let df1 = generate_df1(rows)
+    let df2 = generate_df2(rows)
+    
+    let join_start = std::time::now()
+    let joined_df = df1.lazy().join(df2.lazy(), "id", "inner").collect()
+    let join_end = std::time::now()
+    
+    if joined_df.col("label") == null {
+        println("FAIL: Join failed to include 'label' column")
+        return false
+    }
+    
+    let extract_start = std::time::now()
+    let X_df = joined_df.select(["f1", "f2"])
+    let X = std::df::ml_bridge::to_tensor(X_df)
+    X.requires_grad = false
+    let Y_df = joined_df.select(["label"])
+    let Y = std::df::ml_bridge::to_tensor(Y_df)
+    Y.requires_grad = false
+    let extract_end = std::time::now()
+    
+    println("Data prep complete. X shape: ", X.shape, ", Y shape: ", Y.shape)
+    
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(2, 4, "relu"),
+        ml::nn::Linear(4, 1, null)
+    ])
+    let opt = ml::optim::SGD(model.layers, 0.01)
+    
+    let train_start = std::time::now()
+    let iters = 10
+    let i = 0
+    while i < iters {
+        let pred = model.forward(X)
+        let loss = ml::nn::nn_mse_loss(pred, Y)
+        loss.backward()
+        ml::optim::optim_step(opt)
+        ml::optim::optim_zero_grad(opt)
+        i = i + 1
+    }
+    let train_end = std::time::now()
+    
+    println("SUCCESS: Pipeline trained 10 iters safely.")
+    println("Join time     : ", (join_end - join_start) / 1000.0, "s")
+    println("DF->Tensor time: ", (extract_end - extract_start) / 1000.0, "s")
+    println("Train time    : ", (train_end - train_start) / 1000.0, "s")
+}
+
+fn main() {
+    test_join_pipeline(1000)
+    test_join_pipeline(10000)
+}

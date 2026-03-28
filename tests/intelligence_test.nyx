@@ -1,0 +1,29 @@
+# Nyx Intelligence Engine: Wizard API Verification
+fn main() {
+    println("--- Nyx Intelligence Engine: Wizard API Test ---")
+    
+    # 1. Regression Task: Solve y = 2x + 1
+    let wiz = ml::nn::Wizard("regression")
+    wiz.auto_build(1, 1)
+    
+    # Prepare synthetic data
+    # x = [1, 2, 3, 4, 5], y = [3, 5, 7, 9, 11]
+    let x_train = ml::tensor::Tensor([[1.0], [2.0], [3.0], [4.0], [5.0]], [5, 1], false)
+    let y_train = ml::tensor::Tensor([[3.0], [5.0], [7.0], [9.0], [11.0]], [5, 1], false)
+    
+    # Train for 1 epoch for testing
+    wiz.train(x_train, y_train, 500)
+    
+    # Predict for x = 6 (expected y = 13)
+    let x_test = ml::tensor::Tensor([[6.0]], [1, 1], false)
+    let pred = wiz.predict(x_test)
+    
+    println("Prediction for x=6: {}", pred.item())
+    
+    let result = pred.item()
+    if result > 12.5 && result < 13.5 {
+        println("SUCCESS: Intelligence Engine solved the regression problem!")
+    } else {
+        println("FAILURE: Model did not converge correctly.")
+    }
+}

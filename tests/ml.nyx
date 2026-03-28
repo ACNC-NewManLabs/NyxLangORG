@@ -1,0 +1,100 @@
+# Nyx Standard ML Library (std::ml)
+# Optimized with native math acceleration
+
+# Linear Layer Implementation
+fn Linear(input_size: i32, output_size: i32, activation: str) -> {
+    weights: { data: [], shape: [input_size, output_size] },
+    biases: { data: [], shape: [1, output_size] },
+    activation: activation,
+    
+    # Initialize with small random values
+    init: fn(self) {
+        let num_w = input_size * output_size
+        let w_data = []
+        let i = 0
+        while i < num_w {
+            w_data = w_data + [0.1] # Simplified init
+            i = i + 1
+        }
+        self.weights.data = w_data
+        
+        let b_data = []
+        i = 0
+        while i < output_size {
+            b_data = b_data + [0.0]
+            i = i + 1
+        }
+        self.biases.data = b_data
+        return self
+    },
+    
+    forward: fn(self, input_tensor) {
+        let input_rows = input_tensor.shape[0]
+        let input_cols = input_tensor.shape[1]
+        let output_cols = self.weights.shape[1]
+        
+        let res_data = []
+        let r = 0
+        while r < input_rows {
+            let row_in = []
+            let c = 0
+            while c < input_cols {
+                row_in = row_in + [input_tensor.data[r * input_cols + c]]
+                c = c + 1
+            }
+            
+            let oc = 0
+            while oc < output_cols {
+                let col_w = []
+                let ic = 0
+                while ic < input_cols {
+                    col_w = col_w + [self.weights.data[ic * output_cols + oc]]
+                    ic = ic + 1
+                }
+                
+                let val = std::math::dot(row_in, col_w) + self.biases.data[oc]
+                
+                if self.activation == "relu" {
+                    val = std::math::relu(val)
+                } else if self.activation == "sigmoid" {
+                    val = std::math::sigmoid(val)
+                }
+                
+                res_data = res_data + [val]
+                oc = oc + 1
+            }
+            r = r + 1
+        }
+        
+        return { data: res_data, shape: [input_rows, output_cols] }
+    }
+}
+
+# SGD Optimizer
+fn SGD(lr: f64) -> {
+    learning_rate: lr,
+    step: fn(layer, grad_w, grad_b) {
+        let scaled_dw = []
+        let i = 0
+        while i < len(grad_w) {
+            scaled_dw = scaled_dw + [grad_w[i] * lr]
+            i = i + 1
+        }
+        layer.weights.data = std::math::mat_sub(layer.weights.data, scaled_dw)
+        
+        let scaled_db = []
+        i = 0
+        while i < len(grad_b) {
+            scaled_db = scaled_db + [grad_b[i] * lr]
+            i = i + 1
+        }
+        layer.biases.data = std::math::mat_sub(layer.biases.data, scaled_db)
+    }
+}
+
+mod ml_mod = {
+    Linear: Linear,
+    SGD: SGD
+}
+
+export ml_mod

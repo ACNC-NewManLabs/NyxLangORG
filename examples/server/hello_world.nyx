@@ -1,0 +1,115 @@
+/**
+ * Hello World Server Example
+ * 
+ * A basic HTTP server that responds with "Hello World" messages.
+ * Demonstrates:
+ * - Creating an HTTP server
+ * - Adding GET routes
+ * - Returning HTML and JSON responses
+ * 
+ * Run with: nyx run hello_world.nyx
+ * Or: nyx serve --port 8080
+ * 
+ * @example
+ * import examples.server.hello_world;
+ * hello_world.main([]);
+ */
+
+import net.http;
+
+/**
+ * Main function
+ * 
+ * @param args - Command line arguments
+ */
+fn main(args: List<string>) {
+    print("Starting Hello World Server...");
+    print("");
+    
+    // Create HTTP server on port 8080
+    let port = 8080;
+    if args.length() > 0 {
+        // Allow overriding port via args
+        port = parse_int(args[0]);
+    }
+    
+    let server = net.HttpServer(port: port);
+    
+    // Root route - returns HTML
+    server.get("/", fn(req, res) {
+        let html = "<!DOCTYPE html>";
+        html = html + "<html>";
+        html = html + "<head>";
+        html = html + "  <title>Hello from Nyx</title>";
+        html = html + "  <meta charset=\"utf-8\">";
+        html = html + "  <style>";
+        html = html + "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;";
+        html = html + "           max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }";
+        html = html + "    h1 { color: #2c3e50; }";
+        html = html + "    p { color: #7f8c8d; }";
+        html = html + "    .links { margin-top: 30px; }";
+        html = html + "    a { color: #3498db; margin: 0 10px; }";
+        html = html + "  </style>";
+        html = html + "</head>";
+        html = html + "<body>";
+        html = html + "  <h1>Hello from Nyx! 🚀</h1>";
+        html = html + "  <p>Welcome to your Nyx web server</p>";
+        html = html + "  <div class=\"links\">";
+        html = html + "    <a href=\"/api\">API Endpoint</a>";
+        html = html + "    <a href=\"/json\">JSON Response</a>";
+        html = html + "    <a href=\"/plain\">Plain Text</a>";
+        html = html + "  </div>";
+        html = html + "</body>";
+        html = html + "</html>";
+        
+        res.html(html);
+    });
+    
+    // API endpoint - returns JSON
+    server.get("/api", fn(req, res) {
+        res.json({
+            "message": "Hello from the API",
+            "status": "ok",
+            "version": "1.0.0"
+        });
+    });
+    
+    // JSON endpoint
+    server.get("/json", fn(req, res) {
+        res.json({
+            "server": "Nyx",
+            "port": port,
+            "timestamp": current_time()
+        });
+    });
+    
+    // Plain text endpoint
+    server.get("/plain", fn(req, res) {
+        res.text("Hello, World! This is a plain text response.");
+    });
+    
+    // Health check endpoint
+    server.get("/health", fn(req, res) {
+        res.json({
+            "status": "healthy",
+            "uptime": 0
+        });
+    });
+    
+    // Start the server
+    server.start();
+    
+    print("Server running at http://localhost:" + to_string(port));
+    print("Press Ctrl+C to stop");
+}
+
+/**
+ * Get current timestamp (placeholder)
+ */
+fn current_time() -> string {
+    return "2024-01-01T00:00:00Z";
+}
+
+export {
+    main
+};

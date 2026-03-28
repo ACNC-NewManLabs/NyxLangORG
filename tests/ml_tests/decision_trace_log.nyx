@@ -1,0 +1,57 @@
+import ml;
+
+# --- Nyx Decision Trace Log (Forensics Lineage) ---
+
+fn log_decision_trace(trace) {
+    println("--- Nyx Forensics: Decision Lineage Trace ---")
+    println("  Trace ID: ", trace.id)
+    println("  Inputs: ", trace.features)
+    
+    # 1. Guard Audit
+    println("  Audit [Envelope]: ", trace.envelope_status)
+    println("  Audit [Guard]:    ", trace.guard_status)
+    
+    # 2. Pipeline Stage
+    if trace.fallback_triggered {
+        println("  Decision: FALLBACK (Reason: ", trace.reason, ")")
+    } else {
+        println("  Decision: PRIMARY_ML (Output: ", trace.output, ")")
+    }
+    
+    println("  Final Outcome Code: ", trace.final_code)
+    println("--- End Trace ---")
+    
+    return true
+}
+
+# --- Test Case ---
+
+fn main() {
+    # Scenario: Safe, primary ML decision
+    let t1 = {
+        id: "TX-991",
+        features: [0.55, 0.45],
+        envelope_status: "INSIDE",
+        guard_status: "APPROVED",
+        fallback_triggered: false,
+        output: 1,
+        reason: "NONE",
+        final_code: "200_OK"
+    }
+    log_decision_trace(t1)
+    
+    println("")
+    
+    # Scenario: Rejection, fallback decision
+    let t2 = {
+        id: "TX-992",
+        features: [0.05, 0.95],
+        envelope_status: "INSIDE",
+        guard_status: "REJECTED",
+        fallback_triggered: true,
+        output: 0,
+        reason: "LOW_CONFIDENCE",
+        final_code: "202_FALLBACK"
+    }
+    log_decision_trace(t2)
+}

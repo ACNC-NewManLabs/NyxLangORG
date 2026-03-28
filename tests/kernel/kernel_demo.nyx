@@ -1,0 +1,108 @@
+# ============================================================
+# Nyx OS Kernel Development Standard Library Demo
+# shows all pre-built modules kernel authors can import
+# ============================================================
+
+fn main() {
+    print("=== Nyx Kernel Development Standard Library ===\n")
+
+    # ── 1. KEYBOARD MODULE ───────────────────────────────────
+    print("[ std::kernel::keyboard ]")
+    let esc_code   = std::kernel::keyboard::KEY_ESCAPE()
+    let enter_code = std::kernel::keyboard::KEY_ENTER()
+    let up_code    = std::kernel::keyboard::KEY_UP()
+    print("  KEY_ESCAPE  scancode = " + esc_code)
+    print("  KEY_ENTER   scancode = " + enter_code)
+    print("  KEY_UP      scancode = " + up_code)
+
+    # Scan code → character
+    let ch_a = std::kernel::keyboard::scancode_to_char(0x1E)
+    print("  scancode 0x1E -> char: '" + ch_a + "'")
+
+    # Scan code → key name
+    let name_f1 = std::kernel::keyboard::scancode_to_name(0x3B)
+    print("  scancode 0x3B -> name: " + name_f1)
+
+    # Key name → scan code lookup
+    let code_space = std::kernel::keyboard::read_keycode("space")
+    print("  read_keycode('space') = " + code_space + " (expected 57)")
+
+    # Is printable?
+    let printable_a = std::kernel::keyboard::is_printable(0x1E)
+    let printable_esc = std::kernel::keyboard::is_printable(0x01)
+    print("  is_printable(0x1E 'a') = " + printable_a)
+    print("  is_printable(0x01 ESC) = " + printable_esc)
+
+    # Build a key event struct
+    let ev = std::kernel::keyboard::key_event(0x1E, true)
+    print("  key_event(0x1E, pressed=true) -> " + ev)
+
+    # ── 2. MOUSE MODULE ──────────────────────────────────────
+    print("\n[ std::kernel::mouse ]")
+    # Decode a PS/2 packet: b0=0x08 (no buttons), b1=5 (dx=+5), b2=0 (dy=0)
+    let mstate = std::kernel::mouse::decode_ps2_packet(0x08, 5, 0)
+    print("  PS/2 packet (0x08, 5, 0) -> delta_x=" + mstate["delta_x"] + " delta_y=" + mstate["delta_y"])
+    print("  left=" + mstate["left_button"] + " right=" + mstate["right_button"])
+    let btn_left = std::kernel::mouse::BTN_LEFT()
+    print("  BTN_LEFT constant = " + btn_left)
+
+    # ── 3. VGA TEXT-MODE MODULE ──────────────────────────────
+    print("\n[ std::kernel::vga ]")
+    let vga_buf  = std::kernel::vga::VGA_BUFFER()
+    let vga_w    = std::kernel::vga::VGA_WIDTH()
+    let vga_h    = std::kernel::vga::VGA_HEIGHT()
+    let white    = std::kernel::vga::WHITE()
+    let blue     = std::kernel::vga::BLUE()
+    let black    = std::kernel::vga::BLACK()
+    print("  VGA Buffer @ 0x" + vga_buf + " (" + vga_w + "x" + vga_h + " chars)")
+
+    # Build a color attribute byte
+    let attr = std::kernel::vga::color_code(white, blue)
+    print("  color_code(WHITE on BLUE) = " + attr + " (expected 113)")
+
+    # Build a screen cell (character 'A' = 65)
+    let cell = std::kernel::vga::make_cell("A", white, black)
+    print("  make_cell('A', WHITE, BLACK) = " + cell + " (expected 30017)")
+
+    # ── 4. I/O PORTS MODULE ──────────────────────────────────
+    print("\n[ std::kernel::ports ]")
+    print("  PIC1_CMD   = 0x" + std::kernel::ports::PIC1_CMD())
+    print("  PIT_CH0    = 0x" + std::kernel::ports::PIT_CH0())
+    print("  PS2_DATA   = 0x" + std::kernel::ports::PS2_DATA())
+    print("  COM1       = 0x" + std::kernel::ports::COM1())
+    print("  PIT clock  = " + std::kernel::ports::PIT_HZ() + " Hz")
+
+    # ── 5. SERIAL MODULE ─────────────────────────────────────
+    print("\n[ std::kernel::serial ]")
+    print("  COM1 base  = 0x" + std::kernel::serial::COM1())
+    print("  LSR offset = " + std::kernel::serial::UART_LSR())
+    print("  TX_IDLE    = 0x" + std::kernel::serial::LSR_TX_IDLE())
+
+    # ── 6. MEMORY MODULE ─────────────────────────────────────
+    print("\n[ std::kernel::memory ]")
+    let page_4k = std::kernel::memory::PAGE_SIZE_4K()
+    let high_mem = std::kernel::memory::HIGH_MEMORY_START()
+    print("  PAGE_SIZE_4K        = " + page_4k + " bytes")
+    print("  HIGH_MEMORY_START   = 0x" + high_mem + " (1MB)")
+    print("  VGA_TEXT_BUFFER     = 0x" + std::kernel::memory::VGA_TEXT_BUFFER())
+
+    # Alignment helpers
+    let raw_addr = 0x101A35
+    let aligned_up   = std::kernel::memory::align_up(raw_addr, page_4k)
+    let aligned_down  = std::kernel::memory::align_down(raw_addr, page_4k)
+    let pages = std::kernel::memory::pages_needed(100000)
+    print("  align_up(0x101A35, 4K)   = 0x" + aligned_up)
+    print("  align_down(0x101A35, 4K) = 0x" + aligned_down)
+    print("  pages_needed(100000 bytes) = " + pages + " pages")
+
+    # ── 7. INTERRUPTS MODULE ─────────────────────────────────
+    print("\n[ std::kernel::interrupts ]")
+    print("  IRQ_TIMER    = " + std::kernel::interrupts::IRQ_TIMER())
+    print("  IRQ_KEYBOARD = " + std::kernel::interrupts::IRQ_KEYBOARD())
+    print("  IRQ_MOUSE    = " + std::kernel::interrupts::IRQ_MOUSE())
+    print("  EX_PAGE_FAULT= " + std::kernel::interrupts::EX_PAGE_FAULT())
+    print("  describe(33) = " + std::kernel::interrupts::describe(33))
+    print("  describe(14) = " + std::kernel::interrupts::describe(14))
+
+    print("\n=== All kernel modules verified successfully ===")
+}

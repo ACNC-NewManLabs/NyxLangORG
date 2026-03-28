@@ -1,0 +1,40 @@
+import ml;
+
+# --- Nyx Regulator Audit API (Independent Evidence Access) ---
+
+fn expose_evidence(token) {
+    if token == "VERIFIED_REGULATOR_ACCESS" {
+        println("  ACCESS GRANTED: Regulator [EU_GDPR_OFFICE]")
+        return {
+            status: "PASS",
+            snapshots: [ "SHA256:8f9a2b...", "SHA256:supreme_9a8b..." ],
+            dr_logs: "file:///logs/dr_failover_audit.log"
+        }
+    }
+    return "DENIED"
+}
+
+fn main() {
+    println("--- Nyx Auditor: Regulator Evidence API [SIG-001] ---")
+    println("")
+
+    # 1. API endpoint configuration
+    let audit_tokens = {
+        "AUDIT_EU_01": "VERIFIED_REGULATOR_ACCESS",
+        "AUDIT_US_02": "VERIFIED_FINRA_ACCESS"
+    }
+
+    let active_regulator = "AUDIT_EU_01"
+    println("REQUEST: Data access request from ", active_regulator)
+    
+    let report = expose_evidence(audit_tokens[active_regulator])
+    
+    if report != "DENIED" {
+        println("  COMPLIANCE STATUS: ", report.status)
+        println("  EVIDENCE COPIES:   ", std::list::len(report.snapshots))
+        println("  DR LOGS:           ", report.dr_logs)
+    }
+
+    println("")
+    println("SUCCESS: Regulator audit API verified. Independence is accessible.")
+}

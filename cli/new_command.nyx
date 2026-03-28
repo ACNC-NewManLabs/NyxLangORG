@@ -1,0 +1,658 @@
+/**
+ * CLI New Command
+ * 
+ * Provides CLI command for creating new Nyx projects:
+ * - new: Create a new Nyx project from a template
+ * 
+ * @module cli::new_command
+ */
+
+/**
+ * Project template types
+ */
+type Template = 
+    | "web"           // Web application
+    | "api"           // REST API
+    | "websocket"     // WebSocket server
+    | "microservice"  // Microservice
+    | "cli"           // Command-line tool
+    | "library"       // Library/package
+    | "empty";        // Empty project
+
+/**
+ * Project structure to create
+ */
+type ProjectStructure = {
+    name: string,
+    template: string,
+    directory: string,
+    files: Map<string, string>
+};
+
+/**
+ * Parse command line arguments for new command
+ * 
+ * @param args - Command line arguments
+ * @returns Parsed options
+ */
+fn parse_new_args(args: List<string>) -> Map<string, any> {
+    let options = {
+        "name": "",
+        "template": "web",
+        "directory": ".",
+        "force": false,
+        "help": false
+    };
+    
+    let i = 0;
+    while i < args.length() {
+        let arg = args[i];
+        
+        if arg == "--template" or arg == "-t" {
+            if i + 1 < args.length() {
+                options["template"] = args[i + 1];
+                i = i + 1;
+            }
+        } else if arg == "--directory" or arg == "-d" {
+            if i + 1 < args.length() {
+                options["directory"] = args[i + 1];
+                i = i + 1;
+            }
+        } else if arg == "--force" or arg == "-f" {
+            options["force"] = true;
+        } else if arg == "--help" or arg == "-h" {
+            options["help"] = true;
+        } else if !starts_with(arg, "-") && options["name"] == "" {
+            options["name"] = arg;
+        }
+        
+        i = i + 1;
+    }
+    
+    return options;
+}
+
+/**
+ * Print help for new command
+ */
+fn print_new_help() {
+    print("Nyx New Command - Create a new Nyx project");
+    print("");
+    print("Usage:");
+    print("  nyx new <project-name> [options]");
+    print("");
+    print("Options:");
+    print("  -t, --template <type>    Project template (web, api, websocket, microservice, cli, library, empty)");
+    print("  -d, --directory <dir>   Directory to create project in (default: current directory)");
+    print("  -f, --force              Overwrite existing files");
+    print("  -h, --help               Show this help message");
+    print("");
+    print("Templates:");
+    print("  web           Web application with HTTP server");
+    print("  api           REST API server");
+    print("  websocket     Real-time WebSocket server");
+    print("  microservice  Microservice template");
+    print("  cli           Command-line tool");
+    print("  library       Library/package");
+    print("  empty         Empty project");
+    print("");
+    print("Examples:");
+    print("  nyx new my-web-app");
+    print("  nyx new my-api --template api");
+    print("  nyx new my-app --directory ./projects");
+}
+
+/**
+ * Generate project files based on template
+ * 
+ * @param name - Project name
+ * @param template - Template type
+ * @returns Map of file paths to contents
+ */
+fn generate_project(name: string, template: string) -> Map<string, string> {
+    let files = {};
+    
+    // Project file
+    files["nyxproject.json"] = generate_nyxproject(name, template);
+    
+    if template == "web" {
+        files["src/main.nyx"] = generate_web_main();
+        files["src/routes.nyx"] = generate_web_routes();
+        files["public/index.html"] = generate_index_html(name);
+        files["public/style.css"] = generate_style_css();
+    } else if template == "api" {
+        files["src/main.nyx"] = generate_api_main();
+        files["src/handlers.nyx"] = generate_api_handlers();
+    } else if template == "websocket" {
+        files["src/main.nyx"] = generate_ws_main();
+    } else if template == "microservice" {
+        files["src/main.nyx"] = generate_microservice_main();
+        files["src/config.nyx"] = generate_config();
+    } else if template == "cli" {
+        files["src/main.nyx"] = generate_cli_main();
+    } else if template == "library" {
+        files["src/lib.nyx"] = generate_lib();
+    }
+    
+    return files;
+}
+
+/**
+ * Generate nyxproject.json
+ */
+fn generate_nyxproject(name: string, template: string) -> string {
+    return '{\n  "name": "' + name + '",\n  "version": "0.1.0",\n  "template": "' + template + '",\n  "dependencies": {}\n}';
+}
+
+/**
+ * Generate web application main.nyx
+ */
+fn generate_web_main() -> string {
+    return '/**
+ * ' + 'Main application file
+ */
+import web;
+
+let app = web.WebApp({
+    "port": 8080,
+    "static": "./public",
+    "templates": "./templates"
+});
+
+// Import routes
+import routes;
+
+// Start server
+app.start();
+';
+}
+
+/**
+ * Generate web routes
+ */
+fn generate_web_routes() -> string {
+    return '/**
+ * Application routes
+ */
+
+import web;
+
+// Define routes using the web app
+// Note: In a full implementation, these would be registered with the app
+
+/**
+ * Home page handler
+ */
+fn home_handler(req, res) {
+    res.html("<h1>Welcome to My Nyx App</h1>");
+}
+
+/**
+ * API handler
+ */
+fn api_handler(req, res) {
+    res.json({"message": "Hello from API"});
+}
+
+/**
+ * About page handler
+ */
+fn about_handler(req, res) {
+    res.html("<h1>About</h1><p>This is a Nyx web application.</p>");
+}
+';
+}
+
+/**
+ * Generate index.html
+ */
+fn generate_index_html(name: string) -> string {
+    return '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' + name + '</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to ' + name + '</h1>
+        <p>Built with Nyx</p>
+    </div>
+</body>
+</html>
+';
+}
+
+/**
+ * Generate style.css
+ */
+fn generate_style_css() -> string {
+    return 'body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #333;
+}
+';
+}
+
+/**
+ * Generate API main.nyx
+ */
+fn generate_api_main() -> string {
+    return '/**
+ * REST API Server
+ */
+import web;
+
+let app = web.WebApp({
+    "port": 3000
+});
+
+app.get("/api/users", list_users);
+app.get("/api/users/:id", get_user);
+app.post("/api/users", create_user);
+app.put("/api/users/:id", update_user);
+app.delete("/api/users/:id", delete_user);
+
+// Handlers would be in handlers.nyx
+fn list_users(req, res) {
+    res.json({"users": []});
+}
+
+fn get_user(req, res) {
+    let id = req.param("id");
+    res.json({"id": id, "name": "User " + id});
+}
+
+fn create_user(req, res) {
+    res.json({"status": "created"}, status: 201);
+}
+
+fn update_user(req, res) {
+    let id = req.param("id");
+    res.json({"id": id, "status": "updated"});
+}
+
+fn delete_user(req, res) {
+    res.json({"status": "deleted"});
+}
+
+app.start();
+';
+}
+
+/**
+ * Generate API handlers
+ */
+fn generate_api_handlers() -> string {
+    return '/**
+ * API Handlers
+ */
+
+// Add your handlers here
+';
+}
+
+/**
+ * Generate WebSocket main.nyx
+ */
+fn generate_ws_main() -> string {
+    return '/**
+ * WebSocket Server
+ */
+import net.websocket;
+
+let ws = net.websocket.WebSocketServer(port: 8080);
+
+ws.on_connect(fn(conn) {
+    print("Client connected");
+    
+    conn.on_message(fn(msg) {
+        print("Received: " + msg);
+        // Echo back
+        conn.send("Echo: " + msg);
+    });
+    
+    conn.on_close(fn() {
+        print("Client disconnected");
+    });
+});
+
+print("WebSocket server starting on port 8080...");
+ws.start();
+';
+}
+
+/**
+ * Generate microservice main.nyx
+ */
+fn generate_microservice_main() -> string {
+    return '/**
+ * Microservice
+ */
+import web;
+
+// Load configuration
+import config;
+
+let app = web.WebApp({
+    "port": config.port
+});
+
+// Health check
+app.get("/health", fn(req, res) {
+    res.json({"status": "healthy"});
+});
+
+// Your endpoints here
+
+app.start();
+';
+}
+
+/**
+ * Generate config.nyx
+ */
+fn generate_config() -> string {
+    return '/**
+ * Configuration
+ */
+
+let config = {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "debug": true
+};
+';
+}
+
+/**
+ * Generate CLI main.nyx
+ */
+fn generate_cli_main() -> string {
+    return '/**
+ * CLI Tool
+ */
+
+fn main(args: List<string>) {
+    print("Hello from CLI!");
+    print("Arguments: " + str(args.length()));
+    
+    // Parse arguments and run commands
+}
+
+// Entry point - would be called by the runtime
+main([]);
+';
+}
+
+/**
+ * Generate library lib.nyx
+ */
+fn generate_lib() -> string {
+    return '/**
+ * Library exports
+ */
+
+// Export your public API
+export {
+    // Add exports here
+};
+';
+}
+
+/**
+ * Create a new Nyx project
+ * 
+ * @param args - Command line arguments
+ */
+fn new_command(args: List<string>) {
+    let options = parse_new_args(args);
+    
+    if options["help"] == true {
+        print_new_help();
+        return;
+    }
+    
+    let name = options["name"];
+    let template = options["template"];
+    let directory = options["directory"];
+    let force = options["force"];
+    
+    if name == "" {
+        print("Error: Project name is required");
+        print("Run 'nyx new --help' for usage information");
+        return;
+    }
+    
+    // Validate template
+    let valid_templates = ["web", "api", "websocket", "microservice", "cli", "library", "empty"];
+    let is_valid = false;
+    for t in valid_templates {
+        if t == template {
+            is_valid = true;
+        }
+    }
+    
+    if !is_valid {
+        print("Error: Invalid template '" + template + "'");
+        print("Valid templates: " + join(valid_templates, ", "));
+        return;
+    }
+    
+    print("Creating new " + template + " project: " + name);
+    print("Directory: " + directory);
+    print("");
+    
+    // Generate project files
+    let files = generate_project(name, template);
+    
+    print("Generated files:");
+    for file_path in files {
+        print("  - " + file_path);
+    }
+    
+    // Create the project directory structure
+    let project_dir = directory + "/" + name;
+    
+    // Create directories and files using native operations
+    create_project_structure(name, template, project_dir, files);
+    
+    print("");
+    print("Project created successfully!");
+    print("");
+    print("Next steps:");
+    print("  cd " + name);
+    print("  nyx dev");
+}
+
+/**
+ * Create project directory structure and files on disk
+ */
+fn create_project_structure(name: string, template: string, project_dir: string, files: Map<string, string>) {
+    // Create project directory
+    __native_create_dir(project_dir);
+    
+    // Create subdirectories based on template
+    if template == "web" {
+        __native_create_dir(project_dir + "/src");
+        __native_create_dir(project_dir + "/public");
+        __native_create_dir(project_dir + "/templates");
+    } else if template == "api" {
+        __native_create_dir(project_dir + "/src");
+    } else if template == "websocket" {
+        __native_create_dir(project_dir + "/src");
+    } else if template == "microservice" {
+        __native_create_dir(project_dir + "/src");
+    } else if template == "cli" {
+        __native_create_dir(project_dir + "/src");
+    } else if template == "library" {
+        __native_create_dir(project_dir + "/src");
+    }
+    
+    // Write all generated files
+    for file_path in files {
+        let full_path = project_dir + "/" + file_path;
+        let content = files[file_path];
+        
+        // Create parent directory if needed
+        let parent_dir = get_parent_dir(full_path);
+        if parent_dir != "" {
+            __native_create_dir(parent_dir);
+        }
+        
+        // Write file
+        __native_write_file(full_path, content);
+    }
+    
+    // Create README.md
+    let readme = generate_readme(name, template);
+    __native_write_file(project_dir + "/README.md", readme);
+    
+    // Create .gitignore
+    let gitignore = generate_gitignore();
+    __native_write_file(project_dir + "/.gitignore", gitignore);
+}
+
+/**
+ * Generate README.md content
+ */
+fn generate_readme(name: string, template: string) -> string {
+    return "# " + name + "
+
+A Nyx " + template + " project.
+
+## Getting Started
+
+```bash
+# Run the project
+nyx dev
+
+# Build for production
+nyx build
+```
+
+## Project Structure
+
+- src/ - Source code
+" + (if template == "web" then "- public/ - Static files" else "") + "
+
+## Learn More
+
+Visit https://nyxlang.dev for documentation.
+";
+}
+
+/**
+ * Generate .gitignore content
+ */
+fn generate_gitignore() -> string {
+    return "# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+";
+}
+
+/**
+ * Get parent directory from path
+ */
+fn get_parent_dir(path: string) -> string {
+    let last_slash = -1;
+    let i = 0;
+    while i < len(path) {
+        let c = char_at(path, i);
+        if c == "/" {
+            last_slash = i;
+        }
+        i = i + 1;
+    }
+    
+    if last_slash <= 0 {
+        return "";
+    }
+    
+    return substring(path, 0, last_slash);
+}
+
+/**
+ * Get character at index
+ */
+fn char_at(s: string, i: i64) -> string {
+    // Would use native implementation
+    return "";
+}
+
+// Native file system functions
+fn __native_create_dir(path: string);
+fn __native_write_file(path: string, content: string);
+fn __native_file_exists(path: string) -> bool;
+
+// Helper functions
+
+fn starts_with(s: string, prefix: string) -> bool {
+    if len(s) == 0 || len(prefix) == 0 {
+        return false;
+    }
+    return substring(s, 0, len(prefix)) == prefix;
+}
+
+fn join(list: List<string>, delim: string) -> string {
+    if len(list) == 0 {
+        return "";
+    }
+    let result = list[0];
+    let i = 1;
+    while i < len(list) {
+        result = result + delim + list[i];
+        i = i + 1;
+    }
+    return result;
+}
+
+fn substring(s: string, start: i64, end: i64) -> string {
+    if len(s) == 0 || start >= end || start >= len(s) {
+        return "";
+    }
+    // Implementation would extract substring
+    return s;
+}
+
+// Export
+export {
+    new_command,
+    parse_new_args,
+    print_new_help
+};

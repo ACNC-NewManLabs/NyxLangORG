@@ -1,0 +1,6 @@
+# Nyx Document Library: Markdown
+# Provides Markdown generation capabilities
+
+fn write(path, text) {
+    return std::io::write_file(path, text)
+}

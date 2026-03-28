@@ -1,0 +1,361 @@
+// Nyx Web Real-time - Events
+// Event-driven messaging system
+
+// Event
+struct Event {
+    name: string
+    data: any
+    timestamp: u64
+    source: string
+    id: string
+}
+
+// Event emitter
+struct EventEmitter {
+    listeners: Map<string, List<EventListener>>
+    once_listeners: Map<string, List<EventListener>>
+    max_listeners: u32
+}
+
+// Event listener
+struct EventListener {
+    id: string
+    callback: fn(Event)
+    context: any
+}
+
+// Event subscription
+struct EventSubscription {
+    emitter: EventEmitter
+    event: string
+    listener_id: string
+}
+
+// Event channel
+struct EventChannel {
+    name: string
+    subscribers: List<string>
+    event_history: List<Event>
+    max_history: u32
+}
+
+// Event bus (global event system)
+struct EventBus {
+    channels: Map<string, EventChannel>
+    emitters: Map<string, EventEmitter>
+}
+
+// Create new event emitter
+fn new_emitter() -> EventEmitter {
+    return EventEmitter {
+        listeners: Map::new()
+        once_listeners: Map::new()
+        max_listeners: 10
+    }
+}
+
+// Add event listener
+fn on(emitter: EventEmitter, event: string, callback: fn(Event)) -> EventSubscription {
+    let listener = EventListener {
+        id: generate_id()
+        callback: callback
+        context: null
+    }
+    
+    if !emitter.listeners.contains(event) {
+        emitter.listeners.insert(event, List::new())
+    }
+    
+    emitter.listeners.get(event).push(listener)
+    
+    return EventSubscription {
+        emitter: emitter
+        event: event
+        listener_id: listener.id
+    }
+}
+
+// Add one-time listener
+fn once(emitter: EventEmitter, event: string, callback: fn(Event)) -> EventSubscription {
+    let listener = EventListener {
+        id: generate_id()
+        callback: callback
+        context: null
+    }
+    
+    if !emitter.once_listeners.contains(event) {
+        emitter.once_listeners.insert(event, List::new())
+    }
+    
+    emitter.once_listeners.get(event).push(listener)
+    
+    return EventSubscription {
+        emitter: emitter
+        event: event
+        listener_id: listener.id
+    }
+}
+
+// Remove listener
+fn off(emitter: EventEmitter, event: string, listener_id: string) {
+    if emitter.listeners.contains(event) {
+        let listeners = emitter.listeners.get(event)
+        let filtered = listeners.filter(fn(l: EventListener) -> l.id != listener_id)
+        emitter.listeners.insert(event, filtered)
+    }
+    
+    if emitter.once_listeners.contains(event) {
+        let listeners = emitter.once_listeners.get(event)
+        let filtered = listeners.filter(fn(l: EventListener) -> l.id != listener_id)
+        emitter.once_listeners.insert(event, filtered)
+    }
+}
+
+// Emit event
+fn emit(emitter: EventEmitter, event: string, data: any) {
+    let e = Event {
+        name: event
+        data: data
+        timestamp: time::now()
+        source: ""
+        id: generate_id()
+    }
+    
+    // Call regular listeners
+    if emitter.listeners.contains(event) {
+        for listener in emitter.listeners.get(event) {
+            listener.callback(e)
+        }
+    }
+    
+    // Call once listeners and remove them
+    if emitter.once_listeners.contains(event) {
+        for listener in emitter.once_listeners.get(event) {
+            listener.callback(e)
+        }
+        emitter.once_listeners.insert(event, List::new())
+    }
+}
+
+// Remove all listeners
+fn remove_all_listeners(emitter: EventEmitter, event: string = "") {
+    if event == "" {
+        emitter.listeners = Map::new()
+        emitter.once_listeners = Map::new()
+    } else {
+        emitter.listeners.remove(event)
+        emitter.once_listeners.remove(event)
+    }
+}
+
+// Listener count
+fn listener_count(emitter: EventEmitter, event: string) -> u32 {
+    let count = 0
+    
+    if emitter.listeners.contains(event) {
+        count = count + emitter.listeners.get(event).len()
+    }
+    
+    if emitter.once_listeners.contains(event) {
+        count = count + emitter.once_listeners.get(event).len()
+    }
+    
+    return count
+}
+
+// Event channel operations
+fn create_channel(name: string) -> EventChannel {
+    return EventChannel {
+        name: name
+        subscribers: List::new()
+        event_history: List::new()
+        max_history: 100
+    }
+}
+
+// Subscribe to channel
+fn channel_subscribe(channel: EventChannel, subscriber_id: string) {
+    if !channel.subscribers.contains(subscriber_id) {
+        channel.subscribers.push(subscriber_id)
+    }
+}
+
+// Unsubscribe from channel
+fn channel_unsubscribe(channel: EventChannel, subscriber_id: string) {
+    channel.subscribers = channel.subscribers.filter(fn(id: string) -> id != subscriber_id)
+}
+
+// Publish to channel
+fn channel_publish(channel: EventChannel, event: Event) {
+    // Add to history
+    channel.event_history.push(event)
+    
+    // Trim history
+    if channel.event_history.len() > channel.max_history {
+        channel.event_history.remove(0)
+    }
+}
+
+// Get channel history
+fn channel_history(channel: EventChannel) -> List<Event> {
+    return channel.event_history
+}
+
+// Event bus (global)
+let global_event_bus = EventBus {
+    channels: Map::new()
+    emitters: Map::new()
+}
+
+// Get or create channel
+fn get_or_create_channel(name: string) -> EventChannel {
+    if !global_event_bus.channels.contains(name) {
+        global_event_bus.channels.insert(name, create_channel(name))
+    }
+    return global_event_bus.channels.get(name)
+}
+
+// Publish to global channel
+fn publish(channel_name: string, event: Event) {
+    let channel = get_or_create_channel(channel_name)
+    channel_publish(channel, event)
+}
+
+// Subscribe to global channel
+fn subscribe(channel_name: string, callback: fn(Event)) -> EventSubscription {
+    let channel = get_or_create_channel(channel_name)
+    // This would need a proper subscription system
+    return EventSubscription {
+        emitter: new_emitter()
+        event: channel_name
+        listener_id: ""
+    }
+}
+
+// Event middleware
+type EventMiddleware = fn(Event) -> Event
+
+// Create event pipeline
+fn create_pipeline() -> List<EventMiddleware> {
+    return List::new()
+}
+
+// Add middleware to pipeline
+fn pipeline_use(pipeline: List<EventMiddleware>, middleware: EventMiddleware) {
+    pipeline.push(middleware)
+}
+
+// Execute pipeline
+fn pipeline_execute(pipeline: List<EventMiddleware>, event: Event) -> Event {
+    let current = event
+    
+    for middleware in pipeline {
+        current = middleware(current)
+    }
+    
+    return current
+}
+
+// Common middleware: logging
+fn middleware_logging() -> EventMiddleware {
+    return fn(event: Event) -> Event {
+        console::log("[Event] " + event.name + " at " + event.timestamp.to_string())
+        return event
+    }
+}
+
+// Common middleware: filtering
+fn middleware_filter(predicate: fn(Event) -> bool) -> EventMiddleware {
+    return fn(event: Event) -> Event {
+        if predicate(event) {
+            return event
+        }
+        // Return empty event to signal skip
+        return Event {
+            name: ""
+            data: null
+            timestamp: 0
+            source: ""
+            id: ""
+        }
+    }
+}
+
+// Common middleware: transformation
+fn middleware_transform(transformer: fn(any) -> any) -> EventMiddleware {
+    return fn(event: Event) -> Event {
+        event.data = transformer(event.data)
+        return event
+    }
+}
+
+// Event source (for server-sent events)
+struct EventSource {
+    connection: WSConnection
+    channels: List<string>
+}
+
+// Create event source
+fn create_event_source(conn: WSConnection) -> EventSource {
+    return EventSource {
+        connection: conn
+        channels: List::new()
+    }
+}
+
+// Send SSE event
+fn sse_send(source: EventSource, event_name: string, data: string) {
+    let sse = "event: " + event_name + "\n" +
+              "data: " + data + "\n\n"
+    send_text(source.connection, sse)
+}
+
+// SSE broadcast
+fn sse_broadcast(channel: string, event_name: string, data: any) {
+    let payload = json::serialize(data)
+    let message = WSMessage {
+        type: "sse"
+        payload: payload
+        channel: channel
+        timestamp: time::now()
+        sender: ""
+    }
+    
+    // Broadcast to channel
+    // This would integrate with the WebSocket server
+}
+
+export Event
+export EventEmitter
+export EventListener
+export EventSubscription
+export EventChannel
+export EventBus
+export EventMiddleware
+export EventSource
+export new_emitter
+export on
+export once
+export off
+export emit
+export remove_all_listeners
+export listener_count
+export create_channel
+export channel_subscribe
+export channel_unsubscribe
+export channel_publish
+export channel_history
+export global_event_bus
+export get_or_create_channel
+export publish
+export subscribe
+export create_pipeline
+export pipeline_use
+export pipeline_execute
+export middleware_logging
+export middleware_filter
+export middleware_transform
+export create_event_source
+export sse_send
+export sse_broadcast
+

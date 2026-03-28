@@ -1,0 +1,67 @@
+import ml;
+import std::df;
+
+# --- Unified Nyx Safe Inference Stack ---
+
+# 1. State / Constants
+let envelope = { age_min: 18.0, age_max: 85.0 }
+let rules = { default_val: 0.0 }
+
+# 2. Safety Modules
+
+fn run_safety_envelope_audit(age) {
+    if age < envelope.age_min || age > envelope.age_max { return false }
+    return true
+}
+
+fn run_prediction_guard(probs) {
+    # Check max confidence
+    if probs[0] < 0.75 && probs[1] < 0.75 { return "REJECTED" }
+    return "APPROVED"
+}
+
+fn run_fallback_logic(reason) {
+    println("  [Fallback] Triggered due to: ", reason)
+    println("  [Fallback] Rule Engine Output: ", rules.default_val)
+    return rules.default_val
+}
+
+# 3. Unified Pipeline
+fn safe_predict_unified(age, ml_probs) {
+    println(">>> Safe Inference Request: Age=", age, " Probs=", ml_probs)
+    
+    # Step 1: Envelope Check (Pre-inference)
+    if !run_safety_envelope_audit(age) {
+        return run_fallback_logic("OUT_OF_DOMAIN (Age Audit)")
+    }
+    
+    # Step 2: Prediction Guard (Post-inference)
+    let guard_res = run_prediction_guard(ml_probs)
+    if guard_res == "REJECTED" {
+        return run_fallback_logic("LOW_CONFIDENCE (Uncertainty Audit)")
+    }
+    
+    # Step 3: Success
+    println("  [Safe] Prediction Approved. Output=", ml_probs[0])
+    return ml_probs[0]
+}
+
+# --- Demo Case ---
+
+fn main() {
+    println("--- Nyx Unified Safety Stack Demo ---")
+    
+    # Test 1: Ideal Case
+    println("Scenario 1: Nominal Operating Conditions")
+    safe_predict_unified(25.0, [0.95, 0.05])
+    println("")
+    
+    # Test 2: Out of Domain
+    println("Scenario 2: Input Outside Operating Envelope")
+    safe_predict_unified(10.0, [0.99, 0.01])
+    println("")
+    
+    # Test 3: Uncertain Model
+    println("Scenario 3: Ambiguous Decision (Low Confidence)")
+    safe_predict_unified(45.0, [0.55, 0.45])
+}

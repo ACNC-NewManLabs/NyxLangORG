@@ -1,0 +1,9 @@
+[package]
+name = "nyx-scheduler"
+version = "0.1.0"
+edition = "2021"
+authors = ["SURYA SEKHAR ROY"]
+description = "Industrial-grade cooperative task scheduler for the Nyx Runtime™"
+
+[dependencies]
+# No external dependencies for the core scheduler

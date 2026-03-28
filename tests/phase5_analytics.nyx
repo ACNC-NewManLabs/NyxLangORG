@@ -1,0 +1,95 @@
+# Nyx Dataframe Engine: Phase 5 - Advanced API & Analytics Test
+
+import df.column;
+import df.dataframe;
+import df.window;
+import df.transform;
+import df.lazy;
+import df.expr;
+
+fn main() {
+    println("=== Phase 5: Advanced API & Analytics Tests ===")
+    let all_passed = true
+
+    # ── Test 1: window_rank ───────────────────────────────────────────────────
+    let scores = [85.0, 92.0, 78.0, 92.0, 65.0]
+    let rank_data = std::df::window_rank(scores, true)
+    let passed_1 = (rank_data[4] == 1 && rank_data[2] == 2 && rank_data[0] == 3)
+    if passed_1 { println("✅ Test 1: window_rank PASSED") }
+    else { println("❌ Test 1: window_rank FAILED  got:", rank_data)  all_passed = false }
+
+    # ── Test 2: window_row_number ─────────────────────────────────────────────
+    let rn_data = std::df::window_row_number(scores)
+    let passed_2 = (rn_data[0] == 1 && rn_data[4] == 5)
+    if passed_2 { println("✅ Test 2: window_row_number PASSED") }
+    else { println("❌ Test 2: window_row_number FAILED  got:", rn_data)  all_passed = false }
+
+    # ── Test 3: apply UDF (row-by-row) ───────────────────────────────────────
+    let vals = [1.0, 2.0, 3.0, 4.0, 5.0]
+    let doubled = std::df::apply(vals, fn(x) { return x * 2.0 })
+    let passed_3 = (doubled[0] == 2.0 && doubled[4] == 10.0)
+    if passed_3 { println("✅ Test 3: apply UDF PASSED") }
+    else { println("❌ Test 3: apply UDF FAILED  got:", doubled)  all_passed = false }
+
+    # ── Test 4: pct_change ────────────────────────────────────────────────────
+    let prices = [100.0, 110.0, 121.0, 110.0]
+    let pct = std::df::pct_change(prices, 1)
+    let pct1 = pct[1]
+    let diff4 = pct1 - 0.1
+    if diff4 < 0 { diff4 = 0 - diff4 }
+    let passed_4 = (pct[0] == null && diff4 < 0.001)
+    if passed_4 { println("✅ Test 4: pct_change PASSED") }
+    else { println("❌ Test 4: pct_change FAILED  got:", pct)  all_passed = false }
+
+    # ── Test 5: ewm ──────────────────────────────────────────────────────────
+    let series = [10.0, 20.0, 30.0]
+    let ema = std::df::ewm(series, 0.5)
+    let passed_5 = (ema[0] == 10.0 && ema.len() == 3)
+    if passed_5 { println("✅ Test 5: ewm PASSED") }
+    else { println("❌ Test 5: ewm FAILED  got:", ema)  all_passed = false }
+
+    # ── Test 6: resample ──────────────────────────────────────────────────────
+    let daily = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    let weekly = std::df::resample(daily, 2, "sum")
+    let passed_6 = (weekly[0] == 3.0 && weekly[1] == 7.0 && weekly[2] == 11.0)
+    if passed_6 { println("✅ Test 6: resample PASSED") }
+    else { println("❌ Test 6: resample FAILED  got:", weekly)  all_passed = false }
+
+    # ── Test 7: rank at DataFrame level ──────────────────────────────────────
+    let col_a = df::column::Column("score", "float", [3.0, 1.0, 2.0], null)
+    let col_b = df::column::Column("group", "str", ["A", "A", "B"], null)
+    let df_t = df::dataframe::DataFrame([col_a, col_b], null)
+    let ranked = df::window::rank(df_t, "score", true)
+    let passed_7 = (ranked.col("score_rank") != null)
+    if passed_7 { println("✅ Test 7: rank() DataFrame method PASSED") }
+    else { println("❌ Test 7: rank() DataFrame method FAILED")  all_passed = false }
+
+    # ── Test 8: row_number ────────────────────────────────────────────────────
+    let with_rn = df::window::row_number(df_t)
+    let passed_8 = (with_rn.col("row_number") != null && with_rn.col("row_number")._data[0] == 1)
+    if passed_8 { println("✅ Test 8: row_number() PASSED") }
+    else { println("❌ Test 8: row_number() FAILED")  all_passed = false }
+
+    # ── Test 9: apply UDF produces correct values ─────────────────────────────
+    let v9 = [10.0, 20.0, 30.0]
+    let result9 = std::df::apply(v9, fn(x) { return x + 5.0 })
+    let passed_9 = (result9.len() == 3 && result9[0] == 15.0 && result9[2] == 35.0)
+    if passed_9 { println("✅ Test 9: apply UDF length + values PASSED") }
+    else { println("❌ Test 9: apply UDF values FAILED  got:", result9)  all_passed = false }
+
+    # ── Test 10: pct_change step=2 ───────────────────────────────────────────
+    let p10 = [100.0, 110.0, 100.0, 110.0]
+    let pct10 = std::df::pct_change(p10, 2)
+    let passed_10 = (pct10[0] == null && pct10[1] == null && pct10[2] == 0.0)
+    if passed_10 { println("✅ Test 10: pct_change step=2 PASSED") }
+    else { println("❌ Test 10: pct_change step=2 FAILED  got:", pct10)  all_passed = false }
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    if all_passed {
+        println("")
+        println("NYX PHASE 5 TESTS: ALL PASSED ✓")
+    } else {
+        println("")
+        println("NYX PHASE 5 TESTS: SOME FAILED ✗")
+    }
+}

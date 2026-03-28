@@ -1,0 +1,52 @@
+import ml;
+
+# --- Nyx Retraining Regression Gate (Safety Guardrail) ---
+
+fn verify_retrain_no_regression(new_metrics, old_metrics) {
+    println("--- Nyx Lifecycle: Retraining Regression Audit ---")
+    
+    let is_safe = true
+    
+    # 1. Accuracy Baseline
+    if new_metrics.acc < old_metrics.acc {
+        println("  WARNING: Mean Accuracy regressed (", new_metrics.acc, " < ", old_metrics.acc, ")")
+        # Minor acc regression might be acceptable for better safety, but we flag it
+    }
+    
+    # 2. Safety Invariant (Subgroup Accuracy)
+    if new_metrics.subgroup_acc < old_metrics.subgroup_acc {
+        println("  RETRAIN_BLOCK: Subgroup Safety Regressed (", new_metrics.subgroup_acc, " < ", old_metrics.subgroup_acc, ")")
+        is_safe = false
+    }
+    
+    # 3. Adversarial Robustness
+    if new_metrics.adv_threshold < old_metrics.adv_threshold {
+        println("  RETRAIN_BLOCK: Adversarial Robustness regressed (", new_metrics.adv_threshold, " < ", old_metrics.adv_threshold, ")")
+        is_safe = false
+    }
+    
+    if is_safe {
+        println("  RESULT: RE-CERTIFICATION = PASS (Safety baseline maintained)")
+        return true
+    } else {
+        println("  RESULT: RE-CERTIFICATION = FAIL (Safety regression detected!)")
+        println("  ACTION: Discarding v1.0.2. Rolling back to v1.0.1.")
+        return false
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    let v1_0_1 = { acc: 0.88, subgroup_acc: 0.75, adv_threshold: 0.04 }
+    
+    println("Scenario 1: Safe Improvement")
+    let v1_0_2_ok = { acc: 0.89, subgroup_acc: 0.76, adv_threshold: 0.05 }
+    verify_retrain_no_regression(v1_0_2_ok, v1_0_1)
+    
+    println("")
+    
+    println("Scenario 2: Safety Trade-off Regression")
+    let v1_0_2_bad = { acc: 0.92, subgroup_acc: 0.65, adv_threshold: 0.02 } # Higher acc, but lower safety
+    verify_retrain_no_regression(v1_0_2_bad, v1_0_1)
+}

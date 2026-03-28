@@ -1,0 +1,63 @@
+# Nyx ML Model Serving Engine
+# Enterprise-grade inference server with request batching and hot-reload
+
+fn ModelServer(model) {
+    return {
+        _model: model,
+        _queue: [],
+        _batch_size: 16,
+        _active: true,
+
+        # Area 44: Request Batching
+        enqueue: fn(self, input_tensor) {
+            self._queue.push(input_tensor)
+            println("[Serving] Enqueued request. Queue size: {}", self._queue.len())
+            
+            if self._queue.len() >= self._batch_size {
+                return self.process_batch()
+            }
+            return null # Wait for batch
+        },
+
+        process_batch: fn(self) {
+            let n = self._queue.len()
+            if n == 0 { return null }
+            println("[Serving] Processing batch of {} requests...", n)
+            
+            # Area 44: Production Batching
+            # In a real system, we'd use ml::tensor::stack to create one large tensor
+            # and run a single forward pass. For the simulation, we map the forward
+            # pass across the queue.
+            let results = []
+            let i = 0
+            while i < n {
+                let out = self._model.forward(self._queue[i])
+                results.push(out)
+                i = i + 1
+            }
+            
+            # Clear queue and return batch results
+            self._queue = []
+            return results
+        },
+
+        # Area 47: Hot-Reloading parameters
+        swap_parameters: fn(self, new_model) {
+            println("[Serving] HOT-RELOAD: Swapping model parameters live...")
+            self._model = new_model
+            return true
+        },
+
+        stop: fn(self) {
+            self._active = false
+            println("[Serving] Server stopped.")
+        }
+    }
+}
+
+# Async Inference Queue helper
+fn start_serving_loop(server) {
+    println("[Serving] Starting async inference loop...")
+    # Simulated background loop
+    return true
+}

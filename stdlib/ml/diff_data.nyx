@@ -1,0 +1,30 @@
+# Nyx Differentiable Data Pipeline (Phase 3)
+# Enables "Neural Data Cleaning" by allowing gradients to flow through parsing
+
+fn JsonDataset(json_str, keys, requires_grad) {
+    if requires_grad == null { requires_grad = false }
+    return {
+        type: "JsonDataset",
+        json_str: json_str,
+        keys: keys,
+        requires_grad: requires_grad,
+
+        forward: fn(self) {
+            # Call the SIMD-accelerated differentiable parser
+            let tensor_data = std::ml::diff_parse_json(self.json_str, self.keys, self.requires_grad)
+            if tensor_data == null { return null }
+            
+            # Wrap in a standard ML Tensor
+            return ml::tensor::Tensor(tensor_data, [self.keys.len()], self.requires_grad, null, "cpu")
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Semantic Data Layer (Area 84)
+# ─────────────────────────────────────────────────────────────
+fn SemanticFilter(dataset, threshold) {
+    # Placeholder for neural-guided data filtering
+    println("[DiffData] Initializing Semantic Filter...")
+    return dataset
+}

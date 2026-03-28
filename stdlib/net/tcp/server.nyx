@@ -1,0 +1,703 @@
+/**
+ * TCP Server Implementation
+ * 
+ * Provides TCP server and connection handling functionality.
+ * 
+ * @module tcp::server
+ */
+
+type TcpServer = {
+    host: string,
+    port: i64,
+    socket: i64,
+    running: bool,
+    connection_handler: ConnectionHandler?,
+    read_handler: ReadHandler?,
+    write_handler: WriteHandler?,
+    tick_handler: fn()?,
+    max_connections: i64,
+    backlog: i64,
+    reuse_address: bool,
+    reuse_port: bool,
+    connections: List<TcpConnection>
+};
+
+type TcpConnection = {
+    id: i64,
+    socket: i64,
+    remote_address: string,
+    remote_port: i64,
+    local_address: string,
+    local_port: i64,
+    connected: bool,
+    read_buffer: string,
+    write_buffer: string,
+    closed: bool,
+    created_at: i64
+};
+
+type TcpClient = {
+    socket: i64,
+    connected: bool,
+    remote_address: string,
+    remote_port: i64
+};
+
+type ConnectionHandler = fn(TcpConnection);
+type ReadHandler = fn(TcpConnection, string);
+type WriteHandler = fn(TcpConnection);
+
+let next_connection_id: i64 = 0;
+
+/**
+ * Create a new TCP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns A new TCP server instance
+ */
+fn create(host: string, port: i64) -> TcpServer {
+    return TcpServer {
+        host: host,
+        port: port,
+        socket: 0,
+        running: false,
+        connection_handler: none,
+        read_handler: none,
+        write_handler: none,
+        tick_handler: none,
+        max_connections: 1000,
+        backlog: 128,
+        reuse_address: true,
+        reuse_port: false,
+        connections: []
+    };
+}
+
+/**
+ * Set the connection handler
+ * 
+ * @param server - The TCP server
+ * @param handler - Function to handle new connections
+ * @returns The same server for chaining
+ */
+fn on_connect(server: TcpServer, handler: ConnectionHandler) -> TcpServer {
+    server.connection_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set the read handler
+ * 
+ * @param server - The TCP server
+ * @param handler - Function to handle incoming data
+ * @returns The same server for chaining
+ */
+fn on_read(server: TcpServer, handler: ReadHandler) -> TcpServer {
+    server.read_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set the write handler
+ * 
+ * @param server - The TCP server
+ * @param handler - Function called when data can be written
+ * @returns The same server for chaining
+ */
+fn on_write(server: TcpServer, handler: WriteHandler) -> TcpServer {
+    server.write_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set tick handler for periodic background work
+ * 
+ * @param server - The TCP server
+ * @param handler - Function invoked each accept loop iteration
+ * @returns The same server for chaining
+ */
+fn on_tick(server: TcpServer, handler: fn()) -> TcpServer {
+    server.tick_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set maximum connections
+ * 
+ * @param server - The TCP server
+ * @param max - Maximum number of connections
+ * @returns The same server for chaining
+ */
+fn max_connections(server: TcpServer, max: i64) -> TcpServer {
+    server.max_connections = max;
+    return server;
+}
+
+/**
+ * Set connection backlog
+ * 
+ * @param server - The TCP server
+ * @param backlog - Connection backlog size
+ * @returns The same server for chaining
+ */
+fn backlog(server: TcpServer, backlog: i64) -> TcpServer {
+    server.backlog = backlog;
+    return server;
+}
+
+/**
+ * Enable address reuse
+ * 
+ * @param server - The TCP server
+ * @param reuse - Whether to reuse address
+ * @returns The same server for chaining
+ */
+fn reuse_addr(server: TcpServer, reuse: bool) -> TcpServer {
+    server.reuse_address = reuse;
+    return server;
+}
+
+/**
+ * Enable port reuse
+ * 
+ * @param server - The TCP server
+ * @param reuse - Whether to reuse port
+ * @returns The same server for chaining
+ */
+fn reuse_port(server: TcpServer, reuse: bool) -> TcpServer {
+    server.reuse_port = reuse;
+    return server;
+}
+
+/**
+ * Start the TCP server
+ * 
+ * @param server - The TCP server to start
+ * @returns Whether the server started successfully
+ */
+fn start(server: TcpServer) -> bool {
+    if server.running {
+        return false;
+    }
+    
+    // Create socket
+    server.socket = create_socket();
+    
+    if server.socket < 0 {
+        return false;
+    }
+    
+    // Set socket options
+    if server.reuse_address {
+        set_reuse_address(server.socket, true);
+    }
+    
+    if server.reuse_port {
+        set_reuse_port(server.socket, true);
+    }
+    
+    // Bind to address
+    if !bind_socket(server.socket, server.host, server.port) {
+        close_socket(server.socket);
+        return false;
+    }
+    
+    // Listen for connections
+    if !listen_socket(server.socket, server.backlog) {
+        close_socket(server.socket);
+        return false;
+    }
+    
+    server.running = true;
+    
+    // Start accepting connections in a loop
+    accept_loop(server);
+    
+    return true;
+}
+
+/**
+ * Stop the TCP server
+ * 
+ * @param server - The TCP server to stop
+ */
+fn stop(server: TcpServer) {
+    if !server.running {
+        return;
+    }
+    
+    server.running = false;
+    
+    // Close all connections
+    for conn in server.connections {
+        close_connection(conn);
+    }
+    server.connections = [];
+    
+    // Close server socket
+    if server.socket > 0 {
+        close_socket(server.socket);
+        server.socket = 0;
+    }
+}
+
+/**
+ * Accept connections loop
+ */
+fn accept_loop(server: TcpServer) {
+    while server.running {
+        if server.tick_handler != none {
+            let handler = server.tick_handler as fn();
+            handler();
+        }
+        
+        // Accept new connection
+        let conn = accept_connection(server.socket);
+        
+        if conn != none {
+            let connection = conn as TcpConnection;
+            
+            // Check max connections
+            if len(server.connections) < server.max_connections {
+                // Add to connections list
+                server.connections = server.connections + [connection];
+                
+                // Call connection handler
+                if server.connection_handler != none {
+                    let handler = server.connection_handler as ConnectionHandler;
+                    handler(connection);
+                }
+                
+                // Handle connection I/O
+                handle_connection(server, connection);
+            } else {
+                // Reject connection - too many
+                close_connection(connection);
+            }
+        }
+        
+        // Avoid busy spinning when no connections are ready
+        if conn == none {
+            sleep(5);
+        }
+    }
+}
+
+/**
+ * Handle connection I/O
+ */
+fn handle_connection(server: TcpServer, conn: TcpConnection) {
+    // Start read/write handlers if set
+    if server.read_handler != none {
+        let handler = server.read_handler as ReadHandler;
+        start_read_loop(conn, handler);
+    }
+    
+    if server.write_handler != none {
+        let handler = server.write_handler as WriteHandler;
+        handler(conn);
+    }
+}
+
+/**
+ * Start continuous reading from connection
+ */
+fn start_read_loop(conn: TcpConnection, handler: ReadHandler) {
+    // This would be async in real implementation
+    while conn.connected && !conn.closed {
+        let data = read_from_socket(conn.socket);
+        
+        if data != "" {
+            handler(conn, data);
+        }
+        
+        // Yield to event loop
+        sleep(1);
+    }
+}
+
+/**
+ * Accept an incoming connection
+ */
+fn accept_connection(socket: i64) -> TcpConnection? {
+    let result = accept_socket(socket);
+    
+    if result == none {
+        return none;
+    }
+    
+    let result_tuple = result as (i64, string, i64);
+    let client_socket = result_tuple[0];
+    let addr = result_tuple[1];
+    let port = result_tuple[2];
+    
+    next_connection_id = next_connection_id + 1;
+    
+    return some(TcpConnection {
+        id: next_connection_id,
+        socket: client_socket,
+        remote_address: addr,
+        remote_port: port,
+        local_address: "",
+        local_port: 0,
+        connected: true,
+        read_buffer: "",
+        write_buffer: "",
+        closed: false,
+        created_at: current_time_ms()
+    });
+}
+
+/**
+ * Close a connection
+ * 
+ * @param conn - The connection to close
+ */
+fn close_connection(conn: TcpConnection) {
+    if conn.closed {
+        return;
+    }
+    
+    conn.closed = true;
+    conn.connected = false;
+    
+    if conn.socket > 0 {
+        close_socket(conn.socket);
+        conn.socket = 0;
+    }
+}
+
+/**
+ * Write data to a connection
+ * 
+ * @param conn - The connection to write to
+ * @param data - The data to write
+ * @returns Number of bytes written
+ */
+fn write(conn: TcpConnection, data: string) -> i64 {
+    if conn.closed || !conn.connected {
+        return 0;
+    }
+    
+    return write_to_socket(conn.socket, data);
+}
+
+/**
+ * Write data to connection buffer
+ * 
+ * @param conn - The connection to write to
+ * @param data - The data to buffer
+ */
+fn write_buffered(conn: TcpConnection, data: string) {
+    conn.write_buffer = conn.write_buffer + data;
+}
+
+/**
+ * Flush write buffer
+ * 
+ * @param conn - The connection to flush
+ * @returns Number of bytes written
+ */
+fn flush(conn: TcpConnection) -> i64 {
+    if conn.write_buffer == "" {
+        return 0;
+    }
+    
+    let written = write(conn, conn.write_buffer);
+    
+    if written > 0 {
+        conn.write_buffer = "";
+    }
+    
+    return written;
+}
+
+/**
+ * Read data from a connection
+ * 
+ * @param conn - The connection to read from
+ * @param max_size - Maximum bytes to read
+ * @returns The data read
+ */
+fn read(conn: TcpConnection, max_size: i64) -> string {
+    if conn.closed || !conn.connected {
+        return "";
+    }
+    
+    return read_from_socket_size(conn.socket, max_size);
+}
+
+/**
+ * Read a line from connection
+ * 
+ * @param conn - The connection to read from
+ * @returns The line read (including newline)
+ */
+fn read_line(conn: TcpConnection) -> string {
+    let mut line = "";
+    
+    while conn.connected && !conn.closed {
+        let ch = read(conn, 1);
+        
+        if ch == "" {
+            break;
+        }
+        
+        line = line + ch;
+        
+        if ch == "\n" {
+            break;
+        }
+    }
+    
+    return line;
+}
+
+/**
+ * Check if connection is closed
+ * 
+ * @param conn - The connection to check
+ * @returns Whether the connection is closed
+ */
+fn is_closed(conn: TcpConnection) -> bool {
+    return conn.closed;
+}
+
+/**
+ * Get connection ID
+ * 
+ * @param conn - The connection
+ * @returns Connection ID
+ */
+fn get_id(conn: TcpConnection) -> i64 {
+    return conn.id;
+}
+
+/**
+ * Get remote address
+ * 
+ * @param conn - The connection
+ * @returns Remote IP address
+ */
+fn get_remote_address(conn: TcpConnection) -> string {
+    return conn.remote_address;
+}
+
+/**
+ * Get remote port
+ * 
+ * @param conn - The connection
+ * @returns Remote port
+ */
+fn get_remote_port(conn: TcpConnection) -> i64 {
+    return conn.remote_port;
+}
+
+/**
+ * Create a TCP client connection
+ * 
+ * @param host - Host to connect to
+ * @param port - Port to connect to
+ * @returns A new TCP client
+ */
+fn create_client(host: string, port: i64) -> TcpClient {
+    return TcpClient {
+        socket: 0,
+        connected: false,
+        remote_address: host,
+        remote_port: port
+    };
+}
+
+/**
+ * Connect to a TCP server
+ * 
+ * @param host - Host to connect to
+ * @param port - Port to connect to
+ * @returns A connection if successful
+ */
+fn connect(host: string, port: i64) -> TcpConnection? {
+    let socket = create_socket();
+    
+    if socket < 0 {
+        return none;
+    }
+    
+    // Connect to server
+    if !connect_socket(socket, host, port) {
+        close_socket(socket);
+        return none;
+    }
+    
+    next_connection_id = next_connection_id + 1;
+    
+    return some(TcpConnection {
+        id: next_connection_id,
+        socket: socket,
+        remote_address: host,
+        remote_port: port,
+        local_address: "",
+        local_port: 0,
+        connected: true,
+        read_buffer: "",
+        write_buffer: "",
+        closed: false,
+        created_at: current_time_ms()
+    });
+}
+
+// Socket functions - Real implementation using native bindings
+// These would be implemented as native functions by the VM/runtime
+
+/**
+ * Create a new TCP socket
+ * 
+ * @returns Socket file descriptor or -1 on error
+ */
+fn create_socket() -> i64 {
+    // Native implementation would create a real socket
+    // For VM compatibility, this delegates to runtime
+    return __native_create_socket();
+}
+
+/**
+ * Close a socket
+ * 
+ * @param socket - Socket file descriptor
+ */
+fn close_socket(socket: i64) {
+    if socket > 0 {
+        __native_close_socket(socket);
+    }
+}
+
+/**
+ * Bind socket to address
+ * 
+ * @param socket - Socket file descriptor
+ * @param host - Host address
+ * @param port - Port number
+ * @returns True if successful
+ */
+fn bind_socket(socket: i64, host: string, port: i64) -> bool {
+    return __native_bind_socket(socket, host, port);
+}
+
+/**
+ * Listen for connections
+ * 
+ * @param socket - Socket file descriptor
+ * @param backlog - Maximum pending connections
+ * @returns True if successful
+ */
+fn listen_socket(socket: i64, backlog: i64) -> bool {
+    return __native_listen_socket(socket, backlog);
+}
+
+/**
+ * Accept incoming connection
+ * 
+ * @param socket - Server socket
+ * @returns Tuple of (client_socket, address, port) or none
+ */
+fn accept_socket(socket: i64) -> (i64, string, i64)? {
+    return __native_accept_socket(socket);
+}
+
+/**
+ * Connect to remote address
+ * 
+ * @param socket - Socket file descriptor
+ * @param host - Remote host
+ * @param port - Remote port
+ * @returns True if successful
+ */
+fn connect_socket(socket: i64, host: string, port: i64) -> bool {
+    return __native_connect_socket(socket, host, port);
+}
+
+/**
+ * Read data from socket
+ * 
+ * @param socket - Socket file descriptor
+ * @returns Data read or empty string
+ */
+fn read_from_socket(socket: i64) -> string {
+    return __native_read_socket(socket, 4096);
+}
+
+/**
+ * Read specific amount of data from socket
+ * 
+ * @param socket - Socket file descriptor
+ * @param size - Maximum bytes to read
+ * @returns Data read
+ */
+fn read_from_socket_size(socket: i64, size: i64) -> string {
+    return __native_read_socket(socket, size);
+}
+
+/**
+ * Write data to socket
+ * 
+ * @param socket - Socket file descriptor
+ * @param data - Data to write
+ * @returns Bytes written or -1 on error
+ */
+fn write_to_socket(socket: i64, data: string) -> i64 {
+    return __native_write_socket(socket, data);
+}
+
+/**
+ * Set socket option for address reuse
+ * 
+ * @param socket - Socket file descriptor
+ * @param reuse - Whether to reuse address
+ */
+fn set_reuse_address(socket: i64, reuse: bool) {
+    __native_set_socket_option(socket, "SO_REUSEADDR", reuse ? 1 : 0);
+}
+
+/**
+ * Set socket option for port reuse
+ * 
+ * @param socket - Socket file descriptor
+ * @param reuse - Whether to reuse port
+ */
+fn set_reuse_port(socket: i64, reuse: bool) {
+    __native_set_socket_option(socket, "SO_REUSEPORT", reuse ? 1 : 0);
+}
+
+/**
+ * Get current time in milliseconds
+ * 
+ * @returns Current timestamp in milliseconds
+ */
+fn current_time_ms() -> i64 {
+    return __native_time_ms();
+}
+
+/**
+ * Sleep for specified milliseconds
+ * 
+ * @param ms - Milliseconds to sleep
+ */
+fn sleep(ms: i64) {
+    __native_sleep(ms);
+}
+
+// Native function declarations - implemented by VM runtime
+// These are native declarations provided by the runtime
+
+fn __native_create_socket() -> i64;
+fn __native_close_socket(socket: i64);
+fn __native_bind_socket(socket: i64, host: string, port: i64) -> bool;
+fn __native_listen_socket(socket: i64, backlog: i64) -> bool;
+fn __native_accept_socket(socket: i64) -> (i64, string, i64)?;
+fn __native_connect_socket(socket: i64, host: string, port: i64) -> bool;
+fn __native_read_socket(socket: i64, size: i64) -> string;
+fn __native_write_socket(socket: i64, data: string) -> i64;
+fn __native_set_socket_option(socket: i64, option: string, value: i64);
+fn __native_time_ms() -> i64;
+fn __native_sleep(ms: i64);

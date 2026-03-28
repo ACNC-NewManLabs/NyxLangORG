@@ -1,0 +1,32 @@
+# Nyx Kernel Standard Library (std::kernel)
+# Consolidated High-Level API for OS Development
+
+mod pmm        = pmm;
+mod malloc     = malloc;
+mod interrupts = interrupts;
+mod vga        = vga;
+mod keyboard   = keyboard;
+mod scheduler  = scheduler;
+mod dma        = dma;
+
+# Native Bridge
+fn hlt() { std::kernel::cpu::hlt() }
+fn cli() { std::kernel::cpu::cli() }
+fn sti() { std::kernel::cpu::sti() }
+fn yield_task() { std::kernel::scheduler::yield_task() }
+fn rdtsc() { return std::kernel::cpu::rdtsc() }
+fn cpuid_reg(leaf, subleaf, reg) { return std::kernel::cpu::cpuid_reg(leaf, subleaf, reg) }
+fn fence() { std::kernel::memory::fence() }
+
+fn get_cpu_features() {
+    let edx = cpuid_reg(1, 0, 3); # EDX
+    let ecx = cpuid_reg(1, 0, 2); # ECX
+    
+    return {
+        "fpu":  (edx & 1) != 0,
+        "sse":  (edx & 33554432) != 0, # 1 << 25
+        "sse2": (edx & 67108864) != 0, # 1 << 26
+        "sse3": (ecx & 1) != 0,        # 1 << 0
+        "avx":  (ecx & 268435456) != 0 # 1 << 28
+    };
+}

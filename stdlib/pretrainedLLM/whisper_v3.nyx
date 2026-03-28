@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(51865, 1280, 32, 20, null, null, "whisper-v3", "cpu");
+}

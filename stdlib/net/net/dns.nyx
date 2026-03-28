@@ -1,0 +1,271 @@
+/**
+ * DNS Resolution Module
+ * 
+ * Provides DNS resolution functionality for the network engine.
+ * Supports A, AAAA, CNAME, MX, TXT, and other record types.
+ * 
+ * @module net::dns
+ * @version 1.0.0
+ * 
+ * @example
+ * import net.dns;
+ * 
+ * // Resolve hostname to IP addresses
+ * let ips = net.dns.resolve("example.com");
+ * 
+ * // Get all record types
+ * let records = net.dns.lookup("example.com");
+ * 
+ * // Reverse DNS lookup
+ * let hostname = net.dns.reverse("93.184.216.34");
+ */
+
+/**
+ * DNS record type
+ */
+type RecordType = 
+    | "A"         // IPv4 address
+    | "AAAA"      // IPv6 address
+    | "CNAME"     // Canonical name
+    | "MX"        // Mail exchange
+    | "TXT"       // Text record
+    | "NS"        // Name server
+    | "SOA"       // Start of authority
+    | "PTR";      // Pointer record
+
+/**
+ * DNS record
+ */
+type DnsRecord = {
+    type: string,
+    name: string,
+    value: string,
+    ttl: i64,
+    priority: i64?
+};
+
+/**
+ * DNS lookup result
+ */
+type DnsResult = {
+    hostname: string,
+    addresses: List<string>,
+    cname: string?,
+    records: List<DnsRecord>,
+    error: string?
+};
+
+/**
+ * Resolve hostname to IP addresses (A and AAAA records)
+ * 
+ * @param hostname - Hostname to resolve
+ * @returns List of IP addresses
+ * 
+ * @example
+ * let ips = net.dns.resolve("example.com");
+ * // ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"]
+ */
+fn resolve(hostname: string) -> List<string> {
+    // Use native DNS resolution
+    return __native_dns_resolve(hostname);
+}
+
+/**
+ * Perform full DNS lookup
+ * 
+ * @param hostname - Hostname to lookup
+ * @returns DNS result with all records
+ * 
+ * @example
+ * let result = net.dns.lookup("example.com");
+ * if result.error == none {
+ *     print("Addresses: " + result.addresses);
+ * }
+ */
+fn lookup(hostname: string) -> DnsResult {
+    let result = __native_dns_lookup(hostname);
+    if result != none {
+        return result as DnsResult;
+    }
+    return DnsResult {
+        hostname: hostname,
+        addresses: [],
+        cname: none,
+        records: [],
+        error: some("Lookup failed")
+    };
+}
+
+/**
+ * Lookup specific record type
+ * 
+ * @param hostname - Hostname to lookup
+ * @param record_type - Type of record to lookup
+ * @returns List of DNS records
+ * 
+ * @example
+ * let mx_records = net.dns.lookup_type("example.com", "MX");
+ */
+fn lookup_type(hostname: string, record_type: string) -> List<DnsRecord> {
+    return __native_dns_lookup_type(hostname, record_type);
+}
+
+/**
+ * Get A records (IPv4 addresses)
+ * 
+ * @param hostname - Hostname to lookup
+ * @returns List of IPv4 addresses
+ * 
+ * @example
+ * let ipv4 = net.dns.a("example.com");
+ */
+fn a(hostname: string) -> List<string> {
+    let records = __native_dns_lookup_type(hostname, "A");
+    return map(records, fn(r: DnsRecord) -> string { r.value });
+}
+
+/**
+ * Get AAAA records (IPv6 addresses)
+ * 
+ * @param hostname - Hostname to lookup
+ * @returns List of IPv6 addresses
+ * 
+ * @example
+ * let ipv6 = net.dns.aaaa("example.com");
+ */
+fn aaaa(hostname: string) -> List<string> {
+    let records = __native_dns_lookup_type(hostname, "AAAA");
+    return map(records, fn(r: DnsRecord) -> string { r.value });
+}
+
+/**
+ * Get CNAME record
+ * 
+ * @param hostname - Hostname to lookup
+ * @returns CNAME or none
+ * 
+ * @example
+ * let cname = net.dns.cname("www.example.com");
+ */
+fn cname(hostname: string) -> string? {
+    let records = __native_dns_lookup_type(hostname, "CNAME");
+    if len(records) > 0 {
+        return some(records[0].value);
+    }
+    return none;
+}
+
+/**
+ * Get MX records (mail servers)
+ * 
+ * @param domain - Domain to lookup
+ * @returns List of MX records with priority
+ * 
+ * @example
+ * let mx = net.dns.mx("example.com");
+ */
+fn mx(domain: string) -> List<DnsRecord> {
+    return __native_dns_lookup_type(domain, "MX");
+}
+
+/**
+ * Get TXT records
+ * 
+ * @param hostname - Hostname to lookup
+ * @returns List of TXT records
+ * 
+ * @example
+ * let txt = net.dns.txt("example.com");
+ */
+fn txt(hostname: string) -> List<DnsRecord> {
+    return __native_dns_lookup_type(hostname, "TXT");
+}
+
+/**
+ * Get NS records (name servers)
+ * 
+ * @param domain - Domain to lookup
+ * @returns List of NS records
+ * 
+ * @example
+ * let ns = net.dns.ns("example.com");
+ */
+fn ns(domain: string) -> List<DnsRecord> {
+    return __native_dns_lookup_type(domain, "NS");
+}
+
+/**
+ * Reverse DNS lookup
+ * 
+ * @param ip_address - IP address to reverse lookup
+ * @returns Hostname or none
+ * 
+ * @example
+ * let hostname = net.dns.reverse("93.184.216.34");
+ */
+fn reverse(ip_address: string) -> string? {
+    return __native_dns_reverse(ip_address);
+}
+
+/**
+ * Check if a hostname resolves
+ * 
+ * @param hostname - Hostname to check
+ * @returns Whether the hostname resolves
+ * 
+ * @example
+ * if net.dns.exists("example.com") {
+ *     print("Domain exists!");
+ * }
+ */
+fn exists(hostname: string) -> bool {
+    let ips = resolve(hostname);
+    return len(ips) > 0;
+}
+
+/**
+ * Set custom DNS servers
+ * 
+ * @param servers - List of DNS server addresses
+ * 
+ * @example
+ * net.dns.set_servers(["8.8.8.8", "8.8.4.4"]);
+ */
+fn set_servers(servers: List<string>) {
+    __native_dns_set_servers(servers);
+}
+
+/**
+ * Get current DNS servers
+ * 
+ * @returns List of DNS server addresses
+ */
+fn get_servers() -> List<string> {
+    return __native_dns_get_servers();
+}
+
+/**
+ * Clear DNS cache
+ */
+fn clear_cache() {
+    __native_dns_clear_cache();
+}
+
+/**
+ * Set DNS cache TTL
+ * 
+ * @param ttl - TTL in seconds
+ */
+fn set_cache_ttl(ttl: i64) {
+    __native_dns_set_cache_ttl(ttl);
+}
+
+// Native DNS functions - implemented by VM/runtime
+fn __native_dns_resolve(hostname: string) -> List<string>;
+fn __native_dns_lookup(hostname: string) -> DnsResult?;
+fn __native_dns_lookup_type(hostname: string, record_type: string) -> List<DnsRecord>;
+fn __native_dns_reverse(ip_address: string) -> string?;
+fn __native_dns_set_servers(servers: List<string>);
+fn __native_dns_get_servers() -> List<string>;
+fn __native_dns_clear_cache();
+fn __native_dns_set_cache_ttl(ttl: i64);

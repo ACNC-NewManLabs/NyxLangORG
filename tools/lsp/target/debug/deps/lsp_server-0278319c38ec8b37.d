@@ -1,0 +1,10 @@
+/home/surya/NPL/nyx/tools/lsp/target/debug/deps/lsp_server-0278319c38ec8b37.d: /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/lib.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/error.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/msg.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/req_queue.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/socket.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/stdio.rs
+
+/home/surya/NPL/nyx/tools/lsp/target/debug/deps/liblsp_server-0278319c38ec8b37.rmeta: /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/lib.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/error.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/msg.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/req_queue.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/socket.rs /home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/stdio.rs
+
+/home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/lib.rs:
+/home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/error.rs:
+/home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/msg.rs:
+/home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/req_queue.rs:
+/home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/socket.rs:
+/home/surya/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lsp-server-0.7.9/src/stdio.rs:

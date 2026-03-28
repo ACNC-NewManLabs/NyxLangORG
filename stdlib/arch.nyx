@@ -1,0 +1,39 @@
+// Nyx Architecture & Intrinsics [Layer 0]
+// Low-level CPU control and hardware primitives.
+
+export fn nop() {
+    std::arch::nop();
+}
+
+export fn pause() {
+    std::arch::pause();
+}
+
+export fn rdtsc() -> int {
+    return std::arch::rdtsc();
+}
+
+// Port I/O
+export fn inb(port: int) -> int {
+    return std::arch::inb(port);
+}
+
+export fn inw(port: int) -> int {
+    return std::arch::inw(port);
+}
+
+export fn inl(port: int) -> int {
+    return std::arch::inl(port);
+}
+
+export fn outb(port, val: int) {
+    std::arch::outb(port, val);
+}
+
+export fn outw(port, val: int) {
+    std::arch::outw(port, val);
+}
+
+export fn outl(port, val: int) {
+    std::arch::outl(port, val);
+}

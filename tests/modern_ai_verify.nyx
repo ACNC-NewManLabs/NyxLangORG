@@ -1,0 +1,62 @@
+# Modern AI Verification: GELU, LayerNorm & Advanced Pooling
+# Showcases architectural superiority and modern operator breadth
+
+fn main() {
+    println("--- Nyx Modern AI Operator Verification ---")
+
+    # 1. Input Tensor [Batch=2, Dim=4]
+    let x = ml::tensor::randn([2, 4], true)
+    println("Input Tensor created.")
+
+    # 2. Modern Model Architecture
+    # Includes LayerNorm and GELU (Transformer Core Primitives)
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(4, 8, "mish"),      # Fused Linear with Mish
+        ml::nn::LayerNorm(8),              # Layer Normalization
+        ml::nn::Hardswish(),               # Modern Activation
+        ml::nn::Linear(8, 2, "tanh")
+    ])
+    
+    println("Model built with LayerNorm and GELU.")
+
+    # 3. Forward Pass
+    let out = model.forward(x)
+    println("Forward pass successful.")
+    println("Output Shape: {}", out.shape)
+
+    # 4. Backward Pass
+    let target = ml::tensor::randn([2, 2], false)
+    let loss = ml::nn::mse_loss(out, target)
+    println("Initial Loss: {}", loss.item())
+
+    println("Running backward pass...")
+    loss.backward()
+    
+    # Verify gradients existence
+    let l_grad = model.layers[0].weight.grad
+    if l_grad != null {
+        println("SUCCESS: Gradients reached the first layer (GELU/LayerNorm chain working).")
+        println("First weight grad: {}", l_grad[0])
+    } else {
+        println("FAILURE: Gradients not found!")
+    }
+
+    # 5. Optimizer Step
+    let optimizer = ml::optim::Adam(model.layers, 0.01, 0.9, 0.999, 1e-8)
+    optimizer.step()
+    println("Optimizer step complete.")
+
+    # 6. Verify AdaptiveAvgPool2d
+    println("\nVerifying Adaptive Average Pooling...")
+    let img = ml::tensor::randn([1, 4, 8, 8], true)
+    let pool = ml::nn::AdaptiveAvgPool2d(1, 1) # Global Average Pooling
+    let pooled = pool.forward(img)
+    println("Pooled Shape (expected [1, 4, 1, 1]): {}", pooled.shape)
+    
+    pooled.sum().backward()
+    if img.grad != null {
+        println("SUCCESS: AdaptiveAvgPool2d backward pass verified.")
+    }
+
+    println("\n--- Phase 9: Operator Breadth Verified ---")
+}

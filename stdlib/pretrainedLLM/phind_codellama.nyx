@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(32016, 4096, 32, 32, null, null, "phind-codellama", "cpu");
+}

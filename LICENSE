@@ -1,0 +1,751 @@
+╔════════════════════════════════════════════════════════════════════════╗
+║         NYX PROGRAMMING LANGUAGE — DUAL LICENSE AGREEMENT              ║
+║                    Version 4.0, March 2026                             ║
+║                                                                        ║
+║   Copyright (c) 2026 Surya Sekhar Roy. All Rights Reserved.            ║
+║   Website : https://nyxprogramminglanguage.github.io                   ║
+║   Contact : nyxprogramminglanguage@gmail.com                           ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PREAMBLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Nyx is a programming language, virtual machine, web framework, native
+UI framework, hypervisor, and firmware platform created entirely by
+Surya Sekhar Roy ("the Author").
+
+This License is built on one philosophy:
+
+    "Use Nyx freely. Build. Grow. When you succeed — pay."
+
+  (a) FREE for individuals, students, researchers, open-source
+      projects, and early-stage startups finding their footing.
+
+  (b) PAID for organizations at commercial scale — ensuring the
+      Author is fairly compensated when Nyx drives real business
+      value.
+
+  (c) CONTRIBUTOR-FRIENDLY — you keep copyright on your code.
+      The Author keeps control of the platform.
+
+  (d) ECOSYSTEM-FIRST — plugins, tools, and extensions are
+      explicitly encouraged, free or commercial.
+
+  (e) GLOBALLY PROTECTED under international intellectual property
+      treaties and national copyright law in every jurisdiction.
+
+  (f) SUPPLY-CHAIN SECURE — only the Author distributes official
+      Nyx builds, protecting the trust and integrity of the
+      platform.
+
+This License operates in two tiers:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  TIER 1 — NYX COMMUNITY LICENSE (FREE)                          │
+  │  Individuals, students, open-source, qualifying startups        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  TIER 2 — NYX COMMERCIAL LICENSE (PAID)                         │
+  │  Organizations at commercial scale, SaaS, enterprise, cloud     │
+  └─────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"Software" means the Nyx Programming Language and all associated
+components created by Surya Sekhar Roy, including: the Nyx compiler,
+NyxVM virtual machine, JIT engine, garbage collector, bytecode format,
+standard library, nyx-web framework, nyx-ui framework, nyx-hypervisor,
+nyx-bios, CLI toolchain, runtime, and official documentation.
+
+"Author" means Surya Sekhar Roy, sole creator and owner of the
+Software.
+
+"You" or "Licensee" means the individual or legal entity exercising
+rights under this License.
+
+"Commercial Use" means use of the Software that meets ALL of the
+following criteria simultaneously:
+
+  (a) Your organization generates more than USD $100,000 in total
+      annual revenue from any source, AND
+
+  (b) The Software is used in production or customer-facing systems,
+      OR is used to deliver a paid product or service to external
+      customers, OR is used to power a SaaS, PaaS, or hosted service
+      accessible to third parties.
+
+  EXPLICIT NON-COMMERCIAL ACTIVITIES (never require paid license):
+    • Internal experimentation and evaluation
+    • Development and staging environments
+    • Proof-of-concept and prototype work
+    • CI/CD pipelines within your organization
+    • Internal tooling used only by employees
+    • Any use while below the $100,000 revenue threshold
+
+"Startup Exemption" means the free commercial use allowance for
+qualifying early-stage companies defined in Section 2.3.
+
+"Open Source Project" means a project whose complete source code is
+publicly available under an OSI-approved open source license.
+
+"Contribution" means any code, documentation, design, or other
+material submitted to the Author for potential inclusion in the
+Software.
+
+"Nyx Marks" means the name "Nyx", "NyxLang", "NyxVM", "Nyx BIOS",
+"Nyx Hypervisor", "nyxlang", the Nyx logo, and all associated brand
+identifiers owned by Surya Sekhar Roy.
+
+"Official Build" means a release of the Software compiled, signed,
+and distributed directly by the Author via official channels at
+https://nyxprogramminglanguage.github.io or the official GitHub repository.
+
+"Plugin" means software that extends Nyx functionality using the
+official Nyx public APIs without modifying or incorporating the
+Software core.
+
+"Same Legal Entity" means a parent company, subsidiary, or affiliate
+under common ownership or control with the Licensee.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — TIER 1: NYX COMMUNITY LICENSE (FREE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 2.1 — WHO QUALIFIES FOR FREE USE
+
+The Community License is permanently free for:
+
+  (a) INDIVIDUALS
+      Any natural person using Nyx for personal projects, hobby
+      work, learning, or experimentation.
+
+  (b) STUDENTS & EDUCATORS
+      Students at any level, educators, professors, bootcamps,
+      and accredited educational institutions using Nyx for
+      teaching, learning, coursework, or academic research.
+
+  (c) OPEN SOURCE PROJECTS
+      Projects whose complete source code is publicly available
+      under an OSI-approved license.
+
+  (d) NON-PROFIT ORGANIZATIONS
+      Registered non-profit or charitable organizations using
+      Nyx solely for their non-commercial charitable mission.
+
+  (e) ACADEMIC RESEARCHERS
+      Researchers using Nyx for non-commercial research with
+      openly published results.
+
+  (f) QUALIFYING STARTUPS
+      See Section 2.3 — Startup Exemption.
+
+SECTION 2.2 — RIGHTS GRANTED UNDER COMMUNITY LICENSE
+
+Subject to the terms of this License, the Author grants you a
+worldwide, royalty-free, non-exclusive license — transferable
+within the Same Legal Entity — to:
+
+  (a) Download, install, and run the Software.
+
+  (b) Use the Software to write, compile, and run Nyx programs.
+
+  (c) Study and learn from the Software.
+
+  (d) Modify the Software for personal or open-source use,
+      provided modifications are not distributed as a standalone
+      competing runtime (see Section 4.2).
+
+  (e) Redistribute the Software, including as part of a larger
+      system or product, provided:
+        (i)   this License is included in full
+        (ii)  all copyright and attribution notices are preserved
+        (iii) the Software itself is not sold as a standalone
+              product — bundling within a larger offering is
+              permitted, reselling Nyx alone is not
+        (iv)  the redistribution is clearly identified as
+              containing Nyx and not presented as an Official Build
+
+  (f) Publish, share, and distribute programs you create using
+      Nyx — including commercially. Your programs are yours.
+      (See Section 7.2)
+
+  (g) Build, distribute, and sell plugins, extensions, tools,
+      IDE integrations, libraries, and packages that work with
+      Nyx via its public APIs.
+
+  (h) Create and sell educational content about Nyx including
+      tutorials, courses, books, and videos.
+
+  (i) Offer paid consulting, training, and support services
+      related to Nyx.
+
+  (j) Use the Software in CI/CD pipelines and internal
+      developer tooling within the Same Legal Entity.
+
+SECTION 2.3 — STARTUP EXEMPTION
+
+Early-stage companies may use the Software commercially, including
+in production and customer-facing systems, completely free of charge
+provided ALL of the following are true at the time of use:
+
+  (a) Your company's total annual revenue is less than
+      USD $100,000, AND
+
+  (b) Your use does not involve reselling or sublicensing Nyx
+      access as a service to third parties (cloud provider use
+      always requires a license regardless of revenue)
+
+When your company's annual revenue exceeds USD $100,000 and the
+Software is in production or customer-facing use, you must obtain
+a Commercial License within 90 days of crossing that threshold.
+
+There is no penalty, audit, or retroactive fee for use during the
+exempt period. The Author trusts you to upgrade when you scale.
+
+This exemption exists because the Author believes early-stage
+companies should be able to build and validate ideas without
+friction. Your success is Nyx's success.
+
+SECTION 2.4 — ATTRIBUTION
+
+When redistributing the Software or any portion thereof under the
+Community License, you must:
+
+  (a) Include this notice prominently:
+        "Powered by Nyx — https://nyxprogramminglanguage.github.io
+         Copyright (c) 2026 Surya Sekhar Roy"
+
+  (b) Preserve all existing copyright notices within the Software.
+
+  (c) If distributing a modified version, clearly state that
+      modifications were made, identify your changes, and make
+      clear the modified version is not an Official Build.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — TIER 2: NYX COMMERCIAL LICENSE (PAID)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 3.1 — WHEN A COMMERCIAL LICENSE IS REQUIRED
+
+A paid Commercial License is required when your use meets the
+definition of Commercial Use in Part 1 — specifically when BOTH
+of these are true simultaneously:
+
+  (a) Your organization's total annual revenue exceeds
+      USD $100,000, AND
+
+  (b) The Software is deployed in production or customer-facing
+      systems, used to deliver paid products or services, or
+      used to power a SaaS, PaaS, or hosted service accessible
+      to third parties.
+
+Additionally, a Commercial License is always required for:
+
+  (c) CLOUD PROVIDERS — any entity offering Nyx as a managed
+      service, hosted runtime, or platform-as-a-service to
+      third parties, regardless of revenue level.
+
+SECTION 3.2 — COMMERCIAL LICENSE TIERS
+
+  ┌──────────────────────┬────────────────────────────────────────┐
+  │ GROWTH LICENSE       │ Revenue $100K – $1M/year               │
+  │                      │ Up to 10 developers                    │
+  │                      │ Production deployment included         │
+  ├──────────────────────┼────────────────────────────────────────┤
+  │ BUSINESS LICENSE     │ Revenue $1M – $10M/year                │
+  │                      │ Up to 50 developers                    │
+  │                      │ Priority support included              │
+  ├──────────────────────┼────────────────────────────────────────┤
+  │ ENTERPRISE LICENSE   │ Revenue > $10M/year                    │
+  │                      │ Unlimited developers                   │
+  │                      │ Custom SLA, dedicated support          │
+  │                      │ Source code escrow available           │
+  ├──────────────────────┼────────────────────────────────────────┤
+  │ CLOUD PROVIDER       │ For entities reselling Nyx access or   │
+  │ LICENSE              │ offering it as a managed service.      │
+  │                      │ Custom pricing — contact Author.       │
+  └──────────────────────┴────────────────────────────────────────┘
+
+Current pricing: https://nyxprogramminglanguage.github.io//pricing
+
+SECTION 3.3 — HOW TO OBTAIN A COMMERCIAL LICENSE
+
+  Email:   nyxprogramminglanguage@gmail.com
+  Website: https://nyxprogramminglanguage.github.io//licensing
+
+Commercial use that begins without a license constitutes copyright
+infringement and the Author reserves all legal remedies available
+under applicable law worldwide.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — UNIVERSAL RESTRICTIONS (BOTH TIERS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 4.1 — NO SUBLICENSING
+
+You may not sublicense the Software or any rights under this
+License to any third party outside the Same Legal Entity. Each
+external user must obtain their own license directly from the
+Author or through an authorized channel.
+
+SECTION 4.2 — NO COMPETING RUNTIME FROM NYX SOURCE CODE
+
+You may not copy, reuse, or incorporate substantial portions of
+the Software's source code to create a competing programming
+language runtime, virtual machine, or compiler platform that is
+offered to the public, whether free or commercial.
+
+  THIS RESTRICTION PROTECTS CODE, NOT IDEAS:
+
+  You are FREE to:
+    ✓ Build new programming languages inspired by Nyx syntax
+    ✓ Write your own VM from scratch with independent code
+    ✓ Create tools, editors, and frameworks that work with Nyx
+    ✓ Build compilers that target NyxVM via public APIs
+    ✓ Research and publish papers about Nyx's design
+
+  You may NOT:
+    ✗ Copy or adapt substantial portions of NyxVM source code
+      to create a competing runtime
+    ✗ Repackage or rebrand the Nyx compiler as a competing
+      product
+    ✗ Fork Nyx's core VM, JIT, or compiler and distribute it
+      as a competing platform
+
+SECTION 4.3 — OFFICIAL BUILDS & DISTRIBUTION INTEGRITY
+
+  (a) Only the Author may distribute Official Builds of Nyx.
+      Only releases published at https://nyxprogramminglanguage.github.io/ or the
+      official GitHub repository at
+      https://github.com/NyxProgrammingLanguage are Official Builds.
+
+  (b) If you distribute a modified or repackaged version of the
+      Software, you must:
+        (i)  Clearly label it as an unofficial, modified version
+        (ii) Remove or replace the official Nyx version string
+             and build identifier
+        (iii) Not use any Nyx Marks that imply it is an
+              Official Build or endorsed by the Author
+
+  (c) You may not sign, notarize, or represent a modified build
+      as coming from Surya Sekhar Roy or from nyxlang.dev.
+
+  This section protects the supply chain integrity of the Nyx
+  platform and the trust of every Nyx user worldwide.
+
+SECTION 4.4 — AI TRAINING RESTRICTION
+
+  (a) You may not use the Software's own source code, VM
+      implementation, JIT compiler internals, or bytecode format
+      as training data, fine-tuning data, or evaluation data for
+      any commercial artificial intelligence or machine learning
+      system without explicit prior written permission from the
+      Author.
+
+  (b) Non-commercial academic AI research using publicly available
+      Nyx programs — that do not include the Software source code
+      itself — is permitted, provided results are published openly
+      and Nyx is credited appropriately.
+
+  (c) Programs YOU write in the Nyx language are entirely YOUR
+      property. You may use your own Nyx programs for any purpose
+      including commercial AI training.
+
+SECTION 4.5 — TRADEMARK & BRAND PROTECTION
+
+  (a) The Nyx Marks are the exclusive property of Surya Sekhar
+      Roy, protected under trademark law globally.
+
+  (b) You MAY use the Nyx Marks to:
+        ✓ Truthfully state your product "runs on Nyx" or
+          "built with Nyx"
+        ✓ Write tutorials, reviews, articles, or news about Nyx
+        ✓ Name community plugins (e.g., "nyx-postgres-driver")
+          where it is clear the plugin is not made by the Author
+
+  (c) You may NOT use the Nyx Marks to:
+        ✗ Name a competing language, runtime, or platform
+        ✗ Create official-looking unauthorized releases or
+          documentation
+        ✗ Register domain names mimicking the official Nyx brand
+          without written permission
+        ✗ Imply official sponsorship, partnership, or endorsement
+          by the Author without written permission
+
+SECTION 4.6 — NO MISREPRESENTATION
+
+You may not claim authorship of the Software, claim to be Surya
+Sekhar Roy, or misrepresent the origin of the Software to any
+person or entity.
+
+SECTION 4.7 — EXPORT COMPLIANCE
+
+You agree to comply with all applicable export control laws,
+including US Export Administration Regulations (EAR), EU
+Dual-Use Regulation (2021/821), and applicable national export
+restrictions. You may not export or re-export the Software to
+any embargoed country or restricted person or entity.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — CONTRIBUTOR AGREEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 5.1 — CONTRIBUTIONS WELCOME
+
+The Author actively welcomes contributions from the community
+including code, bug fixes, documentation, translations, and design.
+Contribution guidelines: https://nyxprogramminglanguage.github.io//contributing
+
+SECTION 5.2 — CONTRIBUTOR LICENSE GRANT
+
+By submitting a Contribution to the Author (via pull request,
+email, issue tracker, or any other channel), you:
+
+  (a) RETAIN full copyright ownership of your Contribution.
+
+  (b) GRANT the Author a perpetual, worldwide, irrevocable,
+      royalty-free, non-exclusive license to use, reproduce,
+      modify, distribute, sublicense, and incorporate your
+      Contribution into the Software under any license terms
+      the Author chooses, including future commercial licenses.
+
+  (c) CONFIRM you are the original author of the Contribution
+      and have the legal right to grant the above license.
+
+  (d) CONFIRM your Contribution does not knowingly infringe
+      any third party's intellectual property rights.
+
+  (e) UNDERSTAND you do not receive ownership of the Software,
+      equity, or financial compensation for Contributions unless
+      a separate written agreement with the Author specifies
+      otherwise.
+
+SECTION 5.3 — CONTRIBUTOR RECOGNITION
+
+The Author commits to:
+
+  (a) Crediting significant contributors in the official
+      CONTRIBUTORS file and in release notes.
+
+  (b) Maintaining a respectful, professional contributor
+      community.
+
+  (c) Never removing contributor attribution retroactively
+      from published release history.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — PLUGIN & ECOSYSTEM LICENSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 6.1 — ECOSYSTEM ACTIVELY ENCOURAGED
+
+The Author actively encourages building a rich ecosystem around
+Nyx. Under both license tiers, you may:
+
+  (a) Build and sell IDE plugins, editor extensions, linters,
+      formatters, and developer tools for Nyx.
+
+  (b) Build and sell Nyx libraries and packages written in the
+      Nyx language.
+
+  (c) Build and sell commercial frameworks on top of Nyx via its
+      public APIs.
+
+  (d) Offer paid training, consulting, and support for Nyx.
+
+  (e) Create and monetize educational content about Nyx including
+      courses, books, and video series.
+
+  (f) Build and operate commercial Nyx package registries and
+      tooling services.
+
+SECTION 6.2 — ECOSYSTEM BOUNDARIES
+
+Plugins and ecosystem tools may not:
+
+  (a) Bundle or redistribute the Software core in violation of
+      the redistribution terms in Section 2.2(e).
+
+  (b) Use the Nyx Marks in a way that implies official Author
+      endorsement without permission.
+
+  (c) Be structured to circumvent the Commercial License
+      requirement for the Software itself.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — OWNERSHIP & INTELLECTUAL PROPERTY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 7.1 — SOFTWARE OWNERSHIP
+
+The Software is licensed, not sold. Surya Sekhar Roy retains all
+right, title, and interest in and to the Software, including all
+intellectual property rights therein, worldwide. All rights not
+expressly granted in this License are reserved.
+
+SECTION 7.2 — YOUR PROGRAMS ARE ENTIRELY YOURS
+
+Programs, applications, libraries, and systems that you write
+using the Nyx programming language are entirely your own property.
+The Author makes no claim whatsoever over software you create
+using Nyx. You may license, sell, open-source, patent, or use
+your programs in any way you choose, under any license you choose,
+including commercially — without any obligation to the Author.
+
+This is an unconditional, permanent commitment from the Author.
+
+SECTION 7.3 — PATENT PEACE
+
+  (a) The Author grants you a non-exclusive, worldwide,
+      royalty-free license under the Author's essential patent
+      claims to make, use, and distribute the Software as
+      permitted by this License.
+
+  (b) If you initiate patent litigation against the Author or
+      against any Nyx user alleging that the Software infringes
+      a patent, your rights under this License terminate
+      immediately upon filing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 8 — NO WARRANTY & LIMITATION OF LIABILITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 8.1 — NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, ACCURACY,
+SECURITY, AND NON-INFRINGEMENT. THE AUTHOR DOES NOT WARRANT THAT
+THE SOFTWARE WILL BE ERROR-FREE, UNINTERRUPTED, SECURE, OR MEET
+YOUR REQUIREMENTS. ALL USE OF THE SOFTWARE IS AT YOUR SOLE RISK.
+
+SECTION 8.2 — LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW:
+
+  (a) IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY INDIRECT,
+      INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE
+      DAMAGES, INCLUDING WITHOUT LIMITATION LOSS OF PROFITS,
+      REVENUE, DATA, BUSINESS, OR GOODWILL, ARISING FROM YOUR
+      USE OF OR INABILITY TO USE THE SOFTWARE.
+
+  (b) THE AUTHOR'S TOTAL AGGREGATE LIABILITY FOR ALL CLAIMS
+      ARISING FROM OR RELATED TO THIS LICENSE OR THE SOFTWARE
+      SHALL NOT EXCEED THE GREATER OF:
+        (i)  THE TOTAL AMOUNT YOU PAID FOR A COMMERCIAL LICENSE
+             IN THE TWELVE MONTHS PRECEDING THE CLAIM, OR
+        (ii) ONE HUNDRED US DOLLARS (USD $100).
+
+  (c) SOME JURISDICTIONS DO NOT ALLOW EXCLUSION OF IMPLIED
+      WARRANTIES OR LIMITATION OF INCIDENTAL DAMAGES. IN SUCH
+      JURISDICTIONS, THE AUTHOR'S LIABILITY IS LIMITED TO THE
+      MINIMUM EXTENT PERMITTED BY APPLICABLE LAW.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 9 — TERMINATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 9.1 — TERMINATION FOR BREACH
+
+Your rights under this License terminate automatically if you
+materially breach any term and fail to cure such breach within
+30 days of written notice from the Author.
+
+Exception: Unlicensed Commercial Use terminates your rights
+immediately upon the date commercial use began, with no cure
+period.
+
+SECTION 9.2 — EFFECT OF TERMINATION
+
+Upon termination you must immediately:
+
+  (a) Cease all use of the Software.
+
+  (b) Delete or destroy all copies of the Software in your
+      possession or control.
+
+  (c) Cease all distribution of any software incorporating
+      the Software.
+
+Note: The Author acknowledges that deletion of all copies is
+a standard legal requirement. Enforcement will be proportionate
+and focused on stopping ongoing infringement.
+
+SECTION 9.3 — SURVIVAL
+
+The following Sections survive termination of this License
+indefinitely: Part 4 (Universal Restrictions), Part 7
+(Ownership & IP), Part 8 (No Warranty & Liability), Part 10
+(Governing Law & Disputes), and Part 11 (General Provisions).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 10 — GOVERNING LAW & DISPUTE RESOLUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 10.1 — GOVERNING LAW
+
+This License shall be governed by and construed in accordance
+with the laws of India, including the Indian Copyright Act 1957,
+the Information Technology Act 2000, the Trade Marks Act 1999,
+and the Patents Act 1970, without regard to conflict of law
+principles.
+
+SECTION 10.2 — GLOBAL INTELLECTUAL PROPERTY PROTECTION
+
+The Author's rights in the Software are protected worldwide under:
+
+  • Berne Convention for the Protection of Literary and Artistic
+    Works — 181 member countries — automatic copyright protection
+    in all member states without registration
+
+  • TRIPS Agreement (WTO) — 164 member countries — minimum
+    intellectual property standards globally enforced
+
+  • WIPO Copyright Treaty — digital and online protections
+
+  • Universal Copyright Convention (UCC)
+
+  • EU Software Directive 2009/24/EC — legal protection of
+    computer programs in all EU member states
+
+  • Digital Millennium Copyright Act (DMCA) — United States —
+    covering US users, platforms, and hosting providers
+
+  • Computer Fraud and Abuse Act (CFAA) — United States
+
+  • UK Copyright, Designs and Patents Act 1988
+
+  • National copyright, trademark, and computer crime laws
+    in all jurisdictions where the Software is used or
+    distributed
+
+These protections apply automatically. The Author reserves the
+right to enforce rights in any jurisdiction worldwide.
+
+SECTION 10.3 — DISPUTE RESOLUTION
+
+  (a) GOOD FAITH NEGOTIATION
+      Before initiating any formal proceeding, both parties shall
+      attempt to resolve any dispute through good-faith negotiation
+      for a minimum period of 30 days following written notice
+      identifying the dispute.
+
+  (b) BINDING ARBITRATION
+      If negotiation fails, disputes shall be resolved by binding
+      arbitration under the Arbitration and Conciliation Act, 1996
+      of India.
+        Seat:       Kolkata, West Bengal, India
+        Language:   English
+        Arbitrator: One mutually agreed arbitrator
+        Award:      Final and binding on both parties
+
+  (c) EMERGENCY & INJUNCTIVE RELIEF
+      Notwithstanding arbitration, the Author may seek emergency
+      injunctive or other equitable relief from any court of
+      competent jurisdiction worldwide — without posting bond —
+      to prevent irreparable harm from unauthorized use,
+      infringement, or misappropriation of the Software or
+      Nyx Marks.
+
+  (d) CLASS ACTION WAIVER
+      You waive any right to participate in a class action
+      lawsuit or class-wide arbitration against the Author.
+
+  (e) DMCA TAKEDOWN
+      The Author reserves the right to issue DMCA takedown
+      notices to any hosting platform, CDN, or service provider
+      distributing infringing copies of the Software.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 11 — GENERAL PROVISIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 11.1 — ENTIRE AGREEMENT
+This License, together with any executed Commercial License
+Agreement, constitutes the entire agreement between you and the
+Author regarding the Software and supersedes all prior or
+contemporaneous agreements, representations, and understandings.
+
+SECTION 11.2 — SEVERABILITY
+If any provision of this License is held invalid, illegal, or
+unenforceable by a court of competent jurisdiction, that provision
+shall be modified to the minimum extent necessary to make it
+enforceable. All remaining provisions continue in full force
+and effect.
+
+SECTION 11.3 — NO WAIVER
+The Author's failure to enforce any provision of this License at
+any time shall not constitute a waiver of that right. Any waiver
+must be explicit, in writing, and signed by Surya Sekhar Roy to
+be effective.
+
+SECTION 11.4 — AMENDMENTS & VERSIONING
+The Author reserves the right to publish new versions of this
+License. New versions will be published at nyxlang.dev/license
+with a minimum of 90 days notice before taking effect for
+existing users. You may continue using the Software under the
+version of the License under which you received it, or upgrade
+to a newer version at your option.
+
+SECTION 11.5 — LEGAL NOTICES
+All formal legal notices to the Author must be sent to:
+  Email:   nyxprogramminglanguage@gmail.com
+  Subject: [NYX LICENSE — LEGAL NOTICE]
+  Backup:  Contact form at https://nyxprogramminglanguage.github.io//contact
+
+SECTION 11.6 — INJUNCTIVE RELIEF ACKNOWLEDGMENT
+You acknowledge that any material breach of this License,
+particularly unauthorized commercial use or infringement of
+the Nyx Marks, would cause irreparable harm to the Author for
+which monetary damages would be inadequate, and that the Author
+is therefore entitled to seek immediate injunctive relief in
+any court of competent jurisdiction worldwide without posting
+bond or other security.
+
+SECTION 11.7 — CONTROLLING LANGUAGE
+This License is written in English. Any translation provided
+is for convenience only. In the event of any conflict between
+the English original and any translation, the English original
+controls in all respects.
+
+SECTION 11.8 — HEADINGS
+Section and part headings are included for convenience of
+reference only and shall not affect the interpretation or
+construction of this License.
+
+SECTION 11.9 — RELATIONSHIP OF PARTIES
+Nothing in this License creates any partnership, joint venture,
+agency, franchise, employment, or fiduciary relationship between
+you and the Author. You have no authority to bind the Author
+to any obligation.
+
+SECTION 11.10 — FORCE MAJEURE
+Neither party shall be liable for delays or failures in
+performance resulting from causes beyond their reasonable
+control.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BY INSTALLING, COPYING, ACCESSING, OR USING THE NYX PROGRAMMING
+LANGUAGE IN ANY WAY, YOU ACKNOWLEDGE THAT YOU HAVE READ THIS
+LICENSE IN FULL, UNDERSTAND ITS TERMS, AND AGREE TO BE BOUND
+BY THEM.
+
+IF YOU DO NOT AGREE TO THESE TERMS IN FULL, DO NOT INSTALL,
+ACCESS, OR USE THE SOFTWARE IN ANY WAY.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NYX PROGRAMMING LANGUAGE DUAL LICENSE v4.0
+  Copyright (c) 2026 Surya Sekhar Roy. All Rights Reserved.
+  https://nyxprogramminglanguage.github.io/  |  nyxprogramminglanguage@gmail.com
+
+  Protected worldwide under the Berne Convention, TRIPS Agreement,
+  WIPO Copyright Treaty, DMCA, EU Software Directive, and national
+  copyright law in all jurisdictions where the Software is used.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

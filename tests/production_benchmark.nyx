@@ -1,0 +1,82 @@
+import ml;
+import df;
+
+fn benchmark_df(n_rows) {
+    println("[Benchmark] Generating {} rows for DataFrame test...", n_rows);
+    let data = [];
+    let i = 0;
+    while i < n_rows {
+        data.push(i * 1.0);
+        i = i + 1;
+    }
+    let col = df::Column("vals", "float", data, null);
+    let my_df = df::DataFrame([col], null);
+    
+    let start = std::time::now();
+    let d_df = ml::query::DifferentiableDataFrame(my_df, false);
+    let result = ml::query::agg_mean(d_df, "vals");
+    let end = std::time::now();
+    
+    let duration = end - start;
+    println("[Benchmark] DF Aggregate ({} rows): {} ms", n_rows, duration);
+    return duration;
+}
+
+fn benchmark_tensor_matmul(size) {
+    println("[Benchmark] Running MatMul ({}x{}) x ({}x{})...", size, size, size, size);
+    # Manual initialization to avoid std::math::random_array
+    let data_a = [];
+    let data_b = [];
+    let i = 0;
+    while i < (size * size) {
+        data_a.push(1.0);
+        data_b.push(1.0);
+        i = i + 1;
+    }
+    let a = ml::tensor::Tensor(data_a, [size, size], false, null);
+    let b = ml::tensor::Tensor(data_b, [size, size], false, null);
+    
+    let start = std::time::now();
+    let c = a.matmul(b);
+    let end = std::time::now();
+    
+    let duration = end - start;
+    println("[Benchmark] Tensor MatMul: {} ms", duration);
+    return duration;
+}
+
+fn benchmark_inference_latency(batch_size) {
+    println("[Benchmark] Measuring inference latency (batch={})...", batch_size);
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(128, 64),
+        ml::nn::ReLU(),
+        ml::nn::Linear(64, 10)
+    ]);
+    
+    # Manual input
+    let data_in = [];
+    let i = 0;
+    while i < (batch_size * 128) {
+        data_in.push(1.0);
+        i = i + 1;
+    }
+    let input = ml::tensor::Tensor(data_in, [batch_size, 128], false, null);
+    
+    let start = std::time::now();
+    let output = model.forward(input);
+    let end = std::time::now();
+    
+    let duration = end - start;
+    println("[Benchmark] Inference Latency: {} ms", duration);
+    return duration;
+}
+
+fn main() {
+    println("=== Nyx Production Benchmark ===");
+    
+    benchmark_df(100000);  # 100k rows
+    benchmark_tensor_matmul(128); # Reduce size to 128 for faster initialization in script
+    benchmark_inference_latency(16); # Batch 16
+    
+    println("================================");
+}

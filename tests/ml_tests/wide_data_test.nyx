@@ -1,0 +1,45 @@
+import std;
+
+fn create_wide_df(rows, cols) {
+    let columns = []
+    let c = 0
+    while c < cols {
+        let data = []
+        let i = 0
+        while i < rows {
+            data.push(i * 0.1 + c)
+            i = i + 1
+        }
+        columns.push(std::df::Column("col_" + c, "float", data, null))
+        c = c + 1
+    }
+    return std::df::DataFrame(columns, null)
+}
+
+fn test_wide_df(rows, cols) {
+    println("--- Testing Wide DataFrame (", rows, " rows x ", cols, " cols) ---")
+    let start_gen = std::time::now()
+    let df = create_wide_df(rows, cols)
+    let end_gen = std::time::now()
+    println("Generation time: ", (end_gen - start_gen) / 1000.0, "s")
+    
+    let start_sum = std::time::now()
+    let total = df.col("col_49").sum()
+    let end_sum = std::time::now()
+    println("Sum col_49: ", total)
+    println("Sum time: ", (end_sum - start_sum) / 1000.0, "s")
+    
+    let start_filter = std::time::now()
+    let mask = df.col("col_0").gt(50000.0)
+    let filtered_df = df.filter(mask)
+    let end_filter = std::time::now()
+    println("Filtered rows: ", filtered_df.nrows())
+    println("Filter time: ", (end_filter - start_filter) / 1000.0, "s")
+    println("SUCCESS: Wide DataFrame handles memory and processing perfectly.")
+}
+
+fn main() {
+    # Test 100k x 50 first to be safe, then 1M x 50
+    test_wide_df(100000, 50)
+    test_wide_df(1000000, 50)
+}

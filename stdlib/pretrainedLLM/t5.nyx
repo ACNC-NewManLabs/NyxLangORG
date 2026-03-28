@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(32128, 512, 6, 8, null, null, "t5", "cpu");
+}

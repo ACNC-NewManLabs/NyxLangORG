@@ -1,0 +1,41 @@
+# Nyx Multi-Modal AI Support
+# Fusing Vision, Text, and Audio pipelines
+
+# ─────────────────────────────────────────────────────────────
+# Data Container: Image + Text pairs
+# ─────────────────────────────────────────────────────────────
+fn ImageTextPair(image, text) {
+    return {
+        image: image, # tensor [C, H, W]
+        text: text,   # tensor [SeqLen]
+        type: "multi-modal-sample"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Cross-Modal Attention: Query from one modality, Key/Value from another
+# ─────────────────────────────────────────────────────────────
+fn cross_modal_attention(vision_features, text_features) {
+    println("[MultiModal] Cross-Modal Attention: Fusing vision and text features...")
+    # q = vision, k,v = text
+    return ml::transformer::scaled_dot_product_attention(
+        vision_features, text_features, text_features, null, 0.0
+    ).output
+}
+
+# ─────────────────────────────────────────────────────────────
+# CLIP-style Fusion Layer
+# ─────────────────────────────────────────────────────────────
+fn CLIPFusion(vision_proj, text_proj) {
+    return {
+        v_proj: vision_proj,
+        t_proj: text_proj,
+        
+        forward: fn(self, v, t) {
+            let v_emb = self.v_proj.forward(v)
+            let t_emb = self.t_proj.forward(t)
+            # Dot-product similarity as fusion
+            return v_emb.matmul_bias(t_emb.transpose(), ml::tensor::zeros([1], false))
+        }
+    }
+}

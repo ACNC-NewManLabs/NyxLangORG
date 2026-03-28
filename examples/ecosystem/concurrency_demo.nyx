@@ -1,0 +1,6 @@
+fn main() {
+  # pseudo-nyx concurrency usage
+  # use concurrency.channels
+  # use runtime.scheduler
+  # print("concurrency demo")
+}

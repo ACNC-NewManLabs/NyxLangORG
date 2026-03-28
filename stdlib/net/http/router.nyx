@@ -1,0 +1,418 @@
+/**
+ * HTTP Router Module
+ * 
+ * Provides HTTP routing with parameter extraction, route groups, and method matching.
+ * 
+ * @module http::router
+ */
+
+type Router = {
+    routes: List<Route>,
+    groups: List<RouteGroup>,
+    named_routes: Map<string, Route>
+};
+
+type Route = {
+    method: string,
+    path: string,
+    pattern: string,
+    handler: fn(HttpRequest) -> HttpResponse,
+    middlewares: List<Middleware>,
+    name: string?
+};
+
+type RouteGroup = {
+    prefix: string,
+    middlewares: List<Middleware>,
+    routes: List<Route>
+};
+
+type Middleware = fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse?;
+
+// Request type (from request module)
+type HttpRequest = any;
+
+/**
+ * Create a new router
+ * 
+ * @returns A new router instance
+ */
+fn create() -> Router {
+    return Router {
+        routes: [],
+        groups: [],
+        named_routes: {}
+    };
+}
+
+/**
+ * Add a route to the router
+ * 
+ * @param router - The router
+ * @param method - HTTP method
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn add_route(router: Router, method: string, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    let pattern = compile_pattern(path);
+    
+    let route = Route {
+        method: method,
+        path: path,
+        pattern: pattern,
+        handler: handler,
+        middlewares: [],
+        name: none
+    };
+    
+    router.routes = router.routes + [route];
+    return router;
+}
+
+/**
+ * Add a GET route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn get(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "GET", path, handler);
+}
+
+/**
+ * Add a POST route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn post(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "POST", path, handler);
+}
+
+/**
+ * Add a PUT route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn put(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "PUT", path, handler);
+}
+
+/**
+ * Add a DELETE route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn delete(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "DELETE", path, handler);
+}
+
+/**
+ * Add a PATCH route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn patch(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "PATCH", path, handler);
+}
+
+/**
+ * Add an OPTIONS route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn options(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "OPTIONS", path, handler);
+}
+
+/**
+ * Add a HEAD route
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn head(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "HEAD", path, handler);
+}
+
+/**
+ * Add route for any method
+ * 
+ * @param router - The router
+ * @param path - URL path
+ * @param handler - Route handler
+ * @returns The same router for chaining
+ */
+fn any(router: Router, path: string, handler: fn(HttpRequest) -> HttpResponse) -> Router {
+    return add_route(router, "*", path, handler);
+}
+
+/**
+ * Add middleware to a route
+ * 
+ * @param router - The router
+ * @param path - URL path (can include method like "GET /path")
+ * @param middleware - Middleware function
+ * @returns The same router for chaining
+ */
+fn add_middleware(router: Router, path: string, middleware: Middleware) -> Router {
+    for route in router.routes {
+        if route.path == path {
+            route.middlewares = route.middlewares + [middleware];
+        }
+    }
+    return router;
+}
+
+/**
+ * Create a route group
+ * 
+ * @param router - The router
+ * @param prefix - URL prefix for the group
+ * @returns A route group builder
+ */
+fn group(router: Router, prefix: string) -> RouteGroup {
+    let group = RouteGroup {
+        prefix: prefix,
+        middlewares: [],
+        routes: []
+    };
+    
+    router.groups = router.groups + [group];
+    return group;
+}
+
+/**
+ * Add route to group
+ * 
+ * @param group - The route group
+ * @param method - HTTP method
+ * @param path - URL path (without prefix)
+ * @param handler - Route handler
+ */
+fn add_to_group(group: RouteGroup, method: string, path: string, handler: fn(HttpRequest) -> HttpResponse) {
+    let full_path = group.prefix + path;
+    
+    let route = Route {
+        method: method,
+        path: full_path,
+        pattern: compile_pattern(full_path),
+        handler: handler,
+        middlewares: group.middlewares,
+        name: none
+    };
+    
+    group.routes = group.routes + [route];
+}
+
+/**
+ * Name a route
+ * 
+ * @param router - The router
+ * @param name - Route name
+ * @param path - Route path
+ * @returns The same router for chaining
+ */
+fn name(router: Router, name: string, path: string) -> Router {
+    for route in router.routes {
+        if route.path == path {
+            route.name = some(name);
+            router.named_routes[name] = route;
+        }
+    }
+    return router;
+}
+
+/**
+ * Get URL for named route
+ * 
+ * @param router - The router
+ * @param name - Route name
+ * @param params - Route parameters
+ * @returns URL string
+ */
+fn url(router: Router, name: string, params: Map<string, string>) -> string? {
+    if name in router.named_routes {
+        let route = router.named_routes[name];
+        return build_url(route.path, params);
+    }
+    return none;
+}
+
+/**
+ * Match a route
+ * 
+ * @param router - The router
+ * @param method - HTTP method
+ * @param path - URL path
+ * @returns Route handler if matched
+ */
+fn match_route(router: Router, method: string, path: string) -> fn(HttpRequest) -> HttpResponse? {
+    // First check exact matches
+    for route in router.routes {
+        if route.method == method || route.method == "*" {
+            if route.path == path {
+                return some(route.handler);
+            }
+        }
+    }
+    
+    // Then check pattern matches
+    for route in router.routes {
+        if route.method == method || route.method == "*" {
+            let params = match_pattern(route.pattern, path);
+            
+            if params != none {
+                return some(route.handler);
+            }
+        }
+    }
+    
+    return none;
+}
+
+/**
+ * Compile a path pattern
+ * 
+ * @param path - URL path with parameters
+ * @returns Compiled pattern
+ */
+fn compile_pattern(path: string) -> string {
+    // Convert /users/:id to regex-like pattern
+    let pattern = path;
+    
+    // Replace :param with placeholder
+    // This is simplified - real implementation would use regex
+    return pattern;
+}
+
+/**
+ * Match a path against a pattern
+ * 
+ * @param pattern - Compiled pattern
+ * @param path - URL path
+ * @returns Parameters if matched
+ */
+fn match_pattern(pattern: string, path: string) -> Map<string, string>? {
+    // Simple pattern matching for /:param style
+    let pattern_parts = split(pattern, "/");
+    let path_parts = split(path, "/");
+    
+    if len(pattern_parts) != len(path_parts) {
+        return none;
+    }
+    
+    let params: Map<string, string> = {};
+    
+    for i in range(0, len(pattern_parts)) {
+        let p = pattern_parts[i];
+        let pp = path_parts[i];
+        
+        if starts_with(p, ":") {
+            // This is a parameter
+            let param_name = substring(p, 1, len(p));
+            params[param_name] = pp;
+        } else if p != pp {
+            // Literal match failed
+            return none;
+        }
+    }
+    
+    return some(params);
+}
+
+/**
+ * Build URL from path and parameters
+ * 
+ * @param path - URL path
+ * @param params - Parameters to substitute
+ * @returns Built URL
+ */
+fn build_url(path: string, params: Map<string, string>) -> string {
+    let result = path;
+    
+    for key in keys(params) {
+        let placeholder = ":" + key;
+        result = replace(result, placeholder, params[key]);
+    }
+    
+    return result;
+}
+
+/**
+ * Get all routes
+ * 
+ * @param router - The router
+ * @returns List of routes
+ */
+fn get_routes(router: Router) -> List<Route> {
+    return router.routes;
+}
+
+/**
+ * Get routes by method
+ * 
+ * @param router - The router
+ * @param method - HTTP method
+ * @returns List of matching routes
+ */
+fn get_routes_by_method(router: Router, method: string) -> List<Route> {
+    let result: List<Route> = [];
+    
+    for route in router.routes {
+        if route.method == method {
+            result = result + [route];
+        }
+    }
+    
+    return result;
+}
+
+// Helper functions
+
+fn split(s: string, delimiter: string) -> List<string> {
+    return [];  // Placeholder
+}
+
+fn join(list: List<string>, separator: string) -> string {
+    return "";  // Placeholder
+}
+
+fn len(list: List<string>) -> i64 {
+    return 0;  // Placeholder
+}
+
+fn starts_with(s: string, prefix: string) -> bool {
+    return false;  // Placeholder
+}
+
+fn substring(s: string, start: i64, end: i64) -> string {
+    return "";  // Placeholder
+}
+
+fn replace(s: string, old: string, new: string) -> string {
+    return s;  // Placeholder
+}
+
+fn keys(m: Map<string, string>) -> List<string> {
+    return [];  // Placeholder
+}

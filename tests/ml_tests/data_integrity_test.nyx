@@ -1,0 +1,111 @@
+import ml;
+import std::df;
+
+# --- Helper: Data Integrity Checks ---
+
+fn check_schema(df, expected_schema_map) {
+    let s = df.schema()
+    let ks = std::meta::fields(expected_schema_map)
+    let i = 0
+    let passed = true
+    while i < ks.len() {
+        let name = ks[i]
+        let expected_dtype = expected_schema_map[name]
+        let actual_dtype = s.dtype_of(name)
+        
+        if actual_dtype == null {
+            println("FAIL: Column '", name, "' missing from DataFrame")
+            passed = false
+        } else if actual_dtype != expected_dtype {
+            println("FAIL: Column '", name, "' dtype mismatch. Expected: ", expected_dtype, ", Got: ", actual_dtype)
+            passed = false
+        }
+        i = i + 1
+    }
+    return passed
+}
+
+fn check_nulls(df, required_cols) {
+    let i = 0
+    let passed = true
+    while i < required_cols.len() {
+        let name = required_cols[i]
+        let col = df.col(name)
+        if col == null {
+            println("FAIL: Required column '", name, "' for null-check is missing")
+            passed = false
+        } else {
+            let nc = col.null_count()
+            if nc > 0 {
+                println("FAIL: Column '", name, "' has ", nc, " null values")
+                passed = false
+            }
+        }
+        i = i + 1
+    }
+    return passed
+}
+
+fn check_bounds(df, col_name, min_val, max_val) {
+    let col = df.col(col_name)
+    if col == null { return false }
+    
+    let passed = true
+    let i = 0
+    let n = col.len()
+    while i < n {
+        let v = col.get(i)
+        if v != null {
+            if v < min_val || v > max_val {
+                println("FAIL: Row ", i, " column '", col_name, "' value ", v, " out of bounds [", min_val, ", ", max_val, "]")
+                passed = false
+            }
+        }
+        i = i + 1
+    }
+    return passed
+}
+
+# --- Test Case ---
+
+fn test_data_integrity() {
+    println("--- Testing Data Integrity Foundation ---")
+    
+    # 1. Create a sample DataFrame
+    let col1 = std::df::Column("id", "int", [1, 2, 3, 4], null)
+    let col2 = std::df::Column("val", "float", [10.5, 20.0, null, 40.2], [true, true, false, true])
+    let col3 = std::df::Column("label", "int", [0, 1, 0, 1], null)
+    let df = std::df::DataFrame([col1, col2, col3], null)
+    
+    # 2. Schema check
+    let expected = { "id": "int", "val": "float", "label": "int" }
+    if check_schema(df, expected) {
+        println("SUCCESS: Schema validation passed")
+    }
+    
+    # 3. Null check (should fail for 'val')
+    println("Checking nulls for ['id', 'label']...")
+    if check_nulls(df, ["id", "label"]) {
+       println("SUCCESS: Required columns have no nulls")
+    }
+    
+    println("Checking nulls for ['val'] (expected to fail)...")
+    if check_nulls(df, ["val"]) == false {
+       println("SUCCESS: Correctly detected nulls in 'val'")
+    }
+    
+    # 4. Bounds check
+    println("Checking bounds for 'id' [1, 5]...")
+    if check_bounds(df, "id", 1, 5) {
+        println("SUCCESS: Bounds check passed for 'id'")
+    }
+    
+    println("Checking bounds for 'id' [1, 2] (expected to fail)...")
+    if check_bounds(df, "id", 1, 2) == false {
+        println("SUCCESS: Correctly detected out-of-bounds in 'id'")
+    }
+}
+
+fn main() {
+    test_data_integrity()
+}

@@ -1,0 +1,14 @@
+import df.column;
+import df.dataframe;
+import df.transform;
+fn main() {
+    println("DEBUG: simple test with df.transform")
+    let i = 0
+    let a = []
+    while i < 10 {
+        println("i=", i)
+        a.push(i)
+        i = i + 1
+    }
+    println("Done")
+}

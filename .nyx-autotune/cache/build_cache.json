@@ -1,0 +1,31 @@
+{
+  "file_hashes": {
+    "./engines/ai/src/core/assistant.nyx": "02a3a3821f33ddbf27fa18022a9cb8575a2c1bcd680db2d0d7e1f2136ecb8227",
+    "./engines/autonomous/src/core/autonomous.nyx": "7c97eb370597859592b67e57532b4c520b05e63511ab905ab09e88f34758bc76",
+    "./engines/concurrency/src/async/async.nyx": "1f2e62c99f68eccea423b4cf4ed0f5cf67111318d4c3d269c288ca522117f148",
+    "./engines/concurrency/src/channels/channels.nyx": "51bb33ba32b2953cf670674da39f0899ac826638bf04b102a286049e8b4dbb5c",
+    "./engines/concurrency/src/tasks/tasks.nyx": "c562a75a0f04ee587c0388e0e4954c84c771f975e8773bf4b1fc0928022ce64a",
+    "./engines/crypto/src/encryption/encryption.nyx": "a90135045ba9457806b88e5184e75c97411beb19e0d2af5014cb97116666b5d3",
+    "./engines/crypto/src/hash/hash.nyx": "2f4ad926a1a06aa167305a70fc53ae988ebbeaae02f665727f6de624a4ddce8f",
+    "./engines/filesystem/src/fs/fs.nyx": "cb1264bbe7451905199593e681d06a3c518be057d1fe339b241ae923278d8bd1",
+    "./engines/filesystem/src/path/path.nyx": "ecbc76b68f9184e5c6fe5a6b45db6b7aece00a219dc4d05217cdae72e0dc0ffd",
+    "./engines/network/src/http/http.nyx": "1cd4fe669e47094da9017d89d57cc5de6fc6f6945d3c62b07030b6fb6c7f4b6a",
+    "./engines/network/src/tcp/tcp.nyx": "033b838c4f308051e83fbecbb76da74bc63b037adebe75557b16ad74aab52ec8",
+    "./engines/network/src/udp/udp.nyx": "81def25f1617ebfd756d67e0c691fc54744726b7a709278e8ee3059426be5102",
+    "./engines/package_manager/src/nyxpkg/nyxpkg.nyx": "40e64050ca2270b2013269aa5e90147eeb1d078320636e6f67d9db5109aa1631",
+    "./engines/runtime/src/memory/memory.nyx": "9005558c34713df3d8ce6004a9dc47345d4a67f8af6845999ec8bf96647ae241",
+    "./engines/runtime/src/module_loader/module_loader.nyx": "5c9e6fa2e094ee9f2ec1aec4aeef5c94e101004a58186227dd193b443f31f90f",
+    "./engines/runtime/src/scheduler/scheduler.nyx": "b0d1c7bb58b0deb43b10636710f8ff6f0a76ef5680eb90f031ca4601aa7da549",
+    "./engines/runtime/src/threads/threads.nyx": "2f63fea46a8b9928894373714f467ec9fd09308493011058b9e841c07acc3da6",
+    "./engines/stdlib/src/collections/collections.nyx": "98954e8418b21cb35d40e245dc5320efe90ba4113d866733815e814186699557",
+    "./engines/stdlib/src/core/core.nyx": "97cfa26992a596865f9c07cf47b33b9e33ad785ace6eeb8b49dc5e9034e82be2",
+    "./engines/stdlib/src/io/io.nyx": "012730375d0c22271a9c0d38b0831eaf652d7d7183aae22d49d021e0a86661e1",
+    "./engines/stdlib/src/math/math.nyx": "4195405a12899204727dc05f233c9b410ef2ee8239460d583da5a7d940b47b4d",
+    "./engines/stdlib/src/string/string.nyx": "04ca4c3f63fd896a4d2745480fa7e59ddf29389a4a3bd7f6b3661faa2336a3a4",
+    "./engines/testing/src/test_framework/test_framework.nyx": "bd21c692795c924177c4d1f1c46a1de92b02e729d23d6e388ee7b18cb8dd8bc1",
+    "./engines/tools/src/docgen/docgen.nyx": "60ac7afec993f8fedf0622e6ada0edbe0d1914f48f9eba4986f5b1d0a07d7378",
+    "./engines/tools/src/formatter/formatter.nyx": "6978fc1cfd02f0de30e521b050767d95edd280c0a854a768d1ea8ddc98ef26f4",
+    "./engines/tools/src/linter/linter.nyx": "7e9c47e7ffc43b696a8e13d11b8a5e165dfb19de63e06d233ca6a5f07f82eadd",
+    "./engines/tools/src/test/test.nyx": "2f708778a9cac86466206b96d277fe891dafe0d4af5cf2fcb89cfc909e47dca5"
+  }
+}

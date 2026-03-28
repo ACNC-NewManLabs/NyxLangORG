@@ -1,0 +1,32 @@
+{
+  "language": "Nyx",
+  "version": "1.0",
+  "keywords": [
+    "fn", "let", "mut", "return", "if", "else", "while", "for", "loop", "match",
+    "break", "continue", "struct", "union", "enum", "trait", "impl", "type",
+    "mod", "use", "export", "pub", "crate", "super", "self", "Self", "true",
+    "false", "null", "none", "async", "await", "move", "where", "const",
+    "static", "unsafe", "extern", "asm", "in", "as", "and", "or", "not", "defer"
+  ],
+  "types": [
+    "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",
+    "float", "float32", "float64", "bool", "string", "char", "void", "any"
+  ],
+  "operators": [
+    "+", "-", "*", "/", "%", "=", "==", "!", "!=", "<", "<=", ">", ">=",
+    "&", "&&", "|", "||", "^", "~", "<<", ">>", "+=", "-=", "*=", "/=",
+    "%=", "&=", "|=", "^=", "<<=", ">>=", "(", ")", "{", "}", "[", "]",
+    ",", ":", "::", ".", "..", "..=", "...", ";", "?", "??", "@", "->", "=>", "<-"
+  ],
+  "syntax_patterns": {
+    "function": "fn <ident>(<params>) -> <type> { <body> }",
+    "let_stmt": "let <ident>: <type> = <expr>;",
+    "return_stmt": "return <expr>;",
+    "defer_stmt": "defer <stmt>;",
+    "call_expr": "<ident>(<args>)"
+  },
+  "grammar_structures": [
+    "Program", "Item", "FunctionDecl", "StructDecl", "EnumDecl", "TraitDecl", "ImplBlock",
+    "TypeAlias", "ConstDecl", "StaticDecl", "UseDecl", "ModDecl", "Stmt", "Expr"
+  ]
+}

@@ -1,0 +1,39 @@
+import ml;
+import std::df;
+
+# --- Helper: Latency Benchmark ---
+
+fn test_inference_latency() {
+    println("--- Testing Model Inference Latency & Efficiency ---")
+    
+    let n = 1000
+    let start = std::time::now()
+    
+    let i = 0
+    while i < n {
+        # Simulated inference work
+        let x = i * 1.0 / n
+        let p = (x * 0.5) + 0.1
+        i = i + 1
+    }
+    
+    let end = std::time::now()
+    let total_ms = end - start
+    let lat_micro = (total_ms * 1000.0) / n
+    
+    println("Benchmark Configuration:")
+    println("  Iterations: ", n)
+    println("  Total Time: ", total_ms, " ms")
+    println("  Avg Latency: ", lat_micro, " microseconds/inference")
+    
+    # Efficiency threshold: < 50us
+    if lat_micro < 50.0 {
+        println("SUCCESS: Inference latency is within high-performance bounds")
+    } else {
+        println("WARN: High inference latency detected")
+    }
+}
+
+fn main() {
+    test_inference_latency()
+}

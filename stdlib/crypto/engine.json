@@ -1,0 +1,6 @@
+{
+  "name": "crypto",
+  "modules": [
+    "./mod.nyx"
+  ]
+}

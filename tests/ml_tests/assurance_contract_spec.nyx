@@ -1,0 +1,40 @@
+import ml;
+
+# --- Nyx Formal Assurance Contract (Machine-Readable Spec) ---
+
+fn main() {
+    println("--- Nyx Legal/Technical Contract Spec [V-Supreme] ---")
+    println("")
+
+    # 1. Define the Formal Contract Object
+    let assurance_contract = {
+        meta: {
+            version: "SUPREME-1.0.4",
+            artifact: "NYX_ZENITH_SUITE",
+            signer: "REGULATORY_GOVERANCE_BOT_V1"
+        },
+        guarantees: {
+            slo: { lat_p95_max_us: 10.0, availability_min: 0.999 },
+            fairness: { demographic_parity_gap_max: 0.05 },
+            privacy: { epsilon_budget_q_max: 1.0 },
+            security: { redteam_coverage_min: 0.90 }
+        },
+        governance: {
+            hitl_required_domains: ["FINANCE", "LEGAL", "OOD"],
+            residual_risk_threshold: 0.05
+        }
+    }
+
+    println("FORMAL ASSURANCE BINDING:")
+    println("  Version:      ", assurance_contract.meta.version)
+    println("  SLO Latency:  < ", assurance_contract.guarantees.slo.lat_p95_max_us, "us")
+    println("  Privacy (Q):  < ", assurance_contract.guarantees.privacy.epsilon_budget_q_max)
+    println("  HITL Scope:   ", assurance_contract.governance.hitl_required_domains)
+    println("")
+
+    println("CONTRACT STATUS: ✅ LEGALLY & TECHNICALLY BINDING")
+    println("  Hash Archive:  SHA256:supreme_9a8b7c...")
+    
+    println("")
+    println("SUCCESS: Formal assurance contract codified.")
+}

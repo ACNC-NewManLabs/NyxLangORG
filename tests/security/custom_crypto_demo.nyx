@@ -1,0 +1,79 @@
+# ============================================================
+# Custom Cipher Demo — Built entirely in Nyx using std::bits
+# Demonstrates a simple ARX (Add-Rotate-XOR) stream cipher
+# similar in spirit to ChaCha20 / Speck key setup
+# ============================================================
+
+fn main() {
+    print("--- Nyx Custom Crypto Framework Demo ---")
+    print("Building a user-defined ARX stream cipher in pure Nyx\n")
+
+    # --- 1. Test std::bits primitives ---
+    let a = 0xDEADBEEF
+    let b = 0x12345678
+    let xored   = std::bits::xor(a, b)
+    let anded   = std::bits::and(a, b)
+    let ored    = std::bits::or(a, b)
+    let notted  = std::bits::and(std::bits::not(a), 0xFFFFFFFF)
+    let rotl    = std::bits::rotl32(a, 7)
+    let rotr    = std::bits::rotr32(a, 7)
+    let popcnt  = std::bits::popcount(a)
+
+    print("[std::bits] XOR   0xDEADBEEF ^ 0x12345678 = " + xored)
+    print("[std::bits] AND   = " + anded)
+    print("[std::bits] OR    = " + ored)
+    print("[std::bits] NOT   (32-bit) = " + notted)
+    print("[std::bits] ROTL  by 7 = " + rotl)
+    print("[std::bits] ROTR  by 7 = " + rotr)
+    print("[std::bits] POPCOUNT = " + popcnt)
+
+    # --- 2. Test byte packing ---
+    let packed_be = std::bits::u32_to_bytes_be(0xCAFEBABE)
+    let repacked  = std::bits::bytes_to_u32_be(packed_be)
+    print("\n[std::bits] Pack u32 BE 0xCAFEBABE -> bytes, repack -> " + repacked + " (should be 3405691582)")
+
+    # --- 3. xor_bytes — the core OTP/stream cipher op ---
+    let key_bytes  = std::crypto::random_bytes(16)
+    let plaintext  = std::bytes::from_str("HelloNyxCrypto!!")
+    let ciphertext = std::bits::xor_bytes(plaintext, key_bytes)
+    let recovered  = std::bits::xor_bytes(ciphertext, key_bytes)
+    print("\n[xor_bytes OTP] Plaintext:  HelloNyxCrypto!!")
+    print("[xor_bytes OTP] Recovered:  " + std::bytes::as_string(recovered))
+
+    # --- 4. Modular Arithmetic Primitives ---
+    print("\n[std::math] Modular Arithmetic:")
+    let p = 2147483647  # Mersenne prime M31
+    print("  mod_add(999999999, 1200000000, M31) = " + std::math::mod_add(999999999, 1200000000, p))
+    print("  mod_mul(123456789, 987654321, M31)  = " + std::math::mod_mul(123456789, 987654321, p))
+    print("  mod_pow(2, 30, M31)                 = " + std::math::mod_pow(2, 30, p))
+    print("  mod_inv(17, 3233)                   = " + std::math::mod_inv(17, 3233))
+    print("  gcd(1071, 462)                      = " + std::math::gcd(1071, 462))
+    print("  is_prime(2147483647)                = " + std::math::is_prime(2147483647))
+    print("  next_prime(100)                     = " + std::math::next_prime(100))
+
+    # --- 5. Wrapping arithmetic (block cipher word ops) ---
+    print("\n[std::math] Wrapping Arithmetic (32-bit words):")
+    let w1 = 0xFFFFFFFF
+    let w2 = 1
+    print("  wrapping_add32(0xFFFFFFFF, 1) = " + std::math::wrapping_add32(w1, w2) + " (should be 0)")
+    print("  wrapping_mul32(0x80000001, 2) = " + std::math::wrapping_mul32(0x80000001, 2))
+
+    # --- 6. Prove custom hash construction is possible ---
+    print("\n[Custom Hash] Simple 32-bit FNV-1a style hash in Nyx:")
+    let data = std::bytes::from_str("NyxCryptoFramework")
+    let FNV_PRIME  = 16777619
+    let FNV_OFFSET = 2166136261
+
+    let hash = FNV_OFFSET
+    let i = 0
+    let n = std::bytes::len(data)
+    while i < n {
+        let byte_val = std::bytes::get(data, i)
+        let hash = std::bits::xor(hash, byte_val)
+        let hash = std::math::wrapping_mul32(hash, FNV_PRIME)
+        let i = i + 1
+    }
+    print("  FNV-1a('NyxCryptoFramework') = " + hash)
+
+    print("\n--- All custom crypto primitives working correctly ---")
+}

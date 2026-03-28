@@ -1,0 +1,444 @@
+/**
+ * Web Framework Module
+ * 
+ * High-level web framework providing a Django/Express-style API for building
+ * web applications with chainable method calls.
+ * 
+ * @module web
+ * @version 1.0.0
+ * 
+ * @example
+ * import web;
+ * 
+ * app = web.WebApp();
+ * 
+ * app.get("/", fn(req, res) {
+ *     res.html("<h1>Hello from Nyx</h1>");
+ * });
+ * 
+ * app.get("/api/users", fn(req, res) {
+ *     res.json({"users": []});
+ * });
+ * 
+ * app.post("/api/users", fn(req, res) {
+ *     res.json({"status": "created"}, status: 201);
+ * });
+ * 
+ * app.start(8080);
+ */
+
+mod app;
+mod request;
+mod response;
+
+/**
+ * WebApp - High-level web application
+ * 
+ * Provides a chainable API for defining routes and middleware.
+ */
+type WebApp = {
+    server: any,
+    routes: List<Route>,
+    middleware: List<Middleware>,
+    before_middleware: List<Middleware>,
+    after_middleware: List<Middleware>,
+    port: i64,
+    host: string,
+    running: bool,
+    static_path: string?,
+    template_dir: string?,
+    error_handler: fn(any, any) -> any,
+    not_found_handler: fn(any) -> any
+};
+
+/**
+ * Route definition
+ */
+type Route = {
+    method: string,
+    path: string,
+    handler: fn(any, any) -> any,
+    middleware: List<Middleware>
+};
+
+/**
+ * Middleware function type
+ */
+type Middleware = fn(any, fn(any) -> any) -> any;
+
+/**
+ * Create a new WebApp
+ * 
+ * @param options - Optional configuration
+ * @returns A new WebApp instance
+ * 
+ * @example
+ * let app = web.WebApp();
+ * 
+ * // Or with options
+ * let app = web.WebApp({
+ *     "port": 3000,
+ *     "host": "0.0.0.0",
+ *     "static": "./public",
+ *     "templates": "./templates"
+ * });
+ */
+fn WebApp(options?: Map<string, any>) -> WebApp {
+    let port = 8080;
+    let host = "0.0.0.0";
+    let static_path = none;
+    let template_dir = none;
+    
+    if options != none {
+        let opts = options as Map<string, any>;
+        if "port" in opts {
+            port = opts["port"] as i64;
+        }
+        if "host" in opts {
+            host = opts["host"] as string;
+        }
+        if "static" in opts {
+            static_path = some(opts["static"] as string);
+        }
+        if "templates" in opts {
+            template_dir = some(opts["templates"] as string);
+        }
+    }
+    
+    return WebApp {
+        server: none,
+        routes: [],
+        middleware: [],
+        before_middleware: [],
+        after_middleware: [],
+        port: port,
+        host: host,
+        running: false,
+        static_path: static_path,
+        template_dir: template_dir,
+        error_handler: default_error_handler,
+        not_found_handler: default_not_found_handler
+    };
+}
+
+/**
+ * Add a GET route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ * 
+ * @example
+ * app.get("/", fn(req, res) {
+ *     res.html("<h1>Hello</h1>");
+ * });
+ */
+fn get(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "GET", path, handler);
+}
+
+/**
+ * Add a POST route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn post(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "POST", path, handler);
+}
+
+/**
+ * Add a PUT route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn put(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "PUT", path, handler);
+}
+
+/**
+ * Add a DELETE route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn delete(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "DELETE", path, handler);
+}
+
+/**
+ * Add a PATCH route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn patch(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "PATCH", path, handler);
+}
+
+/**
+ * Add an OPTIONS route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn options(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "OPTIONS", path, handler);
+}
+
+/**
+ * Add a HEAD route
+ * 
+ * @param app - The WebApp
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn head(app: WebApp, path: string, handler: fn(any, any) -> any) -> WebApp {
+    return route(app, "HEAD", path, handler);
+}
+
+/**
+ * Add a route for any HTTP method
+ * 
+ * @param app - The WebApp
+ * @param method - HTTP method
+ * @param path - URL path
+ * @param handler - Handler function
+ * @returns The same app for chaining
+ */
+fn route(app: WebApp, method: string, path: string, handler: fn(any, any) -> any) -> WebApp {
+    let route = Route {
+        method: method,
+        path: path,
+        handler: handler,
+        middleware: []
+    };
+    app.routes = app.routes + [route];
+    return app;
+}
+
+/**
+ * Add middleware to the app
+ * 
+ * @param app - The WebApp
+ * @param middleware_fn - Middleware function
+ * @returns The same app for chaining
+ * 
+ * @example
+ * app.use(fn(req, next) {
+ *     print("Before request");
+ *     let res = next(req);
+ *     print("After request");
+ *     return res;
+ * });
+ */
+fn use(app: WebApp, middleware_fn: Middleware) -> WebApp {
+    app.middleware = app.middleware + [middleware_fn];
+    return app;
+}
+
+/**
+ * Add before middleware (runs before the route handler)
+ * 
+ * @param app - The WebApp
+ * @param middleware_fn - Middleware function
+ * @returns The same app for chaining
+ */
+fn before(app: WebApp, middleware_fn: Middleware) -> WebApp {
+    app.before_middleware = app.before_middleware + [middleware_fn];
+    return app;
+}
+
+/**
+ * Add after middleware (runs after the route handler)
+ * 
+ * @param app - The WebApp
+ * @param middleware_fn - Middleware function
+ * @returns The same app for chaining
+ */
+fn after(app: WebApp, middleware_fn: Middleware) -> WebApp {
+    app.after_middleware = app.after_middleware + [middleware_fn];
+    return app;
+}
+
+/**
+ * Set static file directory
+ * 
+ * @param app - The WebApp
+ * @param path - Directory path
+ * @returns The same app for chaining
+ * 
+ * @example
+ * app.static("./public");
+ */
+fn static(app: WebApp, path: string) -> WebApp {
+    app.static_path = some(path);
+    return app;
+}
+
+/**
+ * Set template directory
+ * 
+ * @param app - The WebApp
+ * @param path - Directory path
+ * @returns The same app for chaining
+ * 
+ * @example
+ * app.templates("./templates");
+ */
+fn templates(app: WebApp, path: string) -> WebApp {
+    app.template_dir = some(path);
+    return app;
+}
+
+/**
+ * Set error handler
+ * 
+ * @param app - The WebApp
+ * @param handler - Error handler function
+ * @returns The same app for chaining
+ */
+fn error(app: WebApp, handler: fn(any, any) -> any) -> WebApp {
+    app.error_handler = handler;
+    return app;
+}
+
+/**
+ * Set not found handler
+ * 
+ * @param app - The WebApp
+ * @param handler - Not found handler function
+ * @returns The same app for chaining
+ */
+fn not_found(app: WebApp, handler: fn(any) -> any) -> WebApp {
+    app.not_found_handler = handler;
+    return app;
+}
+
+/**
+ * Start the web server
+ * 
+ * @param app - The WebApp
+ * @param port - Port to listen on (optional, uses app.port by default)
+ * 
+ * @example
+ * app.start();
+ * app.start(3000);
+ */
+fn start(app: WebApp, port?: i64) {
+    let listen_port = app.port;
+    if port != none {
+        listen_port = port as i64;
+    }
+    
+    print("Starting Nyx Web Server on " + app.host + ":" + str(listen_port) + "...");
+    
+    // Create HTTP server
+    let server = http::HttpServer(app.host, listen_port);
+    
+    // Register routes
+    for route in app.routes {
+        let r = route as Route;
+        register_route(server, r.method, r.path, r.handler);
+    }
+    
+    // Apply static files if configured
+    if app.static_path != none {
+        let sp = app.static_path as string;
+        configure_static(server, sp);
+    }
+    
+    // Start server
+    http::server::start(server);
+    
+    app.server = some(server);
+    app.running = true;
+    
+    print("Server running at http://localhost:" + str(listen_port));
+    print("Press Ctrl+C to stop");
+}
+
+/**
+ * Stop the web server
+ * 
+ * @param app - The WebApp
+ */
+fn stop(app: WebApp) {
+    if app.running && app.server != none {
+        http::server::stop(app.server as any);
+        app.running = false;
+        print("Server stopped");
+    }
+}
+
+/**
+ * Register a route with the HTTP server
+ */
+fn register_route(server: any, method: string, path: string, handler: fn(any, any) -> any) {
+    // Route registration delegates to http module
+    if method == "GET" {
+        http::server::get(server, path, handler);
+    } else if method == "POST" {
+        http::server::post(server, path, handler);
+    } else if method == "PUT" {
+        http::server::put(server, path, handler);
+    } else if method == "DELETE" {
+        http::server::delete(server, path, handler);
+    } else if method == "PATCH" {
+        http::server::patch(server, path, handler);
+    }
+}
+
+/**
+ * Configure static file serving
+ */
+fn configure_static(server: any, path: string) {
+    let static_handler = http::static::StaticHandler(path, {
+        "index_file": "index.html",
+        "show_listing": false,
+        "cache_max_age": 0
+    });
+    
+    http::server::get(server, "/*", fn(req, res) {
+        return http::static::handle(static_handler, req);
+    });
+}
+
+/**
+ * Default error handler
+ */
+fn default_error_handler(err: any, req: any) -> any {
+    print("Error: " + str(err));
+    return response::internal_server_error();
+}
+
+/**
+ * Default not found handler
+ */
+fn default_not_found_handler(req: any) -> any {
+    return response::not_found();
+}
+
+/**
+ * Helper to convert number to string
+ */
+fn str(n: i64) -> string {
+    return to_string(n);
+}
+
+// Re-export for convenience
+type Request = request::Request;
+type Response = response::Response;

@@ -1,0 +1,49 @@
+import ml;
+
+# --- Nyx Degraded-Mode SLO Enforcement ---
+
+fn audit_degraded_slo(stats) {
+    println("--- Nyx Operational Audit: Degraded-Mode SLO Verification ---")
+    
+    let slo_met = true
+    
+    # SLO 1: Availability during Fail-Soft
+    if stats.availability < 0.999 {
+        println("  SLO_VIOLATION: Availability ", stats.availability * 100, "% < 99.9%")
+        slo_met = false
+    }
+    
+    # SLO 2: Latency under Fallback (Must be as fast or faster than ML)
+    if stats.latency_p99_us > 2.0 {
+        println("  SLO_VIOLATION: Fallback Latency ", stats.latency_p99_us, "us > 2.0us")
+        slo_met = false
+    }
+    
+    # SLO 3: Minimum Safe Accuracy
+    if stats.fallback_acc < 0.95 {
+        println("  SLO_VIOLATION: Fallback Accuracy ", stats.fallback_acc * 100, "% < 95%")
+        slo_met = false
+    }
+    
+    if slo_met {
+        println("  RESULT: DEGRADED_MODE_SLO = MET (Reliable fail-soft confirmed)")
+        return true
+    } else {
+        println("  RESULT: DEGRADED_MODE_SLO = BREACHED (Unsafe fail-soft detected!)")
+        return false
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: High-Response Rule Engine (SLO Met)")
+    let s1 = { availability: 0.9995, latency_p99_us: 1.2, fallback_acc: 0.98 }
+    audit_degraded_slo(s1)
+    
+    println("")
+    
+    println("Scenario 2: Slow/Inaccurate Fallback (SLO Breach)")
+    let s2 = { availability: 0.98, latency_p99_us: 5.5, fallback_acc: 0.92 }
+    audit_degraded_slo(s2)
+}

@@ -1,0 +1,5 @@
+[
+  "legacy_thread_spawn",
+  "unsafe_api",
+  "old_crypto_hash"
+]

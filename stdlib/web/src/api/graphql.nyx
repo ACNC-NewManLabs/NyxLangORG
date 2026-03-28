@@ -1,0 +1,412 @@
+// Nyx Web API - GraphQL
+// GraphQL API development support
+
+// GraphQL Schema
+struct GraphQLSchema {
+    query_type: GraphQLType
+    mutation_type: GraphQLType
+    types: Map<string, GraphQLType>
+}
+
+// GraphQL Type
+struct GraphQLType {
+    name: string
+    description: string
+    fields: List<GraphQLField>
+    kind: GraphQLKind
+}
+
+// GraphQL Field
+struct GraphQLField {
+    name: string
+    type: string
+    args: List<GraphQLArg>
+    resolver: fn(any, Map<string, any>) -> any
+    description: string
+    nullable: bool
+    list: bool
+}
+
+// GraphQL Argument
+struct GraphQLArg {
+    name: string
+    type: string
+    default_value: any
+    description: string
+}
+
+// GraphQL Kind
+enum GraphQLKind {
+    Scalar
+    Object
+    Interface
+    Union
+    Enum
+    InputObject
+    List
+    NonNull
+}
+
+// GraphQL Operation
+struct GraphQLOperation {
+    operation_type: string  // "query", "mutation", "subscription"
+    name: string
+    variables: Map<string, any>
+    selection_set: List<Selection>
+}
+
+// Selection (field in query)
+struct Selection {
+    field_name: string
+    alias: string
+    arguments: Map<string, any>
+    selections: List<Selection>
+}
+
+// GraphQL Context
+struct GraphQLContext {
+    context: Context
+    variables: Map<string, any>
+    info: GraphQLInfo
+}
+
+// GraphQL Info
+struct GraphQLInfo {
+    field_name: string
+    field_path: string
+    parent_type: string
+    return_type: string
+}
+
+// GraphQL Response
+struct GraphQLResponse {
+    data: any
+    errors: List<GraphQLError>
+    extensions: Map<string, any>
+}
+
+// GraphQL Error
+struct GraphQLError {
+    message: string
+    locations: List<GraphQLLocation>
+    path: List<string>
+    extensions: Map<string, any>
+}
+
+// GraphQL Location
+struct GraphQLLocation {
+    line: u32
+    column: u32
+}
+
+// GraphQL Resolver
+type Resolver = fn(GraphQLContext, Map<string, any>) -> any
+
+// Create a new GraphQL schema
+fn new_schema() -> GraphQLSchema {
+    return GraphQLSchema {
+        query_type: GraphQLType::new("Query")
+        mutation_type: GraphQLType::new("Mutation")
+        types: Map::new()
+    }
+}
+
+// Create a new GraphQL type
+fn GraphQLType::new(name: string) -> GraphQLType {
+    return GraphQLType {
+        name: name
+        description: ""
+        fields: List::new()
+        kind: GraphQLKind::Object
+    }
+}
+
+// Add field to type
+fn add_field(graphql_type: GraphQLType, field: GraphQLField) {
+    graphql_type.fields.push(field)
+}
+
+// Create a field builder
+fn field(name: string, type: string) -> FieldBuilder {
+    return FieldBuilder {
+        name: name
+        type: type
+        args: List::new()
+        resolver: null
+        description: ""
+        nullable: true
+        list: false
+    }
+}
+
+// Field builder
+struct FieldBuilder {
+    name: string
+    type: string
+    args: List<GraphQLArg>
+    resolver: Resolver
+    description: string
+    nullable: bool
+    list: bool
+}
+
+// Set resolver for field builder
+fn resolve(builder: FieldBuilder, resolver: Resolver) -> FieldBuilder {
+    builder.resolver = resolver
+    return builder
+}
+
+// Set description for field builder
+fn description(builder: FieldBuilder, desc: string) -> FieldBuilder {
+    builder.description = desc
+    return builder
+}
+
+// Set argument for field builder
+fn arg(builder: FieldBuilder, name: string, type: string, default_value: any = null) -> FieldBuilder {
+    let graphql_arg = GraphQLArg {
+        name: name
+        type: type
+        default_value: default_value
+        description: ""
+    }
+    builder.args.push(graphql_arg)
+    return builder
+}
+
+// Build the field
+fn build(builder: FieldBuilder) -> GraphQLField {
+    return GraphQLField {
+        name: builder.name
+        type: builder.type
+        args: builder.args
+        resolver: builder.resolver
+        description: builder.description
+        nullable: builder.nullable
+        list: builder.list
+    }
+}
+
+// Query type helper
+fn query(schema: GraphQLSchema, name: string, field: GraphQLField) {
+    schema.query_type.fields.push(field)
+}
+
+// Mutation type helper
+fn mutation(schema: GraphQLSchema, name: string, field: GraphQLField) {
+    schema.mutation_type.fields.push(field)
+}
+
+// Execute GraphQL query
+fn execute(schema: GraphQLSchema, query_str: string, variables: Map<string, any>, ctx: Context) -> GraphQLResponse {
+    // Parse the query
+    let operation = parse_query(query_str)
+    
+    // Create execution context
+    let gql_ctx = GraphQLContext {
+        context: ctx
+        variables: variables
+        info: GraphQLInfo::default()
+    }
+    
+    // Execute operation
+    match operation.operation_type {
+        "query" => {
+            return execute_query(schema, operation, gql_ctx)
+        }
+        "mutation" => {
+            return execute_mutation(schema, operation, gql_ctx)
+        }
+        _ => {
+            return GraphQLResponse {
+                data: null
+                errors: [GraphQLError {
+                    message: "Unknown operation type"
+                    locations: List::new()
+                    path: List::new()
+                    extensions: Map::new()
+                }]
+                extensions: Map::new()
+            }
+        }
+    }
+}
+
+// Execute query
+fn execute_query(schema: GraphQLSchema, operation: GraphQLOperation, ctx: GraphQLContext) -> GraphQLResponse {
+    let data = Map::new()
+    let errors = List::new()
+    
+    // Find the root type
+    let root_type = schema.query_type
+    
+    // Execute selections
+    for selection in operation.selection_set {
+        let field = find_field(root_type, selection.field_name)
+        
+        match field {
+            Some(f) => {
+                // Get arguments
+                let args = resolve_args(f, selection.arguments, ctx.variables)
+                
+                // Execute resolver
+                if f.resolver != null {
+                    let result = f.resolver(ctx, args)
+                    data.insert(selection.alias_or_name(), result)
+                }
+            }
+            None => {
+                errors.push(GraphQLError {
+                    message: "Field '" + selection.field_name + "' not found on type '" + root_type.name + "'"
+                    locations: List::new()
+                    path: [selection.field_name]
+                    extensions: Map::new()
+                })
+            }
+        }
+    }
+    
+    return GraphQLResponse {
+        data: data
+        errors: errors
+        extensions: Map::new()
+    }
+}
+
+// Execute mutation
+fn execute_mutation(schema: GraphQLSchema, operation: GraphQLOperation, ctx: GraphQLContext) -> GraphQLResponse {
+    // Similar to execute_query but for mutations
+    return execute_query(schema, operation, ctx)
+}
+
+// Parse GraphQL query string
+fn parse_query(query_str: string) -> GraphQLOperation {
+    // Simplified parser - in production, use a full parser
+    let operation = GraphQLOperation {
+        operation_type: "query"
+        name: ""
+        variables: Map::new()
+        selection_set: List::new()
+    }
+    
+    // Basic parsing logic
+    if query_str.trim().starts_with("mutation") {
+        operation.operation_type = "mutation"
+    } else if query_str.trim().starts_with("subscription") {
+        operation.operation_type = "subscription"
+    }
+    
+    return operation
+}
+
+// Find field by name
+fn find_field(graphql_type: GraphQLType, name: string) -> Option<GraphQLField> {
+    for field in graphql_type.fields {
+        if field.name == name {
+            return Option::some(field)
+        }
+    }
+    return Option::none()
+}
+
+// Resolve arguments
+fn resolve_args(field: GraphQLField, provided: Map<string, any>, variables: Map<string, any>) -> Map<string, any> {
+    let args = Map::new()
+    
+    for arg in field.args {
+        // Check provided first, then default, then variables
+        if provided.contains(arg.name) {
+            args.insert(arg.name, provided.get(arg.name))
+        } else if arg.default_value != null {
+            args.insert(arg.name, arg.default_value)
+        } else if variables.contains(arg.name) {
+            args.insert(arg.name, variables.get(arg.name))
+        }
+    }
+    
+    return args
+}
+
+// Get alias or name for selection
+fn Selection::alias_or_name(self) -> string {
+    if self.alias != "" {
+        return self.alias
+    }
+    return self.field_name
+}
+
+// Default GraphQL info
+fn GraphQLInfo::default() -> GraphQLInfo {
+    return GraphQLInfo {
+        field_name: ""
+        field_path: ""
+        parent_type: ""
+        return_type: ""
+    }
+}
+
+// GraphQL Int type
+fn int() -> string {
+    return "Int"
+}
+
+// GraphQL Float type
+fn float() -> string {
+    return "Float"
+}
+
+// GraphQL String type
+fn string() -> string {
+    return "String"
+}
+
+// GraphQL Boolean type
+fn boolean() -> string {
+    return "Boolean"
+}
+
+// GraphQL ID type
+fn id() -> string {
+    return "ID"
+}
+
+// Non-null type
+fn non_null(type_name: string) -> string {
+    return type_name + "!"
+}
+
+// List type
+fn list(type_name: string) -> string {
+    return "[" + type_name + "]"
+}
+
+export GraphQLSchema
+export GraphQLType
+export GraphQLField
+export GraphQLArg
+export GraphQLKind
+export GraphQLOperation
+export Selection
+export GraphQLContext
+export GraphQLInfo
+export GraphQLResponse
+export GraphQLError
+export GraphQLLocation
+export Resolver
+export new_schema
+export query
+export mutation
+export execute
+export field
+export resolve
+export description
+export arg
+export build
+export int
+export float
+export string
+export boolean
+export id
+export non_null
+export list
+

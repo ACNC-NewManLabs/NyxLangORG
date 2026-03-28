@@ -1,0 +1,55 @@
+import std;
+
+fn generate_data(rows) {
+    let ids = []
+    let values = []
+    let i = 0
+    while i < rows {
+        ids.push(i % 100)
+        values.push((i * 1.0) / rows)
+        i = i + 1
+    }
+    return {
+        id: std::df::Column("id", "int", ids, null),
+        val: std::df::Column("val", "float", values, null)
+    }
+}
+
+fn benchmark_filter_agg(rows) {
+    println("Generating ", rows, " rows for filter+agg...")
+    let cols = generate_data(rows)
+    let df = std::df::DataFrame([cols.id, cols.val], null)
+    
+    println("--- Benchmarking ", rows, " rows (Filter + Agg) ---")
+    
+    let start_all = std::time::now()
+    
+    # 1. Create mask
+    let mask = df.col("val").gt(0.5)
+    let filter_time = std::time::now()
+    
+    # 2. Filter df
+    let filtered_df = df.filter(mask)
+    let slice_time = std::time::now()
+    
+    # 3. Aggregate
+    let mean_val = filtered_df.col("val").mean()
+    let agg_time = std::time::now()
+    
+    println("Mean of values > 0.5: ", mean_val)
+    println("Mask generation : ", (filter_time - start_all) / 1000.0, " seconds")
+    println("Filter creation : ", (slice_time - filter_time) / 1000.0, " seconds")
+    println("Aggregation     : ", (agg_time - slice_time) / 1000.0, " seconds")
+    println("Total Time      : ", (agg_time - start_all) / 1000.0, " seconds")
+    
+    # Test fusion if applicable
+    # Without fusion, native filter copies row indices. Native aggregation takes mask dynamically if query.nyx is used.
+    # We will test native query performance
+}
+
+fn main() {
+    println("=== DataFrame Filter + Aggregation Benchmarks ===")
+    benchmark_filter_agg(100000)   # 100K
+    benchmark_filter_agg(1000000)  # 1M
+    benchmark_filter_agg(5000000)  # 5M
+}

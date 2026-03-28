@@ -1,0 +1,10 @@
+[package]
+name = "example_lib"
+version = "1.0.0"
+author = "developer"
+description = "Example Nyx package"
+tags = ["http", "crypto"]
+
+[dependencies]
+nyx-http = "^1.2.0"
+nyx-crypto = "~0.5"

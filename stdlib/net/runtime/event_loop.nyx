@@ -1,0 +1,383 @@
+/**
+ * Event Loop Module
+ * 
+ * Provides the core event loop implementation for handling asynchronous
+ * I/O operations, timers, and task scheduling.
+ * 
+ * @module event_loop
+ */
+
+type EventLoop = {
+    running: bool,
+    tick_rate: i64,
+    max_tasks: i64,
+    active_tasks: i64,
+    timers: List<TimerEntry>,
+    io_handles: List<IoHandle>,
+    callbacks: List<Callback>
+};
+
+type TimerEntry = {
+    id: i64,
+    due_time: i64,
+    interval: i64,
+    callback: fn(),
+    cancelled: bool
+};
+
+type IoHandle = {
+    fd: i64,
+    read_callback: fn(),
+    write_callback: fn(),
+    interest: IoInterest
+};
+
+type IoInterest = {
+    readable: bool,
+    writable: bool
+};
+
+type Callback = {
+    id: i64,
+    callback: fn(),
+    priority: i64
+};
+
+// Global event loop instance
+let global_loop: EventLoop? = none;
+let next_timer_id: i64 = 0;
+let next_callback_id: i64 = 0;
+
+/**
+ * Initialize the event loop
+ */
+fn init() {
+    global_loop = some(EventLoop {
+        running: false,
+        tick_rate: 100,  // 10ms default tick
+        max_tasks: 10000,
+        active_tasks: 0,
+        timers: [],
+        io_handles: [],
+        callbacks: []
+    });
+}
+
+/**
+ * Run the event loop - blocks until stopped
+ */
+fn run() {
+    if global_loop == none {
+        init();
+    }
+    
+    let loop_ref = global_loop as EventLoop;
+    loop_ref.running = true;
+    
+    // Main event loop
+    while loop_ref.running {
+        let start_time = current_time_ms();
+        
+        // Process timers
+        process_timers(loop_ref);
+        
+        // Process I/O
+        process_io(loop_ref);
+        
+        // Process callbacks
+        process_callbacks(loop_ref);
+        
+        // Calculate elapsed time
+        let elapsed = current_time_ms() - start_time;
+        
+        // Sleep for remaining tick time if needed
+        if elapsed < loop_ref.tick_rate {
+            sleep(loop_ref.tick_rate - elapsed);
+        }
+        
+        loop_ref.active_tasks = count_active_tasks();
+    }
+}
+
+/**
+ * Stop the event loop gracefully
+ */
+fn stop() {
+    if global_loop != none {
+        let loop_ref = global_loop as EventLoop;
+        loop_ref.running = false;
+    }
+}
+
+/**
+ * Process all pending timers
+ */
+fn process_timers(loop: EventLoop) {
+    let now = current_time_ms();
+    let mut to_remove: List<i64> = [];
+    
+    for timer in loop.timers {
+        if timer.cancelled {
+            to_remove = to_remove + [timer.id];
+        } else if now >= timer.due_time {
+            // Execute the timer callback
+            timer.callback();
+            
+            // If it's an interval timer, reschedule
+            if timer.interval > 0 {
+                timer.due_time = now + timer.interval;
+            } else {
+                // One-shot timer, mark for removal
+                to_remove = to_remove + [timer.id];
+            }
+        }
+    }
+    
+    // Remove cancelled/expired timers
+    let mut remaining: List<TimerEntry> = [];
+    for timer in loop.timers {
+        let mut keep = true;
+        for id in to_remove {
+            if timer.id == id {
+                keep = false;
+            }
+        }
+        if keep {
+            remaining = remaining + [timer];
+        }
+    }
+    loop.timers = remaining;
+}
+
+/**
+ * Process I/O events
+ */
+fn process_io(loop: EventLoop) {
+    for handle in loop.io_handles {
+        // In a real implementation, this would use epoll/kqueue/IOCP
+        // For now, we just check if there's data available
+        if handle.interest.readable {
+            // Check if data is available to read
+            let data_ready = check_read_ready(handle.fd);
+            if data_ready && handle.read_callback != nil {
+                handle.read_callback();
+            }
+        }
+        
+        if handle.interest.writable {
+            let write_ready = check_write_ready(handle.fd);
+            if write_ready && handle.write_callback != nil {
+                handle.write_callback();
+            }
+        }
+    }
+}
+
+/**
+ * Process pending callbacks
+ */
+fn process_callbacks(loop: EventLoop) {
+    // Sort by priority (higher priority first)
+    let sorted = sort_by_priority(loop.callbacks);
+    
+    // Execute callbacks (limit to prevent starvation)
+    let mut executed = 0;
+    let max_per_tick = 100;
+    
+    for cb in sorted {
+        if executed >= max_per_tick {
+            break;
+        }
+        cb.callback();
+        executed = executed + 1;
+    }
+}
+
+/**
+ * Add a timer to the event loop
+ */
+fn add_timer(due_time: i64, interval: i64, callback: fn()) -> i64 {
+    if global_loop == none {
+        init();
+    }
+    
+    let loop_ref = global_loop as EventLoop;
+    next_timer_id = next_timer_id + 1;
+    
+    let entry = TimerEntry {
+        id: next_timer_id,
+        due_time: due_time,
+        interval: interval,
+        callback: callback,
+        cancelled: false
+    };
+    
+    loop_ref.timers = loop_ref.timers + [entry];
+    return next_timer_id;
+}
+
+/**
+ * Cancel a timer
+ */
+fn cancel_timer(id: i64) {
+    if global_loop != none {
+        let loop_ref = global_loop as EventLoop;
+        
+        let mut updated: List<TimerEntry> = [];
+        for timer in loop_ref.timers {
+            if timer.id == id {
+                updated = updated + [{...timer, cancelled: true}];
+            } else {
+                updated = updated + [timer];
+            }
+        }
+        loop_ref.timers = updated;
+    }
+}
+
+/**
+ * Register an I/O handle for monitoring
+ */
+fn register_io(fd: i64, interest: IoInterest, on_read: fn(), on_write: fn()) {
+    if global_loop == none {
+        init();
+    }
+    
+    let loop_ref = global_loop as EventLoop;
+    
+    let handle = IoHandle {
+        fd: fd,
+        read_callback: on_read,
+        write_callback: on_write,
+        interest: interest
+    };
+    
+    loop_ref.io_handles = loop_ref.io_handles + [handle];
+}
+
+/**
+ * Unregister an I/O handle
+ */
+fn unregister_io(fd: i64) {
+    if global_loop != none {
+        let loop_ref = global_loop as EventLoop;
+        
+        let mut remaining: List<IoHandle> = [];
+        for handle in loop_ref.io_handles {
+            if handle.fd != fd {
+                remaining = remaining + [handle];
+            }
+        }
+        loop_ref.io_handles = remaining;
+    }
+}
+
+/**
+ * Add a callback to be executed
+ */
+fn add_callback(callback: fn(), priority: i64) -> i64 {
+    if global_loop == none {
+        init();
+    }
+    
+    let loop_ref = global_loop as EventLoop;
+    next_callback_id = next_callback_id + 1;
+    
+    let cb = Callback {
+        id: next_callback_id,
+        callback: callback,
+        priority: priority
+    };
+    
+    loop_ref.callbacks = loop_ref.callbacks + [cb];
+    return next_callback_id;
+}
+
+/**
+ * Get the current time in milliseconds
+ */
+fn current_time_ms() -> i64 {
+    // This would be implemented by the runtime
+    return 0;  // Placeholder
+}
+
+/**
+ * Sleep for specified milliseconds
+ */
+fn sleep(ms: i64) {
+    // This would be implemented by the runtime
+}
+
+/**
+ * Check if a file descriptor is ready for reading
+ */
+fn check_read_ready(fd: i64) -> bool {
+    return false;  // Placeholder
+}
+
+/**
+ * Check if a file descriptor is ready for writing
+ */
+fn check_write_ready(fd: i64) -> bool {
+    return false;  // Placeholder
+}
+
+/**
+ * Sort callbacks by priority
+ */
+fn sort_by_priority(callbacks: List<Callback>) -> List<Callback> {
+    // Simple bubble sort for now
+    let mut result = callbacks;
+    let n = len(result);
+    
+    for i in range(0, n) {
+        for j in range(0, n - i - 1) {
+            if result[j].priority < result[j + 1].priority {
+                let temp = result[j];
+                result[j] = result[j + 1];
+                result[j + 1] = temp;
+            }
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Count currently active tasks
+ */
+fn count_active_tasks() -> i64 {
+    if global_loop != none {
+        let loop_ref = global_loop as EventLoop;
+        return loop_ref.active_tasks;
+    }
+    return 0;
+}
+
+/**
+ * Get the global event loop instance
+ */
+fn get_loop() -> EventLoop? {
+    return global_loop;
+}
+
+/**
+ * Set the tick rate for the event loop
+ */
+fn set_tick_rate(ms: i64) {
+    if global_loop != none {
+        let loop_ref = global_loop as EventLoop;
+        loop_ref.tick_rate = ms;
+    }
+}
+
+/**
+ * Check if the event loop is running
+ */
+fn is_running() -> bool {
+    if global_loop != none {
+        let loop_ref = global_loop as EventLoop;
+        return loop_ref.running;
+    }
+    return false;
+}

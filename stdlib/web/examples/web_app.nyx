@@ -1,0 +1,176 @@
+// Nyx Web Engine - Example Application
+// A complete example demonstrating web engine features
+
+mod web_engine
+mod router
+mod middleware
+mod api
+mod realtime
+
+// Example: Main application
+fn main() {
+    // Create server configuration
+    let config = server::default_config()
+    config.host = "localhost"
+    config.port = 8081
+    config.workers = 4
+    config.static_dir = "./public"
+    
+    // Create HTTP server
+    let server = server::new_server(config)
+    
+    // Add middleware
+    server.use(middleware::logging())
+    server.use(middleware::cors())
+    server.use(middleware::compression())
+    server.use(middleware::security_headers())
+    server.use(middleware::body_parser())
+    server.use(middleware::session())
+    
+    // Create a new router
+    let app_router = router::new_router()
+    
+    // Home page
+    app_router.get("/", fn(ctx: Context) -> Response {
+        let html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Nyx Web Engine</title>
+            <style>
+                body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                h1 { color: #333; }
+                .card { border: 1px solid #ddd; padding: 20px; margin: 10px 0; border-radius: 8px; }
+                a { color: #0066cc; }
+            </style>
+        </head>
+        <body>
+            <h1>Welcome to Nyx Web Engine! 🚀</h1>
+            <div class='card'>
+                <h2>Getting Started</h2>
+                <p>This is a sample Nyx web application.</p>
+                <ul>
+                    <li><a href='/api/users'>API: Users</a></li>
+                    <li><a href='/api/posts'>API: Posts</a></li>
+                    <li><a href='/graphql'>GraphQL Playground</a></li>
+                    <li><a href='/ws'>WebSocket Demo</a></li>
+                </ul>
+            </div>
+        </body>
+        </html>
+        `
+        return html(ctx, html)
+    })
+    
+    // About page
+    app_router.get("/about", fn(ctx: Context) -> Response {
+        let data = {
+            name: "Nyx Web Engine"
+            version: "1.0.0"
+            description: "A hyper-advanced web development engine"
+        }
+        return json(ctx, data)
+    })
+    
+    // Use the API routes
+    app_router.get("/api/users", api::get_users)
+    app_router.get("/api/users/:id", api::get_user)
+    app_router.post("/api/users", api::create_user)
+    app_router.put("/api/users/:id", api::update_user)
+    app_router.delete("/api/users/:id", api::delete_user)
+    
+    // GraphQL endpoint
+    app_router.post("/graphql", api::graphql_handler)
+    
+    // WebSocket endpoint
+    app_router.get("/ws", realtime::websocket_handler)
+    
+    // Mount router
+    server.use_router(app_router)
+    
+    // Start server
+    console::log("Starting Nyx Web Engine on http://" + config.host + ":" + config.port.to_string())
+    server.listen(config.host, config.port)
+}
+
+// Example: API handlers
+mod api {
+    // Mock user data
+    let users = [
+        { id: 1, name: "Alice", email: "alice@example.com" }
+        { id: 2, name: "Bob", email: "bob@example.com" }
+        { id: 3, name: "Charlie", email: "charlie@example.com" }
+    ]
+    
+    // GET /api/users
+    fn get_users(ctx: Context) -> Response {
+        return api::ok(ctx, { users: users, total: users.len() })
+    }
+    
+    // GET /api/users/:id
+    fn get_user(ctx: Context) -> Response {
+        let id = ctx.params.get("id").parse_u32()
+        
+        for user in users {
+            if user.id == id {
+                return api::ok(ctx, user)
+            }
+        }
+        
+        return api::not_found(ctx, "User not found")
+    }
+    
+    // POST /api/users
+    fn create_user(ctx: Context) -> Response {
+        let body = ctx.state.get("parsed_body")
+        
+        // In production, validate and save to database
+        let new_user = {
+            id: users.len() + 1
+            name: body.name
+            email: body.email
+        }
+        
+        return api::created(ctx, new_user, "User created successfully")
+    }
+    
+    // PUT /api/users/:id
+    fn update_user(ctx: Context) -> Response {
+        let id = ctx.params.get("id").parse_u32()
+        let body = ctx.state.get("parsed_body")
+        
+        return api::ok(ctx, { id: id, message: "User updated" })
+    }
+    
+    // DELETE /api/users/:id
+    fn delete_user(ctx: Context) -> Response {
+        let id = ctx.params.get("id").parse_u32()
+        
+        return api::ok(ctx, { message: "User deleted" })
+    }
+    
+    // GraphQL handler
+    fn graphql_handler(ctx: Context) -> Response {
+        let body = ctx.state.get("parsed_body")
+        
+        // Parse and execute GraphQL query
+        let query = body.query
+        
+        // Simple response
+        return api::ok(ctx, {
+            data: {
+                users: users
+            }
+        })
+    }
+}
+
+// Example: Real-time handlers
+mod realtime {
+    // WebSocket handler
+    fn websocket_handler(ctx: Context) -> Response {
+        // In production, upgrade to WebSocket
+        return error(ctx, "WebSocket upgrade required", 426)
+    }
+}
+

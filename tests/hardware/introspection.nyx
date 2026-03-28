@@ -1,0 +1,9 @@
+fn main() {
+    print("--- Nyx Hardware Introspection ---")
+    
+    let cpu = std::hardware::cpu_info()
+    print("[nyx-cpu] Adapter: " + cpu)
+
+    let gpu = std::hardware::gpu_info()
+    print("[nyx-gpu] Adapter: " + gpu)
+}

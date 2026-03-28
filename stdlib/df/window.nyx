@@ -1,0 +1,274 @@
+# Nyx Dataframe Engine: Window & Rolling Operations
+
+fn rolling(df, col_name, window_size) {
+    let c = df.col(col_name)
+    if c == null { return null }
+    return {
+        _df: df,
+        _col: c,
+        _window: window_size,
+
+        sum: fn(self) {
+            let result_data = std::df::rolling_sum(self._col._data, self._window)
+            let new_col = Column(self._col._name + "_rolling_sum_" + self._window, "float", result_data, null)
+            return self._df.with_column(new_col)
+        },
+
+        mean: fn(self) {
+            let result_data = std::df::rolling_mean(self._col._data, self._window)
+            let new_col = Column(self._col._name + "_rolling_mean_" + self._window, "float", result_data, null)
+            return self._df.with_column(new_col)
+        },
+
+        std: fn(self) {
+            let w = self._window
+            let result_data = []
+            let n = self._col._data.len()
+            let i = 0
+            while i < n {
+                if i + 1 < w { result_data.push(null) }
+                else {
+                    let slice = []
+                    let j = i + 1 - w
+                    while j <= i { slice.push(self._col._data[j])  j = j + 1 }
+                    result_data.push(std::df::col_std(slice))
+                }
+                i = i + 1
+            }
+            let new_col = Column(self._col._name + "_rolling_std_" + self._window, "float", result_data, null)
+            return self._df.with_column(new_col)
+        },
+
+        min: fn(self) {
+            let w = self._window
+            let result_data = []
+            let n = self._col._data.len()
+            let i = 0
+            while i < n {
+                if i + 1 < w { result_data.push(null) }
+                else {
+                    let slice = []
+                    let j = i + 1 - w
+                    while j <= i { slice.push(self._col._data[j])  j = j + 1 }
+                    result_data.push(std::df::col_min(slice))
+                }
+                i = i + 1
+            }
+            let new_col = Column(self._col._name + "_rolling_min_" + self._window, "float", result_data, null)
+            return self._df.with_column(new_col)
+        },
+
+        max: fn(self) {
+            let w = self._window
+            let result_data = []
+            let n = self._col._data.len()
+            let i = 0
+            while i < n {
+                if i + 1 < w { result_data.push(null) }
+                else {
+                    let slice = []
+                    let j = i + 1 - w
+                    while j <= i { slice.push(self._col._data[j])  j = j + 1 }
+                    result_data.push(std::df::col_max(slice))
+                }
+                i = i + 1
+            }
+            let new_col = Column(self._col._name + "_rolling_max_" + self._window, "float", result_data, null)
+            return self._df.with_column(new_col)
+        }
+    }
+}
+
+fn expanding(df, col_name) {
+    # Cumulative (expanding) window operations
+    let c = df.col(col_name)
+    if c == null { return null }
+    return {
+        _df: df,
+        _col: c,
+
+        sum: fn(self) {
+            let result_data = []
+            let running = 0.0
+            let i = 0
+            while i < self._col._data.len() {
+                running = running + self._col._data[i]
+                result_data.push(running)
+                i = i + 1
+            }
+            let new_col = Column(self._col._name + "_cumsum", "float", result_data, null)
+            return self._df.with_column(new_col)
+        },
+
+        mean: fn(self) {
+            let result_data = []
+            let running = 0.0
+            let i = 0
+            while i < self._col._data.len() {
+                running = running + self._col._data[i]
+                result_data.push(running / (i + 1))
+                i = i + 1
+            }
+            let new_col = Column(self._col._name + "_cummean", "float", result_data, null)
+            return self._df.with_column(new_col)
+        }
+    }
+}
+
+fn lag(df, col_name, n) {
+    if n == null { n = 1 }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let result_data = []
+    let i = 0
+    while i < c._data.len() {
+        if i < n { result_data.push(null) }
+        else { result_data.push(c._data[i - n]) }
+        i = i + 1
+    }
+    let new_col = Column(c._name + "_lag" + n, c._dtype, result_data, null)
+    return df.with_column(new_col)
+}
+
+fn lead(df, col_name, n) {
+    if n == null { n = 1 }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let result_data = []
+    let len = c._data.len()
+    let i = 0
+    while i < len {
+        if i + n >= len { result_data.push(null) }
+        else { result_data.push(c._data[i + n]) }
+        i = i + 1
+    }
+    let new_col = Column(c._name + "_lead" + n, c._dtype, result_data, null)
+    return df.with_column(new_col)
+}
+
+fn diff(df, col_name, n) {
+    if n == null { n = 1 }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let result_data = []
+    let i = 0
+    while i < c._data.len() {
+        if i < n { result_data.push(null) }
+        else { result_data.push(c._data[i] - c._data[i - n]) }
+        i = i + 1
+    }
+    let new_col = Column(c._name + "_diff" + n, "float", result_data, null)
+    return df.with_column(new_col)
+}
+
+# ── Phase 5: Time-Series Functions ───────────────────────────────────────────
+
+fn pct_change(df, col_name, n) {
+    if n == null { n = 1 }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let result_data = std::df::pct_change(c._data, n)
+    let new_col = Column(c._name + "_pct_change_" + n, "float", result_data, null)
+    return df.with_column(new_col)
+}
+
+fn ewm(df, col_name, alpha) {
+    if alpha == null { alpha = 0.5 }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let result_data = std::df::ewm(c._data, alpha)
+    let new_col = Column(c._name + "_ewm", "float", result_data, null)
+    return df.with_column(new_col)
+}
+
+fn resample(df, col_name, bucket_size, agg_op) {
+    if agg_op == null { agg_op = "sum" }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let result_data = std::df::resample(c._data, bucket_size, agg_op)
+    let name = c._name + "_resampled_" + bucket_size
+    let out_col = Column(name, "float", result_data, null)
+    let df_new = DataFrame([out_col], null)
+    return df_new
+}
+
+# ── Phase 5: Window Rank / Row Number ────────────────────────────────────────
+
+fn rank(df, col_name, ascending) {
+    if ascending == null { ascending = true }
+    let c = df.col(col_name)
+    if c == null { return df }
+    let rank_data = std::df::window_rank(c._data, ascending)
+    let new_col = Column(c._name + "_rank", "int", rank_data, null)
+    return df.with_column(new_col)
+}
+
+fn row_number(df) {
+    # Pick first column for length
+    if df._columns.len() == 0 { return df }
+    let first_data = df._columns[0]._data
+    let rn_data = std::df::window_row_number(first_data)
+    let new_col = Column("row_number", "int", rn_data, null)
+    return df.with_column(new_col)
+}
+
+# over(df, col_name, partition_by_col, func_name)
+# func_name: "rank" | "row_number"
+fn over(df, col_name, partition_by_col, func_name) {
+    if partition_by_col == null {
+        if func_name == "rank" { return rank(df, col_name, true) }
+        if func_name == "row_number" { return row_number(df) }
+        return df
+    }
+
+    # Partition by col
+    let part_col = df.col(partition_by_col)
+    if part_col == null { return df }
+    let nr = df.nrows()
+
+    # Gather unique partitions
+    let partitions = {}
+    let part_order = []
+    let i = 0
+    while i < nr {
+        let k = "" + part_col._data[i]
+        if partitions[k] == null {
+            partitions[k] = []
+            part_order.push(k)
+        }
+        partitions[k].push(i)
+        i = i + 1
+    }
+
+    # Apply func per partition
+    let out_data = []
+    let r = 0
+    while r < nr { out_data.push(null)  r = r + 1 }
+
+    let p = 0
+    while p < part_order.len() {
+        let key = part_order[p]
+        let idxs = partitions[key]
+        let slice = []
+        let j = 0
+        while j < idxs.len() {
+            let src_col = df.col(col_name)
+            if src_col != null { slice.push(src_col._data[idxs[j]]) }
+            j = j + 1
+        }
+        let rank_slice = null
+        if func_name == "rank" { rank_slice = std::df::window_rank(slice, true) }
+        if func_name == "row_number" { rank_slice = std::df::window_row_number(slice) }
+        if rank_slice != null {
+            let k = 0
+            while k < idxs.len() {
+                out_data[idxs[k]] = rank_slice[k]
+                k = k + 1
+            }
+        }
+        p = p + 1
+    }
+
+    let out_col = Column(col_name + "_" + func_name, "int", out_data, null)
+    return df.with_column(out_col)
+}

@@ -1,0 +1,9 @@
+[package]
+name = "nyx-threads"
+version = "0.1.0"
+edition = "2021"
+authors = ["SURYA SEKHAR ROY"]
+description = "Safe thread management and named execution for the Nyx Runtime™"
+
+[dependencies]
+# Standard thread builder

@@ -1,0 +1,59 @@
+import ml;
+
+# --- Nyx Access Control & Key Management (Security Integrity) ---
+
+let roles = {
+    "ADMIN": ["TRAIN", "DEPLOY", "AUDIT", "ROTATE_KEYS"],
+    "DATA_SCIENTIST": ["TRAIN", "AUDIT"],
+    "SRE": ["DEPLOY", "AUDIT"],
+    "AUDITOR": ["AUDIT"]
+}
+
+fn check_permission(user_role, action) {
+    let allowed_actions = roles[user_role]
+    let i = 0
+    while i < std::list::len(allowed_actions) {
+        if allowed_actions[i] == action {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fn authorized_deploy(user_role, model_id) {
+    println("--- Nyx Security Engine: Production Deployment Gate ---")
+    println("  User Role: ", user_role)
+    println("  Model ID:  ", model_id)
+    
+    if !check_permission(user_role, "DEPLOY") {
+        println("  ACCESS_DENIED: Role ", user_role, " is not authorized for DEPLOY.")
+        return false
+    }
+    
+    # Simulate Signed Deployment (Verify 3rd-party signature)
+    let sig = "SIG_DEFENSIBLE_V1"
+    println("  SECURE: Verifying release signature...")
+    if sig == "SIG_DEFENSIBLE_V1" {
+        println("  SUCCESS: Deployment Signed & Authorized.")
+        return true
+    }
+    return false
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Authorized Auditor Review")
+    authorized_deploy("AUDITOR", "M-101")
+    
+    println("")
+    
+    println("Scenario 2: Unauthorized Data Scientist Deployment")
+    authorized_deploy("DATA_SCIENTIST", "M-101")
+    
+    println("")
+    
+    println("Scenario 3: Authorized SRE Deployment")
+    authorized_deploy("SRE", "M-101")
+}

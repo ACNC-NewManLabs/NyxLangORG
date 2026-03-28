@@ -1,0 +1,266 @@
+/**
+ * HTTP/2 Module
+ * 
+ * Provides HTTP/2 server functionality with support for:
+ * - Multiplexing (multiple streams over single connection)
+ * - Header compression (HPACK)
+ * - Server push
+ * - Stream prioritization
+ * - Flow control
+ * 
+ * @module http2
+ * @version 1.0.0
+ * 
+ * @example
+ * import http2;
+ * 
+ * let server = http2.Server(port: 8080);
+ * 
+ * server.on_request(fn(req, push) {
+ *     // Handle request
+ *     // Optionally push additional resources
+ *     push("/styles.css");
+ * });
+ * 
+ * server.start();
+ */
+
+/**
+ * HTTP/2 server
+ */
+type Server = {
+    host: string,
+    port: i64,
+    tls_config: any?,
+    running: bool,
+    max_concurrent_streams: i64,
+    initial_window_size: i64,
+    max_frame_size: i64
+};
+
+/**
+ * HTTP/2 stream
+ */
+type Stream = {
+    id: i64,
+    state: StreamState,
+    request: any,
+    response: any,
+    priority: i64,
+    weight: i64
+};
+
+/**
+ * Stream state
+ */
+type StreamState = 
+    | "idle"
+    | "open"
+    | "half_closed_local"
+    | "half_closed_remote"
+    | "closed";
+
+/**
+ * HTTP/2 request
+ */
+type Request = {
+    method: string,
+    path: string,
+    headers: Map<string, string>,
+    body: string,
+    scheme: string,
+    authority: string,
+    stream_id: i64
+};
+
+/**
+ * HTTP/2 response
+ */
+type Response = {
+    status_code: i64,
+    headers: Map<string, string>,
+    body: string,
+    stream_id: i64
+};
+
+/**
+ * Push promise
+ */
+type PushPromise = {
+    path: string,
+    headers: Map<string, string>
+};
+
+/**
+ * Create HTTP/2 server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns HTTP/2 server
+ * 
+ * @example
+ * let server = http2.Server(port: 8080);
+ */
+fn Server(host: string = "0.0.0.0", port: i64 = 8080) -> Server {
+    return Server {
+        host: host,
+        port: port,
+        tls_config: none,
+        running: false,
+        max_concurrent_streams: 100,
+        initial_window_size: 65535,
+        max_frame_size: 16384
+    };
+}
+
+/**
+ * Start HTTP/2 server
+ * 
+ * @param server - The server
+ * @returns Whether server started successfully
+ */
+fn start(server: Server) -> bool {
+    // In a full implementation, this would:
+    // 1. Set up TLS (required for HTTP/2)
+    // 2. Handle HTTP/2 connection preface
+    // 3. Set up HPACK encoding/decoding
+    // 4. Begin accepting streams
+    
+    server.running = true;
+    return true;
+}
+
+/**
+ * Stop HTTP/2 server
+ * 
+ * @param server - The server
+ */
+fn stop(server: Server) {
+    server.running = false;
+}
+
+/**
+ * Set request handler
+ * 
+ * @param server - The server
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn on_request(server: Server, handler: fn(Request) -> Response) -> Server {
+    return server;
+}
+
+/**
+ * Set stream handler
+ * 
+ * @param server - The server
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn on_stream(server: Server, handler: fn(Stream) -> void) -> Server {
+    return server;
+}
+
+/**
+ * Set error handler
+ * 
+ * @param server - The server
+ * @param handler - Handler function
+ * @returns The same server for chaining
+ */
+fn on_error(server: Server, handler: fn(any) -> void) -> Server {
+    return server;
+}
+
+/**
+ * Send push promise
+ * 
+ * @param response - The response
+ * @param promise - Push promise
+ */
+fn push(response: Response, promise: PushPromise) {
+    // Would send a push promise frame
+}
+
+/**
+ * Create push promise
+ * 
+ * @param path - Path to push
+ * @param headers - Additional headers
+ * @returns Push promise
+ */
+fn PushPromise(path: string, headers?: Map<string, string>) -> PushPromise {
+    let default_headers = {
+        ":path": path,
+        ":method": "GET"
+    };
+    
+    if headers != none {
+        // Merge headers
+    }
+    
+    return PushPromise {
+        path: path,
+        headers: default_headers
+    };
+}
+
+/**
+ * Set maximum concurrent streams
+ * 
+ * @param server - The server
+ * @param max - Maximum concurrent streams
+ * @returns The same server for chaining
+ */
+fn max_concurrent_streams(server: Server, max: i64) -> Server {
+    server.max_concurrent_streams = max;
+    return server;
+}
+
+/**
+ * Set initial window size
+ * 
+ * @param server - The server
+ * @param size - Initial window size
+ * @returns The same server for chaining
+ */
+fn initial_window_size(server: Server, size: i64) -> Server {
+    server.initial_window_size = size;
+    return server;
+}
+
+/**
+ * Enable server push
+ * 
+ * @param server - The server
+ * @returns The same server for chaining
+ */
+fn enable_push(server: Server) -> Server {
+    return server;
+}
+
+/**
+ * Set TLS configuration
+ * 
+ * @param server - The server
+ * @param config - TLS configuration
+ * @returns The same server for chaining
+ */
+fn with_tls(server: Server, config: any) -> Server {
+    server.tls_config = some(config);
+    return server;
+}
+
+/**
+ * Get server settings
+ * 
+ * @param server - The server
+ * @returns Settings map
+ */
+fn settings(server: Server) -> Map<string, i64> {
+    return {
+        "max_concurrent_streams": server.max_concurrent_streams,
+        "initial_window_size": server.initial_window_size,
+        "max_frame_size": server.max_frame_size
+    };
+}

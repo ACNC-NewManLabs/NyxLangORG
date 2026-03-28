@@ -1,0 +1,5 @@
+# Placeholder web tests (disabled pending full harness)
+
+fn run_all_tests() {
+    return;
+}

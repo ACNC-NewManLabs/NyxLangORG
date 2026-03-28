@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(50280, 2560, 32, 32, null, null, "dolly-v2", "cpu");
+}

@@ -1,0 +1,59 @@
+import ml;
+
+# --- Nyx Fairness Guardrails (Hard Enforcement) ---
+
+fn enforce_fairness_guardrails(rejection_stats, fallback_stats) {
+    println("--- Nyx Fairness Engine: Hard Guardrail Enforcement ---")
+    
+    let rejection_threshold = 0.20 # Max 20% rejection per group
+    let fallback_min_acc = 0.95    # Min 95% accuracy for fallback per group
+    
+    let is_fair = true
+    let groups = rejection_stats.keys()
+    let i = 0
+    
+    while i < std::list::len(groups) {
+        let gid = groups[i]
+        let r_rate = rejection_stats[gid]
+        let f_acc = fallback_stats[gid]
+        
+        println("  Auditing Group: ", gid)
+        
+        # Guardrail 1: Denial-of-Service (Over-rejection)
+        if r_rate > rejection_threshold {
+            println("    CRITICAL_BREACH: Rejection Rate ", r_rate * 100, "% > 20%")
+            is_fair = false
+        }
+        
+        # Guardrail 2: Quality-of-Service (Low-accuracy fallback)
+        if f_acc < fallback_min_acc {
+            println("    CRITICAL_BREACH: Fallback Quality ", f_acc * 100, "% < 95%")
+            is_fair = false
+        }
+        i = i + 1
+    }
+    
+    if is_fair {
+        println("  RESULT: Fairness Guardrails = PASSED (Service Parity Guaranteed)")
+        return true
+    } else {
+        println("  RESULT: Fairness Guardrails = FAILED (Inequitable Safety Detected!)")
+        return false
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Equitable Safety")
+    let r1 = { G_A: 0.05, G_B: 0.07 }
+    let f1 = { G_A: 0.98, G_B: 0.96 }
+    enforce_fairness_guardrails(r1, f1)
+    
+    println("")
+    
+    println("Scenario 2: Inequality (Group B Over-rejected)")
+    let r2 = { G_A: 0.05, G_B: 0.35 }
+    let f2 = { G_A: 0.98, G_B: 0.88 }
+    enforce_fairness_guardrails(r2, f2)
+}

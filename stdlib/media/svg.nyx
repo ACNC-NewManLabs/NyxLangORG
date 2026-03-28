@@ -1,0 +1,64 @@
+# Nyx Media Library: SVG Vector Graphics
+# Allows creating vector graphics using Nyx syntax
+
+fn Canvas(width, height) {
+    return {
+        width: width,
+        height: height,
+        elements: [],
+        
+        circle: fn(self, x, y, r, fill) {
+            self.elements.push("<circle cx=\"" + to_string(x) + "\" cy=\"" + to_string(y) + "\" r=\"" + to_string(r) + "\" fill=\"" + fill + "\" />")
+        },
+        
+        ellipse: fn(self, x, y, rx, ry, fill) {
+            self.elements.push("<ellipse cx=\"" + to_string(x) + "\" cy=\"" + to_string(y) + "\" rx=\"" + to_string(rx) + "\" ry=\"" + to_string(ry) + "\" fill=\"" + fill + "\" />")
+        },
+        
+        rect: fn(self, x, y, w, h, fill) {
+            self.elements.push("<rect x=\"" + to_string(x) + "\" y=\"" + to_string(y) + "\" width=\"" + to_string(w) + "\" height=\"" + to_string(h) + "\" fill=\"" + fill + "\" />")
+        },
+        
+        line: fn(self, x1, y1, x2, y2, stroke, width) {
+            self.elements.push("<line x1=\"" + to_string(x1) + "\" y1=\"" + to_string(y1) + "\" x2=\"" + to_string(x2) + "\" y2=\"" + to_string(y2) + "\" stroke=\"" + stroke + "\" stroke-width=\"" + to_string(width) + "\" />")
+        },
+        
+        path: fn(self, d, fill, stroke) {
+            self.elements.push("<path d=\"" + d + "\" fill=\"" + fill + "\" stroke=\"" + stroke + "\" />")
+        },
+        
+        polygon: fn(self, points, fill) {
+            let pts = ""
+            let i = 0
+            while i < points.len() {
+                pts = pts + to_string(points[i][0]) + "," + to_string(points[i][1]) + " "
+                i = i + 1
+            }
+            self.elements.push("<polygon points=\"" + pts + "\" fill=\"" + fill + "\" />")
+        },
+        
+        text: fn(self, x, y, content, size, fill) {
+             self.elements.push("<text x=\"" + to_string(x) + "\" y=\"" + to_string(y) + "\" font-size=\"" + to_string(size) + "\" fill=\"" + fill + "\">" + content + "</text>")
+        },
+        
+        to_svg: fn(self) {
+            let svg = "<svg width=\"" + to_string(self.width) + "\" height=\"" + to_string(self.height) + "\" xmlns=\"http://www.w3.org/2000/svg\">"
+            let i = 0
+            while i < self.elements.len() {
+                svg = svg + self.elements[i]
+                i = i + 1
+            }
+            svg = svg + "</svg>"
+            return svg
+        },
+        
+        save: fn(self, path) {
+            return std::media::write_svg(path, self.to_svg())
+        }
+    }
+}
+
+fn to_string(v) {
+    if v == null { return "0" }
+    return "" + v
+}

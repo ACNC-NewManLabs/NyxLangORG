@@ -1,0 +1,68 @@
+import ml;
+
+# --- Nyx Fallback Router (Tiered Decision Authority) ---
+
+fn primary_model_sim(input) {
+    # simulated failure on negative input
+    if input < 0 { return { status: "REJECTED", value: null } }
+    return { status: "APPROVED", value: 1.0 }
+}
+
+fn backup_model_sim(input) {
+    # simpler, more stable model
+    return { status: "APPROVED", value: 0.5 }
+}
+
+fn rule_engine_sim(input) {
+    # hard-coded logic
+    if input > 100 { return 1.0 }
+    return 0.0
+}
+
+fn route_decision(input) {
+    println("Routing Decision for Input: ", input)
+    
+    # Tier 1: Primary ML
+    let m1 = primary_model_sim(input)
+    if m1.status == "APPROVED" {
+        println("  Tier 1: Primary ML Approved. Output=", m1.value)
+        return m1.value
+    }
+    
+    # Tier 2: Backup Model
+    println("  Tier 1 REJECTED. Attempting Tier 2 (Stable Backup)...")
+    let m2 = backup_model_sim(input)
+    if m2.status == "APPROVED" {
+        println("  Tier 2: Backup Model Approved. Output=", m2.value)
+        return m2.value
+    }
+    
+    # Tier 3: Rule Engine
+    println("  Tier 2 FAILED. Attempting Tier 3 (Rule Engine)...")
+    let r = rule_engine_sim(input)
+    println("  Tier 3: Rule Engine Result=", r)
+    
+    # Tier 4: Human Intervention
+    if input == -999 {
+        println("  ALERT: Tier 3 Inconclusive. ESCALATING TO HUMAN OPERATOR.")
+    }
+    
+    return r
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("--- Testing Nyx Fallback Router: Tiered Authority ---")
+    
+    # 1. Normal Path
+    route_decision(10.0)
+    println("")
+    
+    # 2. Rejection Path (Trigger Tier 2)
+    route_decision(-5.0)
+    println("")
+    
+    # 3. Escalation Path
+    route_decision(-999.0)
+}

@@ -1,0 +1,39 @@
+# Nyx Memory-Augmented Neural Networks (Area 64)
+# Key-Value External Memory for long-term reasoning
+
+fn MemoryBank(slots, d_model) {
+    return {
+        _slots: slots,
+        _d_model: d_model,
+        _memory: ml::tensor::zeros([slots, d_model], false),
+        
+        # Read from memory using query (soft-attention)
+        read: fn(self, query) {
+            println("[Memory] Reading from memory slots...")
+            # attention = soft_max(query @ memory.T)
+            # return attention @ memory
+            return ml::tensor::zeros(query.shape, false) # Stub
+        },
+        
+        # Write to memory (Least Recently Used or Gated)
+        write: fn(self, key, value) {
+            println("[Memory] Writing to external memory bank...")
+            # For now: just overwrite first slot in the stub
+            return true
+        }
+    }
+}
+
+fn MemoryAugmentedModel(model, memory_bank) {
+    return {
+        _model: model,
+        _memory: memory_bank,
+        
+        forward: fn(self, x) {
+            let m_context = self._memory.read(x)
+            # Combine input and memory context
+            # let combined = ml::tensor::cat([x, m_context], -1)
+            return self._model.forward(x)
+        }
+    }
+}

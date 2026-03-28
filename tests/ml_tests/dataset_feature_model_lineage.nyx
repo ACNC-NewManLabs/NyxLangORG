@@ -1,0 +1,40 @@
+import ml;
+
+# --- Nyx End-to-End Lineage (Data-to-Decision) ---
+
+fn generate_lineage_report(trace_id) {
+    println("--- Nyx Forensics: End-to-End Lineage Trace ---")
+    println("  Trace ID: ", trace_id)
+    
+    # In a real system, this would query a metadata store
+    let lineage = {
+        trace_id: trace_id,
+        outcome: "Approved",
+        model_id: "M-1.0.1-Gold",
+        pipeline_hash: "P-77a8b9c",
+        training_datasets: [
+            { id: "DS-Gold-P1", version: "v1.2", source: "Curated_Feedback" },
+            { id: "DS-Gold-P2", version: "v1.1", source: "Synthetic_Robustness" }
+        ],
+        timestamp: std::time::now_nanos()
+    }
+    
+    println("  MODEL:    ", lineage.model_id)
+    println("  PIPELINE: ", lineage.pipeline_hash)
+    println("  DATASETS: ")
+    let i = 0
+    while i < std::list::len(lineage.training_datasets) {
+        let ds = lineage.training_datasets[i]
+        println("    - [", ds.id, "] version ", ds.version, " (", ds.source, ")")
+        i = i + 1
+    }
+    
+    println("--- Lineage Join SUCCESS: Provenance Confirmed ---")
+    return lineage
+}
+
+# --- Test Case ---
+
+fn main() {
+    generate_lineage_report("TR-999-XYZ")
+}

@@ -1,0 +1,70 @@
+# Nyx AI/ML Production API Consolidation
+# This module provides a single entry point for all matured ML features.
+# [Core Modules]
+mod tensor = tensor;
+mod nn = nn;
+mod optim = optim;
+mod data = data;
+mod query = query;
+mod train = train;
+mod transformer = transformer;
+mod dist = dist;
+mod memory = memory;
+mod explain = explain;
+mod classical = classical;
+mod rl = rl;
+mod safety = safety;
+mod gnn = gnn;
+mod rag = rag;
+mod federated = federated;
+mod multimodal = multimodal;
+mod workflow = workflow;
+mod augment = augment;
+mod metrics = metrics;
+mod diagnostics = diagnostics;
+mod jit = jit;
+mod prob = prob;
+mod symbolic = symbolic;
+mod diffeq = diffeq;
+mod edge = edge;
+mod meta = meta;
+mod privacy = privacy;
+mod compress = compress;
+mod serving = serving;
+mod synthesis = synthesis;
+mod hub = hub;
+mod tracker = tracker;
+mod amp = amp;
+mod export = export;
+mod profiler = profiler;
+mod plugin = plugin;
+
+let _RAND_STATE = { seed: 98765 }
+fn set_seed(seed) { _RAND_STATE.seed = seed }
+fn get_seed() { return _RAND_STATE.seed }
+
+# [NN Operations]
+fn nn_forward(model, x) { return ml::nn::nn_forward(model, x) }
+fn nn_mse_loss(pred, target) { return ml::nn::nn_mse_loss(pred, target) }
+fn nn_cross_entropy(pred, target) { return ml::nn::nn_cross_entropy(pred, target) }
+
+# [Optimizer Operations]
+fn optim_step(opt) { return ml::optim::optim_step(opt) }
+fn optim_zero_grad(opt) { return ml::optim::optim_zero_grad(opt) }
+
+# [Distributed Training]
+fn dist_init(rank, size) { return ml::dist::init_process_group(rank, size) }
+fn dist_barrier() { return ml::dist::barrier("default") }
+fn dist_all_reduce(t, op) { return ml::dist::all_reduce(t, op) }
+
+# [Model Export]
+fn export_onnx(model, path) { return ml::export::export_onnx(model, path) }
+fn export_trt(model, path) { return ml::export::export_tensorrt_hints(model, path) }
+
+# [Probabilistic]
+fn prob_sample(d) { return ml::prob::prob_sample(d) }
+fn prob_prob(d, x) { return ml::prob::prob_prob(d, x) }
+
+# [RL]
+fn rl_sample(b, n) { return ml::rl::replay_buffer_sample(b, n) }
+fn rl_push(b, s, a, r, ns, d) { return ml::rl::replay_buffer_push(b, s, a, r, ns, d) }

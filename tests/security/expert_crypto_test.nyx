@@ -1,0 +1,65 @@
+import crypto
+
+fn test_seal_open() {
+    # In Nyx, strings are converted to bytes via std::string::as_bytes
+    let msg = std::string::as_bytes("Expert security payload")
+    let pwd = std::string::as_bytes("super-secret-password")
+    
+    print("Testing Seal/Open...")
+    let sealed = crypto::seal(msg, pwd)
+    print("Sealed length: " + std::bytes::len(sealed).to_string())
+    
+    let opened = crypto::open(sealed, pwd)
+    if opened != null {
+        print("Success: Opened payload matches original!")
+    } else {
+        print("FAILURE: Open failed!")
+    }
+    
+    # Test wrong password
+    print("Testing adversarial access (wrong password)...")
+    let opened_wrong = crypto::open(sealed, std::string::as_bytes("wrong-password"))
+    if opened_wrong == null {
+        print("Success: Invalid password rejected.")
+    } else {
+        print("FAILURE: Wrong password accepted!")
+    }
+}
+
+fn test_merkle_proofs() {
+    print("\nTesting Merkle Inclusion Proofs...")
+    let data = [
+        std::string::as_bytes("chunk1"),
+        std::string::as_bytes("chunk2"),
+        std::string::as_bytes("chunk3"),
+        std::string::as_bytes("chunk4")
+    ]
+    let tree = crypto::MerkleTree(data)
+    let root = tree.get_root()
+    
+    print("Merkle Root: " + crypto::to_hex(root))
+    
+    # Prove chunk2 (index 1)
+    let proof = tree.prove(1)
+    print("Proof generated for index 1, length: " + std::list::len(proof).to_string())
+    
+    let ok = tree.verify(proof, root, std::string::as_bytes("chunk2"), 1)
+    if ok {
+        print("Success: Proof verified!")
+    } else {
+        print("FAILURE: Proof verification failed!")
+    }
+    
+    # Test invalid data
+    let nok = tree.verify(proof, root, std::string::as_bytes("corrupted"), 1)
+    if !nok {
+        print("Success: Invalid data detected correctly.")
+    } else {
+        print("FAILURE: Invalid data accepted in proof!")
+    }
+}
+
+fn main() {
+    test_seal_open()
+    test_merkle_proofs()
+}

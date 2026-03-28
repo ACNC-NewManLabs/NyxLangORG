@@ -1,0 +1,96 @@
+/**
+ * HTTP Module
+ * 
+ * Provides HTTP/1.1 server functionality with request/response handling,
+ * routing, and middleware support.
+ * 
+ * @module http
+ * @version 1.0.0
+ */
+
+mod server;
+mod request;
+mod response;
+mod router;
+mod middleware;
+
+/**
+ * HTTP Server type
+ */
+type HttpServer = server::HttpServer;
+
+/**
+ * HTTP Request type
+ */
+type HttpRequest = request::HttpRequest;
+
+/**
+ * HTTP Response type
+ */
+type HttpResponse = response::HttpResponse;
+
+/**
+ * HTTP Router type
+ */
+type Router = router::Router;
+
+/**
+ * HTTP Method type
+ */
+type Method = request::Method;
+
+/**
+ * Route handler type
+ */
+type RouteHandler = server::RouteHandler;
+
+/**
+ * Create a new HTTP server
+ * 
+ * @param host - Host to bind to (default: "0.0.0.0")
+ * @param port - Port to listen on (default: 8080)
+ * @returns A new HTTP server instance
+ * 
+ * @example
+ * let server = HttpServer(port=8080);
+ * server.route("GET", "/", home_handler);
+ * server.start();
+ */
+fn HttpServer(host: string = "0.0.0.0", port: i64 = 8080) -> HttpServer {
+    return server::create(host, port);
+}
+
+/**
+ * Create a new router
+ * 
+ * @returns A new router instance
+ * 
+ * @example
+ * let router = Router();
+ * router.get("/", handler);
+ */
+fn Router() -> Router {
+    return router::create();
+}
+
+// Re-export HTTP methods
+let GET = request::GET;
+let POST = request::POST;
+let PUT = request::PUT;
+let DELETE = request::DELETE;
+let PATCH = request::PATCH;
+let HEAD = request::HEAD;
+let OPTIONS = request::OPTIONS;
+
+// Re-export middleware
+type Middleware = middleware::Middleware;
+type Logger = middleware::Logger;
+type Cors = middleware::Cors;
+type RateLimit = middleware::RateLimit;
+
+// Re-export request helpers
+type QueryParams = request::QueryParams;
+type Headers = request::Headers;
+
+// Re-export response helpers
+type StatusCode = response::StatusCode;

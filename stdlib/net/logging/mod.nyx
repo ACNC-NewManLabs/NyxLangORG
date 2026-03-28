@@ -1,0 +1,89 @@
+/**
+ * Logging Module
+ * 
+ * Provides structured logging functionality with multiple levels and outputs.
+ * 
+ * @module logging
+ * @version 1.0.0
+ */
+
+mod logger;
+
+/**
+ * Logger type
+ */
+type Logger = logger::Logger;
+
+/**
+ * Log level type
+ */
+type Level = logger::Level;
+
+/**
+ * Create a new logger
+ * 
+ * @param name - Logger name
+ * @returns A new logger instance
+ * 
+ * @example
+ * let log = Logger(name="my_app");
+ * log.info("Application started");
+ */
+fn Logger(name: string) -> Logger {
+    return logger::create(name);
+}
+
+// Predefined loggers
+let default_logger = logger::default();
+
+/**
+ * Log debug message
+ * 
+ * @param message - Message to log
+ */
+fn debug(message: string) {
+    default_logger.debug(message);
+}
+
+/**
+ * Log info message
+ * 
+ * @param message - Message to log
+ */
+fn info(message: string) {
+    default_logger.info(message);
+}
+
+/**
+ * Log warning message
+ * 
+ * @param message - Message to log
+ */
+fn warn(message: string) {
+    default_logger.warn(message);
+}
+
+/**
+ * Log error message
+ * 
+ * @param message - Message to log
+ */
+fn error(message: string) {
+    default_logger.error(message);
+}
+
+/**
+ * Log with custom level
+ * 
+ * @param level - Log level
+ * @param message - Message to log
+ */
+fn log(level: Level, message: string) {
+    default_logger.log(level, message);
+}
+
+// Log level constants
+let DEBUG = logger::DEBUG;
+let INFO = logger::INFO;
+let WARN = logger::WARN;
+let ERROR = logger::ERROR;

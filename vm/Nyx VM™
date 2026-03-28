@@ -1,0 +1,168 @@
+# Nyx VM™ Trademark Policy
+
+**Nyx VM™** is a trademark of **Surya Sekhar Roy**.
+
+This document defines acceptable and prohibited uses of the Nyx VM trademark.
+
+---
+
+## 1. Trademark Ownership
+
+The name **Nyx VM™** is claimed as a trademark by Surya Sekhar Roy.
+
+The trademark identifies the official implementation of the Nyx Virtual
+Machine runtime contained in the `nyx-vm` project.
+
+All rights to the Nyx VM trademark are reserved.
+
+---
+
+## 2. Purpose of the Trademark
+
+The Nyx VM trademark exists to ensure that users and developers can
+reliably identify the official Nyx Virtual Machine implementation.
+
+The trademark prevents confusion between the official Nyx VM project
+and third-party or modified runtime implementations.
+
+---
+
+## 3. Permitted Uses
+
+The Nyx VM trademark may be used in the following contexts.
+
+### 3.1 Reference Use
+
+You may reference Nyx VM in documentation, articles, tutorials,
+research papers, or technical discussions.
+
+Examples:
+
+• "This runtime targets the **Nyx VM™**."
+• "Programs compiled for **Nyx VM™** bytecode."
+
+### 3.2 Compatibility Statements
+
+Software may state compatibility with Nyx VM.
+
+Examples:
+
+• "Compatible with **Nyx VM™**."
+• "Runs on the **Nyx VM™ runtime environment**."
+
+Such statements must not imply endorsement or official affiliation.
+
+### 3.3 Academic and Research Use
+
+Universities, students, and researchers may reference Nyx VM in
+academic publications or technical analysis.
+
+---
+
+## 4. Prohibited Uses
+
+Without written permission from Surya Sekhar Roy, the Nyx VM trademark
+may NOT be used for the following purposes.
+
+### 4.1 Fork Branding
+
+Forks or modified versions of the Nyx VM may not use the name
+"Nyx VM" in their project name.
+
+Examples:
+
+Allowed:
+
+MyRuntime (fork of Nyx VM)
+
+Not allowed:
+
+Nyx VM Fork
+Nyx VM Enhanced
+Nyx VM Community Edition
+
+### 4.2 Competing Runtime Branding
+
+The Nyx VM trademark may not be used to name or promote competing
+virtual machine runtimes or execution engines.
+
+Examples of prohibited names:
+
+Nyx VM Pro
+Nyx VM Enterprise
+Nyx VM Cloud Runtime
+
+### 4.3 Commercial Branding
+
+Companies may not use the Nyx VM trademark for product names,
+services, or marketing without written permission.
+
+### 4.4 Misleading Representation
+
+You may not imply that a project is the official Nyx VM project
+if it is not maintained by the trademark owner.
+
+---
+
+## 5. Official Nyx VM Project Identification
+
+The official Nyx VM project may identify itself using statements such as:
+
+Official Nyx VM™ Project
+Maintained by Surya Sekhar Roy
+
+Only the official project maintained by Surya Sekhar Roy may use
+this designation.
+
+---
+
+## 6. Trademark Symbol
+
+The ™ symbol indicates a claimed trademark.
+
+Examples:
+
+Nyx VM™
+Nyx Virtual Machine™
+
+The trademark may later become a registered trademark.
+
+---
+
+## 7. Permission Requests
+
+Requests to use the Nyx VM trademark for commercial purposes
+or branding must be submitted to the trademark owner.
+
+Requests should include:
+
+• the intended use
+• the product or service name
+• distribution details.
+
+---
+
+## 8. Changes to This Policy
+
+This trademark policy may be updated or modified by the author
+to protect the integrity of the Nyx VM project.
+
+---
+
+## 9. Summary
+
+You may:
+
+✔ reference Nyx VM in documentation or research
+✔ state compatibility with Nyx VM
+✔ build software that runs on Nyx VM
+
+You may not:
+
+✘ present modified runtimes as Nyx VM
+✘ use Nyx VM as branding for forks
+✘ create products using the Nyx VM name without permission
+
+---
+
+Nyx VM™ is a trademark of **Surya Sekhar Roy**.

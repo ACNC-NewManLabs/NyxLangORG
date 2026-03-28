@@ -1,0 +1,25 @@
+secure protocol Messaging {
+    roles: Client, Server
+    handshake {
+        Client -> Server: client_hello {
+            version = 1
+        }
+        Server -> Client: server_hello {
+            version = 1
+        }
+        derive {
+            shared_secret = "kdf_result"
+        }
+        finish {
+            notify_ready
+        }
+    }
+}
+
+fn main() {
+    let client = Messaging_Client::new()
+    
+    // ERROR: Calling derive before client_hello/server_hello
+    // The analyzer should catch this (E510)
+    client.step_2_derive()
+}

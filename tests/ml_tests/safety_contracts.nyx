@@ -1,0 +1,57 @@
+import ml;
+
+# --- Nyx Safety Contract Enforcement (Provable Invariants) ---
+
+let contracts = {
+    min_acc: 0.70,
+    max_ece: 0.05,
+    max_rejection_rate: 0.15,
+    max_lat_p99_us: 10.0
+}
+
+fn enforce_safety_contract(current_stats) {
+    println("--- Nyx Formal Safety Audit: Contract Verification ---")
+    
+    let is_contract_satisfied = true
+    
+    # 1. Performance Invariant
+    if current_stats.acc < contracts.min_acc {
+        println("  CONTRACT_VIOLATION: Accuracy ", current_stats.acc, " < ", contracts.min_acc)
+        is_contract_satisfied = false
+    }
+    
+    # 2. Reliability Invariant
+    if current_stats.ece > contracts.max_ece {
+        println("  CONTRACT_VIOLATION: ECE ", current_stats.ece, " > ", contracts.max_ece)
+        is_contract_satisfied = false
+    }
+    
+    # 3. Availability Invariant
+    if current_stats.rejection_rate > contracts.max_rejection_rate {
+        println("  CONTRACT_VIOLATION: Rejection Rate ", current_stats.rejection_rate, " > ", contracts.max_rejection_rate)
+        is_contract_satisfied = false
+    }
+    
+    if is_contract_satisfied {
+        println("  RESULT: SYSTEM_STATE = SAFE (All contracts satisfied)")
+        return true
+    } else {
+        println("  RESULT: SYSTEM_STATE = UNSAFE (Contract broken!)")
+        println("  ACTION: ENTERING DEGRADED_MODE (Rule-Engine Only)")
+        return false
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Nominal System state")
+    let s1 = { acc: 0.85, ece: 0.04, rejection_rate: 0.05, lat_p99: 5.0 }
+    enforce_safety_contract(s1)
+    
+    println("")
+    
+    println("Scenario 2: Contract Violation Table")
+    let s2 = { acc: 0.65, ece: 0.08, rejection_rate: 0.20, lat_p99: 15.0 }
+    enforce_safety_contract(s2)
+}

@@ -1,0 +1,26 @@
+# ─────────────────────────────────────────────────────────────
+# Nyx Tokenizer: High-Performance BPE & WordPiece Bridge
+# ─────────────────────────────────────────────────────────────
+
+fn from_file(path) {
+    let content = std::io::read_file(path);
+    if (content == null) { return null }
+    let config = std::json::deserialize(content);
+    return Tokenizer(config);
+}
+
+fn Tokenizer(config) {
+    return {
+        type: "Tokenizer",
+        config: config,
+
+        encode: fn(self, text) {
+            # Bridge to native BPE/WordPiece logic
+            return std::ml::tokenize_native(self.config, text);
+        },
+
+        decode: fn(self, tokens) {
+            return std::ml::detokenize_native(self.config, tokens);
+        }
+    }
+}

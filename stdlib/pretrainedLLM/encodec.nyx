@@ -1,0 +1,7 @@
+use ml::nn;
+
+fn create(config) {
+    return ml::nn::Sequential([
+        ml::nn::Conv2D(1, 32, 7, 1, 3)
+    ]);
+}

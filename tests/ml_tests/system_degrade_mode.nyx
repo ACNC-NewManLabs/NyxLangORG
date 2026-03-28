@@ -1,0 +1,41 @@
+import ml;
+
+# --- Nyx System-Level Degraded Mode (Fail-Soft Logic) ---
+
+let system_state = { mode: "NOMINAL" }
+
+fn check_health_and_degrade(state, error_spike) {
+    println("--- Nyx Supervisor: Monitoring Global System Health ---")
+    if error_spike > 0.3 {
+        println("  CRITICAL: Error spike detected (", error_spike, " > 0.3)")
+        println("  ACTION: SWITCHING GLOBAL MODE TO DEGRADED.")
+        state.mode = "DEGRADED"
+    } else {
+        println("  INFO: System health stable.")
+    }
+}
+
+fn safe_inference_v2(state, features) {
+    if state.mode == "DEGRADED" {
+        println("  [Safe] System in DEGRADED mode. Routing to Rule-Engine ONLY.")
+        return 0 # Safe default
+    }
+    println("  [Safe] System NOMINAL. Routing to Primary ML Model.")
+    return 1 # Model output
+}
+
+# --- Test Case ---
+
+fn main() {
+    let state = { mode: "NOMINAL" }
+    
+    println("Scenario 1: Stable System")
+    check_health_and_degrade(state, 0.05)
+    safe_inference_v2(state, [0.5, 0.5])
+    
+    println("")
+    
+    println("Scenario 2: Global Incident Spike")
+    check_health_and_degrade(state, 0.45) # Trigger spike
+    safe_inference_v2(state, [0.5, 0.5])
+}

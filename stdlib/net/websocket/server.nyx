@@ -1,0 +1,717 @@
+/**
+ * WebSocket Server Implementation
+ * 
+ * Provides WebSocket server functionality with handshake, messaging, and broadcasting.
+ * 
+ * @module websocket::server
+ */
+
+import tcp.server as tcp_server;
+
+type WebSocketServer = {
+    host: string,
+    port: i64,
+    tcp_server: any,
+    connections: List<WebSocketConnection>,
+    on_connect_handler: fn(WebSocketConnection)?,
+    on_message_handler: fn(WebSocketConnection, WebSocketMessage)?,
+    on_close_handler: fn(WebSocketConnection)?,
+    on_error_handler: fn(WebSocketConnection, any)?,
+    ping_interval: i64,
+    ping_timeout: i64,
+    max_payload_size: i64,
+    running: bool
+};
+
+type WebSocketConnection = {
+    id: i64,
+    socket: any,
+    connected: bool,
+    remote_address: string,
+    subprotocol: string?,
+    extensions: Map<string, string>,
+    groups: List<string>,
+    created_at: i64,
+    last_ping: i64,
+    last_pong: i64
+};
+
+type WebSocketMessage = {
+    type: MessageType,
+    data: string,
+    opcode: i64
+};
+
+type MessageType = 
+    | "text"
+    | "binary"
+    | "close"
+    | "ping"
+    | "pong";
+
+// WebSocket opcodes
+let OP_CONTINUATION = 0x0;
+let OP_TEXT = 0x1;
+let OP_BINARY = 0x2;
+let OP_CLOSE = 0x8;
+let OP_PING = 0x9;
+let OP_PONG = 0xA;
+
+let next_connection_id: i64 = 0;
+
+/**
+ * Create a new WebSocket server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns A new WebSocket server
+ */
+fn create(host: string, port: i64) -> WebSocketServer {
+    return WebSocketServer {
+        host: host,
+        port: port,
+        tcp_server: none,
+        connections: [],
+        on_connect_handler: none,
+        on_message_handler: none,
+        on_close_handler: none,
+        on_error_handler: none,
+        ping_interval: 30000,  // 30 seconds
+        ping_timeout: 5000,   // 5 seconds
+        max_payload_size: 16777216,  // 16MB
+        running: false
+    };
+}
+
+/**
+ * Create WebSocket server from HTTP server
+ */
+fn from_http(http_server: any) -> WebSocketServer {
+    return create("0.0.0.0", 0);
+}
+
+/**
+ * Set connect handler
+ * 
+ * @param server - The WebSocket server
+ * @param handler - Handler for new connections
+ * @returns The same server for chaining
+ */
+fn on_connect(server: WebSocketServer, handler: fn(WebSocketConnection)) -> WebSocketServer {
+    server.on_connect_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set message handler
+ * 
+ * @param server - The WebSocket server
+ * @param handler - Handler for incoming messages
+ * @returns The same server for chaining
+ */
+fn on_message(server: WebSocketServer, handler: fn(WebSocketConnection, WebSocketMessage)) -> WebSocketServer {
+    server.on_message_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set close handler
+ * 
+ * @param server - The WebSocket server
+ * @param handler - Handler for closed connections
+ * @returns The same server for chaining
+ */
+fn on_close(server: WebSocketServer, handler: fn(WebSocketConnection)) -> WebSocketServer {
+    server.on_close_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set error handler
+ * 
+ * @param server - The WebSocket server
+ * @param handler - Handler for errors
+ * @returns The same server for chaining
+ */
+fn on_error(server: WebSocketServer, handler: fn(WebSocketConnection, any)) -> WebSocketServer {
+    server.on_error_handler = some(handler);
+    return server;
+}
+
+/**
+ * Set ping interval
+ * 
+ * @param server - The WebSocket server
+ * @param interval_ms - Interval in milliseconds
+ * @returns The same server for chaining
+ */
+fn ping_interval(server: WebSocketServer, interval_ms: i64) -> WebSocketServer {
+    server.ping_interval = interval_ms;
+    return server;
+}
+
+/**
+ * Set maximum payload size
+ * 
+ * @param server - The WebSocket server
+ * @param size - Maximum size in bytes
+ * @returns The same server for chaining
+ */
+fn max_payload_size(server: WebSocketServer, size: i64) -> WebSocketServer {
+    server.max_payload_size = size;
+    return server;
+}
+
+/**
+ * Start the WebSocket server
+ * 
+ * @param server - The WebSocket server
+ * @returns Whether the server started
+ */
+fn start(server: WebSocketServer) -> bool {
+    if server.running {
+        return false;
+    }
+    
+    // Create TCP server
+    let tcp = tcp_server::create(server.host, server.port);
+    
+    tcp_server::on_connect(tcp, fn(conn: tcp_server::TcpConnection) {
+        handle_tcp_connection(server, conn);
+    });
+    
+    if !tcp_server::start(tcp) {
+        return false;
+    }
+    
+    server.tcp_server = some(tcp);
+    server.running = true;
+    
+    return true;
+}
+
+/**
+ * Stop the WebSocket server
+ * 
+ * @param server - The WebSocket server
+ */
+fn stop(server: WebSocketServer) {
+    if !server.running {
+        return;
+    }
+    
+    // Close all connections
+    for conn in server.connections {
+        close(conn);
+    }
+    
+    server.connections = [];
+    
+    if server.tcp_server != none {
+        tcp_server::stop(server.tcp_server as any);
+    }
+    
+    server.running = false;
+}
+
+/**
+ * Handle incoming TCP connection
+ */
+fn handle_tcp_connection(server: WebSocketServer, conn: tcp_server::TcpConnection) {
+    // Read HTTP upgrade request
+    let data = tcp_server::read(conn, 8192);
+    
+    // Parse WebSocket handshake
+    let handshake = parse_handshake(data);
+    let key = handshake[0];
+    let proto = handshake[1];
+    
+    if key == "" {
+        tcp_server::close_connection(conn);
+        return;
+    }
+    
+    // Send handshake response
+    let response = build_handshake_response(key, proto);
+    tcp_server::write(conn, response);
+    
+    // Create WebSocket connection
+    next_connection_id = next_connection_id + 1;
+    
+    let ws_conn = WebSocketConnection {
+        id: next_connection_id,
+        socket: some(conn),
+        connected: true,
+        remote_address: tcp_server::get_remote_address(conn),
+        subprotocol: proto,
+        extensions: {},
+        groups: [],
+        created_at: current_time_ms(),
+        last_ping: current_time_ms(),
+        last_pong: current_time_ms()
+    };
+    
+    // Add to connections
+    server.connections = server.connections + [ws_conn];
+    
+    // Call connect handler
+    if server.on_connect_handler != none {
+        let handler = server.on_connect_handler as fn(WebSocketConnection);
+        handler(ws_conn);
+    }
+    
+    // Start message loop
+    message_loop(server, ws_conn);
+}
+
+/**
+ * Main message handling loop
+ */
+fn message_loop(server: WebSocketServer, conn: WebSocketConnection) {
+    while conn.connected {
+        // Read frame
+        let data = tcp_server::read(conn.socket as any, 8192);
+        
+        if data == "" {
+            // Connection closed
+            break;
+        }
+        
+        // Parse frame
+        let msg = parse_frame(data, conn);
+        
+        if msg.type == "close" {
+            // Close connection
+            send_close(conn, 1000, "");
+            break;
+        } else if msg.type == "ping" {
+            // Respond with pong
+            send_pong(conn, msg.data);
+        } else if msg.type == "text" || msg.type == "binary" {
+            // Call message handler
+            if server.on_message_handler != none {
+                let handler = server.on_message_handler as fn(WebSocketConnection, WebSocketMessage);
+                handler(conn, msg);
+            }
+        }
+        
+        // Update last pong time
+        conn.last_pong = current_time_ms();
+    }
+    
+    // Connection closed
+    remove_connection(server, conn);
+    
+    if server.on_close_handler != none {
+        let handler = server.on_close_handler as fn(WebSocketConnection);
+        handler(conn);
+    }
+}
+
+/**
+ * Parse WebSocket handshake
+ */
+fn parse_handshake(data: string) -> (string, string?) {
+    let lines = split(data, "\r\n");
+    
+    let mut key = "";
+    let mut proto = none;
+    
+    for line in lines {
+        if starts_with(line, "Sec-WebSocket-Key:") {
+            key = trim(substring(line, 17, len(line)));
+        } else if starts_with(line, "Sec-WebSocket-Protocol:") {
+            proto = some(trim(substring(line, 22, len(line))));
+        }
+    }
+    
+    return (key, proto);
+}
+
+/**
+ * Build handshake response
+ */
+fn build_handshake_response(key: string, proto: string?) -> string {
+    let accept = generate_accept(key);
+    
+    let mut response = "HTTP/1.1 101 Switching Protocols\r\n";
+    response = response + "Upgrade: websocket\r\n";
+    response = response + "Connection: Upgrade\r\n";
+    response = response + "Sec-WebSocket-Accept: " + accept + "\r\n";
+    
+    if proto != none {
+        response = response + "Sec-WebSocket-Protocol: " + (proto as string) + "\r\n";
+    }
+    
+    response = response + "\r\n";
+    
+    return response;
+}
+
+/**
+ * Generate Sec-WebSocket-Accept value
+ */
+fn generate_accept(key: string) -> string {
+    let magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    return __native_sha1_base64(key + magic);
+}
+
+/**
+ * Parse WebSocket frame
+ */
+fn parse_frame(data: string, conn: WebSocketConnection) -> WebSocketMessage {
+    // Simplified frame parsing
+    let first_byte = char_at(data, 0);
+    let opcode = first_byte & 0x0F;
+    
+    if opcode == OP_TEXT {
+        return WebSocketMessage {
+            type: "text",
+            data: substring(data, 2, len(data)),
+            opcode: opcode
+        };
+    } else if opcode == OP_BINARY {
+        return WebSocketMessage {
+            type: "binary",
+            data: substring(data, 2, len(data)),
+            opcode: opcode
+        };
+    } else if opcode == OP_CLOSE {
+        return WebSocketMessage {
+            type: "close",
+            data: "",
+            opcode: opcode
+        };
+    } else if opcode == OP_PING {
+        return WebSocketMessage {
+            type: "ping",
+            data: substring(data, 2, len(data)),
+            opcode: opcode
+        };
+    } else if opcode == OP_PONG {
+        return WebSocketMessage {
+            type: "pong",
+            data: substring(data, 2, len(data)),
+            opcode: opcode
+        };
+    }
+    
+    return WebSocketMessage {
+        type: "text",
+        data: "",
+        opcode: opcode
+    };
+}
+
+/**
+ * Send message to connection
+ * 
+ * @param conn - The WebSocket connection
+ * @param message - Message to send
+ */
+fn send(conn: WebSocketConnection, message: WebSocketMessage) {
+    if !conn.connected {
+        return;
+    }
+    
+    let opcode = if message.type == "text" { OP_TEXT } else { OP_BINARY };
+    let frame = build_frame(opcode, message.data);
+    
+    tcp_server::write(conn.socket as any, frame);
+}
+
+/**
+ * Send text message
+ */
+fn send_text(conn: WebSocketConnection, text: string) {
+    send(conn, WebSocketMessage {
+        type: "text",
+        data: text,
+        opcode: OP_TEXT
+    });
+}
+
+/**
+ * Send binary message
+ */
+fn send_binary(conn: WebSocketConnection, data: string) {
+    send(conn, WebSocketMessage {
+        type: "binary",
+        data: data,
+        opcode: OP_BINARY
+    });
+}
+
+/**
+ * Send close frame
+ */
+fn send_close(conn: WebSocketConnection, code: i64, reason: string) {
+    let data = build_close_payload(code, reason);
+    
+    let msg = WebSocketMessage {
+        type: "close",
+        data: data,
+        opcode: OP_CLOSE
+    };
+    
+    send(conn, msg);
+    conn.connected = false;
+}
+
+/**
+ * Send ping
+ */
+fn send_ping(conn: WebSocketConnection, data: string) {
+    let msg = WebSocketMessage {
+        type: "ping",
+        data: data,
+        opcode: OP_PING
+    };
+    
+    send(conn, msg);
+}
+
+/**
+ * Send pong
+ */
+fn send_pong(conn: WebSocketConnection, data: string) {
+    let msg = WebSocketMessage {
+        type: "pong",
+        data: data,
+        opcode: OP_PONG
+    };
+    
+    send(conn, msg);
+}
+
+/**
+ * Build WebSocket frame
+ */
+fn build_frame(opcode: i64, payload: string) -> string {
+    let mut frame = "";
+    
+    // First byte: FIN + opcode
+    let first = 0x80 | opcode;
+    frame = frame + chr(first);
+    
+    // Second byte: mask + payload length
+    let mut length = len(payload);
+    
+    if length < 126 {
+        frame = frame + chr(length);
+    } else if length < 65536 {
+        frame = frame + chr(126);
+        frame = frame + chr((length >> 8) & 0xFF);
+        frame = frame + chr(length & 0xFF);
+    } else {
+        frame = frame + chr(127);
+        // Would add 8-byte length
+    }
+    
+    // Add payload
+    frame = frame + payload;
+    
+    return frame;
+}
+
+/**
+ * Build close frame payload
+ */
+fn build_close_payload(code: i64, reason: string) -> string {
+    let mut data = "";
+    
+    data = data + chr((code >> 8) & 0xFF);
+    data = data + chr(code & 0xFF);
+    data = data + reason;
+    
+    return data;
+}
+
+/**
+ * Broadcast message to all connections
+ */
+fn broadcast(server: WebSocketServer, message: WebSocketMessage) {
+    for conn in server.connections {
+        if conn.connected {
+            send(conn, message);
+        }
+    }
+}
+
+/**
+ * Broadcast to group
+ */
+fn broadcast_to_group(server: WebSocketServer, group: string, message: WebSocketMessage) {
+    for conn in server.connections {
+        if conn.connected && contains_group(conn, group) {
+            send(conn, message);
+        }
+    }
+}
+
+/**
+ * Add connection to group
+ */
+fn add_to_group(conn: WebSocketConnection, group: string) {
+    if !contains_group(conn, group) {
+        conn.groups = conn.groups + [group];
+    }
+}
+
+/**
+ * Remove connection from group
+ */
+fn remove_from_group(conn: WebSocketConnection, group: string) {
+    let mut new_groups: List<string> = [];
+    
+    for g in conn.groups {
+        if g != group {
+            new_groups = new_groups + [g];
+        }
+    }
+    
+    conn.groups = new_groups;
+}
+
+/**
+ * Check if connection is in group
+ */
+fn contains_group(conn: WebSocketConnection, group: string) -> bool {
+    for g in conn.groups {
+        if g == group {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Close connection
+ */
+fn close(conn: WebSocketConnection) {
+    if !conn.connected {
+        return;
+    }
+    
+    send_close(conn, 1000, "");
+    conn.connected = false;
+}
+
+/**
+ * Remove connection from server
+ */
+fn remove_connection(server: WebSocketServer, conn: WebSocketConnection) {
+    conn.connected = false;
+    
+    let mut remaining: List<WebSocketConnection> = [];
+    
+    for c in server.connections {
+        if c.id != conn.id {
+            remaining = remaining + [c];
+        }
+    }
+    
+    server.connections = remaining;
+}
+
+// Helper functions
+
+fn split(s: string, delimiter: string) -> List<string> {
+    let mut parts: List<string> = [];
+    if delimiter.length() == 0 {
+        return [s];
+    }
+    let mut current = "";
+    let mut i = 0;
+    while i < s.length() {
+        if i + delimiter.length() <= s.length() && substring(s, i, i + delimiter.length()) == delimiter {
+            parts = parts + [current];
+            current = "";
+            i = i + delimiter.length();
+        } else {
+            current = current + s[i];
+            i = i + 1;
+        }
+    }
+    parts = parts + [current];
+    return parts;
+}
+
+fn starts_with(s: string, prefix: string) -> bool {
+    if prefix.length() > s.length() {
+        return false;
+    }
+    return substring(s, 0, prefix.length()) == prefix;
+}
+
+fn substring(s: string, start: i64, end: i64) -> string {
+    let mut out = "";
+    let mut i = start;
+    let mut stop = end;
+    if stop > s.length() {
+        stop = s.length();
+    }
+    if i < 0 {
+        i = 0;
+    }
+    while i < stop {
+        out = out + s[i];
+        i = i + 1;
+    }
+    return out;
+}
+
+fn trim(s: string) -> string {
+    if s.length() == 0 {
+        return s;
+    }
+    let start = 0;
+    let end = s.length() - 1;
+    while start < s.length() && is_whitespace(s[start]) {
+        start = start + 1;
+    }
+    while end >= 0 && is_whitespace(s[end]) {
+        end = end - 1;
+    }
+    if end < start {
+        return "";
+    }
+    return substring(s, start, end + 1);
+}
+
+fn len(s: string) -> i64 {
+    return s.length();
+}
+
+fn char_at(s: string, index: i64) -> i64 {
+    if index < 0 or index >= s.length() {
+        return 0;
+    }
+    return s[index];
+}
+
+fn chr(code: i64) -> string {
+    let mut s = "";
+    s = s + code;
+    return s;
+}
+
+fn contains(list: List<string>, item: string) -> bool {
+    for v in list {
+        if v == item {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn current_time_ms() -> i64 {
+    return __native_time_ms();
+}
+
+fn is_whitespace(c: i64) -> bool {
+    return c == 32 || c == 9 || c == 10 || c == 13;
+}
+
+fn __native_sha1_base64(data: string) -> string;
+fn __native_time_ms() -> i64;

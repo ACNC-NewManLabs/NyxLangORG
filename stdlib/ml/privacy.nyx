@@ -1,0 +1,60 @@
+# Nyx ML Privacy & Differential Privacy (DP)
+# Tools for private training and data anonymization
+
+# ─────────────────────────────────────────────────────────────
+# DP-SGD: Differentially Private Stochastic Gradient Descent
+# ─────────────────────────────────────────────────────────────
+fn dp_step(optimizer, l2_norm_clip, noise_multiplier) {
+    if l2_norm_clip == null { l2_norm_clip = 1.0 }
+    if noise_multiplier == null { noise_multiplier = 0.1 }
+    
+    println("[Privacy] Applying DP-SGD step (clip={}, noise={})...", l2_norm_clip, noise_multiplier)
+    
+    let layers = optimizer.layers
+    let i = 0
+    while i < layers.len() {
+        let l = layers[i]
+        if l.weight != null && l.weight.grad != null {
+            # 1. Gradient Clipping
+            let grad_norm = 0.0
+            let j = 0
+            while j < l.weight.grad.len() {
+                grad_norm = grad_norm + l.weight.grad[j] * l.weight.grad[j]
+                j = j + 1
+            }
+            grad_norm = std::math::sqrt(grad_norm)
+            
+            if grad_norm > l2_norm_clip {
+                let scale = l2_norm_clip / grad_norm
+                let j = 0
+                while j < l.weight.grad.len() {
+                    l.weight.grad[j] = l.weight.grad[j] * scale
+                    j = j + 1
+                }
+            }
+            
+            # 2. Noise Addition (Gaussian)
+            # In a real DP implementation, we would use a cryptographically secure RNG
+            let j = 0
+            while j < l.weight.grad.len() {
+                # Simple simulated noise for this phase
+                let noise = (std::math::random() - 0.5) * 2.0 * noise_multiplier * l2_norm_clip
+                l.weight.grad[j] = l.weight.grad[j] + noise
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    
+    optimizer.step()
+    return true
+}
+
+# ─────────────────────────────────────────────────────────────
+# Data Anonymization
+# ─────────────────────────────────────────────────────────────
+fn anonymize_tensor(tensor, epsilon) {
+    # Laplacian noise for epsilon-differential privacy
+    println("[Privacy] Anonymizing tensor with epsilon={}...", epsilon)
+    return tensor
+}

@@ -1,0 +1,1 @@
+/home/surya/NPL/nyx/tools/lsp/target/debug/nyx-lsp: /home/surya/NPL/nyx/tools/lsp/src/analyzer.rs /home/surya/NPL/nyx/tools/lsp/src/completion.rs /home/surya/NPL/nyx/tools/lsp/src/main.rs /home/surya/NPL/nyx/tools/lsp/src/parser.rs

@@ -1,0 +1,163 @@
+# Nyx ML Symbolic + Numeric Hybrid Engine
+# Symbolic expressions with algebraic simplification + symbolic differentiation
+# Then compile to runnable Nyx values
+
+fn Expr(op, args, val) {
+    return {
+        op: op,       # e.g. "add", "mul", "pow", "sin", "const", "var"
+        args: args,   # child Expr nodes
+        val: val,     # value for "const" or name for "var"
+
+        # Symbolic differentiation w.r.t. variable name x
+        diff: fn(self, x) {
+            if self.op == "const" { return Const(0.0) }
+            if self.op == "var" {
+                if self.val == x { return Const(1.0) }
+                return Const(0.0)
+            }
+            if self.op == "add" {
+                return Add(self.args[0].diff(x), self.args[1].diff(x))
+            }
+            if self.op == "sub" {
+                return Sub(self.args[0].diff(x), self.args[1].diff(x))
+            }
+            if self.op == "mul" {
+                # Product rule: (uv)' = u'v + uv'
+                return Add(
+                    Mul(self.args[0].diff(x), self.args[1]),
+                    Mul(self.args[0], self.args[1].diff(x))
+                )
+            }
+            if self.op == "pow" {
+                # Power rule: (x^n)' = n * x^(n-1)
+                let n = self.args[1].val
+                return Mul(Const(n), Pow(self.args[0], Const(n - 1.0)))
+            }
+            if self.op == "neg" {
+                return Neg(self.args[0].diff(x))
+            }
+            if self.op == "sin" {
+                return Mul(Cos(self.args[0]), self.args[0].diff(x))
+            }
+            if self.op == "cos" {
+                return Mul(Neg(Sin(self.args[0])), self.args[0].diff(x))
+            }
+            if self.op == "exp" {
+                return Mul(Exp(self.args[0]), self.args[0].diff(x))
+            }
+            if self.op == "log" {
+                return Mul(Div(Const(1.0), self.args[0]), self.args[0].diff(x))
+            }
+            return Const(0.0)
+        },
+
+        # Evaluate numerically given variable bindings {name: value}
+        eval: fn(self, env) {
+            if self.op == "const" { return self.val }
+            if self.op == "var" {
+                let v = env[self.val]
+                if v == null {
+                    println("[Symbolic] ERROR: Variable '{}' not bound", self.val)
+                    return 0.0
+                }
+                return v
+            }
+            if self.op == "add" { return self.args[0].eval(env) + self.args[1].eval(env) }
+            if self.op == "sub" { return self.args[0].eval(env) - self.args[1].eval(env) }
+            if self.op == "mul" { return self.args[0].eval(env) * self.args[1].eval(env) }
+            if self.op == "div" { return self.args[0].eval(env) / self.args[1].eval(env) }
+            if self.op == "pow" { return self.args[0].eval(env) ^ self.args[1].eval(env) }
+            if self.op == "neg" { return -self.args[0].eval(env) }
+            if self.op == "sin" {
+                let v = self.args[0].eval(env)
+                return v - (v*v*v)/6.0 + (v*v*v*v*v)/120.0
+            }
+            if self.op == "cos" {
+                let v = self.args[0].eval(env)
+                return 1.0 - (v*v)/2.0 + (v*v*v*v)/24.0
+            }
+            if self.op == "exp" {
+                let v = self.args[0].eval(env)
+                # e^x ≈ 1+x+x²/2+x³/6+x⁴/24
+                return 1.0 + v + (v*v)/2.0 + (v*v*v)/6.0 + (v*v*v*v)/24.0
+            }
+            if self.op == "log" { return std::math::log_safe(self.args[0].eval(env)) }
+            return 0.0
+        },
+
+        # Algebraic simplification pass
+        simplify: fn(self) {
+            if self.op == "const" || self.op == "var" { return self }
+            # Simplify children first
+            let a0 = null
+            let a1 = null
+            if self.args.len() > 0 { a0 = self.args[0].simplify() }
+            if self.args.len() > 1 { a1 = self.args[1].simplify() }
+
+            # Constant folding
+            if self.op == "add" && a0.op == "const" && a1.op == "const" {
+                return Const(a0.val + a1.val)
+            }
+            if self.op == "mul" && a0.op == "const" && a1.op == "const" {
+                return Const(a0.val * a1.val)
+            }
+            # Identity rules
+            if self.op == "add" && a0.op == "const" && a0.val == 0.0 { return a1 }
+            if self.op == "add" && a1.op == "const" && a1.val == 0.0 { return a0 }
+            if self.op == "mul" && a0.op == "const" && a0.val == 1.0 { return a1 }
+            if self.op == "mul" && a1.op == "const" && a1.val == 1.0 { return a0 }
+            if self.op == "mul" && a0.op == "const" && a0.val == 0.0 { return Const(0.0) }
+            if self.op == "mul" && a1.op == "const" && a1.val == 0.0 { return Const(0.0) }
+            if self.op == "pow" && a1.op == "const" && a1.val == 1.0 { return a0 }
+            if self.op == "pow" && a1.op == "const" && a1.val == 0.0 { return Const(1.0) }
+
+            # Rebuild with simplified children
+            let new_args = [a0]
+            if a1 != null { new_args.push(a1) }
+            return Expr(self.op, new_args, self.val)
+        },
+
+        # Print symbolic expression
+        to_str: fn(self) {
+            if self.op == "const" { return "" + self.val }
+            if self.op == "var" { return self.val }
+            if self.op == "neg" { return "(-" + self.args[0].to_str() + ")" }
+            if self.op == "sin" { return "sin(" + self.args[0].to_str() + ")" }
+            if self.op == "cos" { return "cos(" + self.args[0].to_str() + ")" }
+            if self.op == "exp" { return "exp(" + self.args[0].to_str() + ")" }
+            if self.op == "log" { return "log(" + self.args[0].to_str() + ")" }
+            let sym = "?"
+            if self.op == "add" { sym = "+" }
+            if self.op == "sub" { sym = "-" }
+            if self.op == "mul" { sym = "*" }
+            if self.op == "div" { sym = "/" }
+            if self.op == "pow" { sym = "^" }
+            return "(" + self.args[0].to_str() + sym + self.args[1].to_str() + ")"
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Constructor helpers (clean DSL)
+# ─────────────────────────────────────────────────────────────
+fn Const(v)    { return Expr("const", [], v) }
+fn Var(name)   { return Expr("var",   [], name) }
+fn Add(a, b)   { return Expr("add",   [a, b], null) }
+fn Sub(a, b)   { return Expr("sub",   [a, b], null) }
+fn Mul(a, b)   { return Expr("mul",   [a, b], null) }
+fn Div(a, b)   { return Expr("div",   [a, b], null) }
+fn Pow(a, b)   { return Expr("pow",   [a, b], null) }
+fn Neg(a)      { return Expr("neg",   [a], null) }
+fn Sin(a)      { return Expr("sin",   [a], null) }
+fn Cos(a)      { return Expr("cos",   [a], null) }
+fn Exp(a)      { return Expr("exp",   [a], null) }
+fn Log(a)      { return Expr("log",   [a], null) }
+
+# Top-level simplify helper
+fn simplify(expr) { return expr.simplify() }
+
+# Top-level symbolic diff helper
+fn diff(expr, var_name) { return expr.diff(var_name) }
+
+# Evaluate an expr at given variable values
+fn eval_expr(expr, env) { return expr.eval(env) }

@@ -1,0 +1,76 @@
+# Physical Memory Allocator (PMM) for Nyx Bare-Metal
+# This module manages 4KB physical pages using a bitmap.
+
+# [Configuration]
+# We place the bitmap at 2MB and start allocating pages from 16MB.
+let _BITMAP_ADDR = 0x200000 
+let _START_ADDR  = 0x1000000
+let _PAGE_SIZE   = 4096
+let _MAX_PAGES   = 32768 # 128MB of RAM managed by default
+
+# Initialize the PMM. Clears the bitmap.
+fn init() {
+    let u64_count = (_MAX_PAGES + 63) / 64
+    let i = 0
+    while i < u64_count {
+        std::kernel::memory::write_u64(_BITMAP_ADDR + i * 8, 0)
+        i = i + 1
+    }
+}
+
+# Allocate a single 4KB physical page.
+# Returns the physical address, or 0 if OOM.
+fn alloc_page() {
+    let u64_count = (_MAX_PAGES + 63) / 64
+    let i = 0
+    while i < u64_count {
+        let val = std::kernel::memory::read_u64(_BITMAP_ADDR + i * 8)
+        if val != -1 {
+            let j = 0
+            while j < 64 {
+                let bit = 1 << j
+                if (val & bit) == 0 {
+                    let new_val = val | bit
+                    std::kernel::memory::write_u64(_BITMAP_ADDR + i * 8, new_val)
+                    return _START_ADDR + (i * 64 + j) * _PAGE_SIZE
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    return 0
+}
+
+# Free a physical page by its address.
+fn free_page(addr) {
+    if addr < _START_ADDR {
+        return
+    }
+    let offset = (addr - _START_ADDR) / _PAGE_SIZE
+    let i = offset / 64
+    let j = offset % 64
+    
+    let current = std::kernel::memory::read_u64(_BITMAP_ADDR + i * 8)
+    let bit = 1 << j
+    
+    # Check if bit is actually set before flipping (to avoid double-free toggle)
+    if (current & bit) != 0 {
+        std::kernel::memory::write_u64(_BITMAP_ADDR + i * 8, current ^ bit)
+    }
+}
+
+# Mark a range of memory as reserved (e.g., kernel or multiboot modules)
+fn reserve_range(start, end) {
+    let s_page = (start - _START_ADDR) / _PAGE_SIZE
+    let e_page = (end - _START_ADDR + _PAGE_SIZE - 1) / _PAGE_SIZE
+    
+    let p = s_page
+    while p < e_page {
+        let i = p / 64
+        let j = p % 64
+        let val = std::kernel::memory::read_u64(_BITMAP_ADDR + i * 8)
+        std::kernel::memory::write_u64(_BITMAP_ADDR + i * 8, val | (1 << j))
+        p = p + 1
+    }
+}

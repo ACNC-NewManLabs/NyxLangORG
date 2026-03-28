@@ -1,0 +1,25 @@
+# Test Native Math Functions
+fn main() {
+    println("--- Testing std::math Natives ---")
+    
+    let a = [1.0, 2.0, 3.0]
+    let b = [4.0, 5.0, 6.0]
+    
+    let dot = std::math::dot(a, b)
+    println("Dot Product (1*4 + 2*5 + 3*6 = 32): {}", dot)
+    
+    let add = std::math::mat_add(a, b)
+    println("Mat Add ([5, 7, 9]): {}", add)
+    
+    let relu_test = std::math::relu(-5.0)
+    println("ReLU(-5.0) (0.0): {}", relu_test)
+    
+    let sig_test = std::math::sigmoid(0.0)
+    println("Sigmoid(0.0) (0.5): {}", sig_test)
+    
+    if dot == 32.0 {
+        println("SUCCESS: Native math kernels are functional.")
+    } else {
+        println("FAILURE: Native math returned {}", dot)
+    }
+}

@@ -1,0 +1,173 @@
+import ml;
+import std::df;
+
+# --- Helper: Advanced Statistics ---
+
+fn sort_array(arr) {
+    let indices = std::df::col_sort(arr, false) # ascending
+    let sorted = []
+    let i = 0
+    while i < indices.len() {
+        sorted.push(arr[indices[i]])
+        i = i + 1
+    }
+    return sorted
+}
+
+fn ks_test(arr1, arr2) {
+    let n1 = arr1.len()
+    let n2 = arr2.len()
+    if n1 == 0 || n2 == 0 { return 0.0 }
+    
+    let s1 = sort_array(arr1)
+    let s2 = sort_array(arr2)
+    
+    let i = 0
+    let j = 0
+    let max_d = 0.0
+    
+    while i < n1 || j < n2 {
+        let val = 0.0
+        if i < n1 && j < n2 {
+            if s1[i] < s2[j] { val = s1[i] } else { val = s2[j] }
+        } else if i < n1 {
+            val = s1[i]
+        } else {
+            val = s2[j]
+        }
+        
+        # Advance pointers
+        while i < n1 && s1[i] <= val { i = i + 1 }
+        while j < n2 && s2[j] <= val { j = j + 1 }
+        
+        # Calculate ECDF diff
+        let e1 = i * 1.0 / n1
+        let e2 = j * 1.0 / n2
+        let diff = std::math::abs(e1 - e2)
+        if diff > max_d { max_d = diff }
+    }
+    
+    return max_d
+}
+
+fn _get_counts(arr, thresh) {
+    let counts = []
+    let i = 0
+    while i <= thresh.len() { counts.push(0) i = i + 1 }
+    
+    let j = 0
+    while j < arr.len() {
+        let val = arr[j]
+        let placed = false
+        let k = 0
+        while k < thresh.len() {
+            if val <= thresh[k] {
+                counts[k] = counts[k] + 1
+                placed = true
+                break
+            }
+            k = k + 1
+        }
+        if (!placed) { counts[thresh.len()] = counts[thresh.len()] + 1 }
+        j = j + 1
+    }
+    return counts
+}
+
+fn psi(train_arr, live_arr, n_bins) {
+    if n_bins == null { n_bins = 10 }
+    let n_train = train_arr.len()
+    let n_live = live_arr.len()
+    if n_train == 0 || n_live == 0 { return 0.0 }
+    
+    let s_train = sort_array(train_arr)
+    
+    # 1. Define bins based on training deciles
+    let thresholds = []
+    let b = 1
+    while b < n_bins {
+        let idx = (n_train * b / n_bins)
+        thresholds.push(s_train[idx])
+        b = b + 1
+    }
+    
+    # 2. Count in bins
+    let train_counts = _get_counts(train_arr, thresholds)
+    let live_counts = _get_counts(live_arr, thresholds)
+    
+    # 3. Calculate PSI
+    let psi_total = 0.0
+    let k = 0
+    while k < train_counts.len() {
+        let actual_per = live_counts[k] * 1.0 / n_live
+        let expected_per = train_counts[k] * 1.0 / n_train
+        
+        # Add small epsilon to avoid div zero / log zero
+        if expected_per == 0 { expected_per = 0.0001 }
+        if actual_per == 0 { actual_per = 0.0001 }
+        
+        let diff = actual_per - expected_per
+        let ratio = actual_per / expected_per
+        let log_ratio = std::math::log(ratio)
+        psi_total = psi_total + (diff * log_ratio)
+        k = k + 1
+    }
+    
+    return psi_total
+}
+
+fn _randn() { 
+    let a = std::math::randn_array(1)
+    if a == null { return 0.0 }
+    return a[0] 
+}
+
+fn round_4(val) {
+    if val == null { return 0.0 }
+    return std::math::round(val * 10000.0) / 10000.0
+}
+
+# --- Test Case ---
+
+fn test_advanced_drift() {
+    println("--- Testing Advanced Distribution Drift (KS & PSI) ---")
+    
+    # 1. Normal Distribution (Target)
+    let train = []
+    let i = 0
+    while i < 100 { train.push(_randn()) i = i + 1 }
+    
+    # 2. Same Distribution (Live)
+    let live_stable = []
+    let i = 0
+    while i < 100 { live_stable.push(_randn()) i = i + 1 }
+    
+    # 3. Shifted Distribution (Live - Mean Shift)
+    let live_shifted = []
+    let i = 0
+    while i < 100 { live_shifted.push(_randn() + 1.5) i = i + 1 }
+    
+    # 4. Same Mean, Different Shape (Live - High Variance)
+    let live_variance = []
+    let i = 0
+    while i < 100 { live_variance.push(_randn() * 3.0) i = i + 1 }
+    
+    println("Checking STABLE distribution...")
+    let b_ks = ks_test(train, live_stable)
+    let b_psi = psi(train, live_stable, 10)
+    println("  KS: ", round_4(b_ks), " PSI: ", round_4(b_psi))
+    
+    println("Checking SHIFTED distribution (Mean shift)...")
+    let s_ks = ks_test(train, live_shifted)
+    let s_psi = psi(train, live_shifted, 10)
+    println("  KS: ", round_4(s_ks), " PSI: ", round_4(s_psi))
+    
+    println("Checking SHAPE change (Variance shift, same mean)...")
+    let v_ks = ks_test(train, live_variance)
+    let v_psi = psi(train, live_variance, 10)
+    println("  KS: ", round_4(v_ks), " PSI: ", round_4(v_psi))
+}
+
+fn main() {
+    test_advanced_drift()
+}

@@ -1,0 +1,240 @@
+# Nyx Dataframe Engine: Expression DSL
+# Expressions are composable, lazy, and represent a computation tree.
+# They are evaluated by the LazyFrame engine during collect().
+
+fn Expr(kind, value, args) {
+    # kind: "col" | "lit" | "alias" | "binop" | "agg" | "unary" | "cast" | "is_null" | "fill_null" | "window"
+    # value: the column name, literal value, or op name
+    # args: child Expr list
+    if args == null { args = [] }
+    return {
+        _kind: kind,
+        _value: value,
+        _args: args,
+
+        # ── arithmetic ───────────────────────────────────────────────
+        add: fn(self, other) { return Expr("binop", "+", [self, other]) },
+        sub: fn(self, other) { return Expr("binop", "-", [self, other]) },
+        mul: fn(self, other) { return Expr("binop", "*", [self, other]) },
+        div: fn(self, other) { return Expr("binop", "/", [self, other]) },
+
+        # ── comparisons ──────────────────────────────────────────────
+        gt:  fn(self, other) { return Expr("binop", ">",  [self, other]) },
+        lt:  fn(self, other) { return Expr("binop", "<",  [self, other]) },
+        gte: fn(self, other) { return Expr("binop", ">=", [self, other]) },
+        lte: fn(self, other) { return Expr("binop", "<=", [self, other]) },
+        eq:  fn(self, other) { return Expr("binop", "==", [self, other]) },
+        neq: fn(self, other) { return Expr("binop", "!=", [self, other]) },
+
+        # ── logical ──────────────────────────────────────────────────
+        and_: fn(self, other) { return Expr("binop", "&&", [self, other]) },
+        or_:  fn(self, other) { return Expr("binop", "||", [self, other]) },
+        not_: fn(self) { return Expr("unary", "!", [self]) },
+
+        # ── null ─────────────────────────────────────────────────────
+        is_null:   fn(self) { return Expr("unary", "is_null", [self]) },
+        fill_null: fn(self, v) { return Expr("fill_null", v, [self]) },
+
+        # ── rename ───────────────────────────────────────────────────
+        alias: fn(self, name) { return Expr("alias", name, [self]) },
+
+        # ── cast ─────────────────────────────────────────────────────
+        cast: fn(self, dtype) { return Expr("cast", dtype, [self]) },
+
+        # ── aggregations ─────────────────────────────────────────────
+        sum:   fn(self) { return Expr("agg", "sum",   [self]) },
+        mean:  fn(self) { return Expr("agg", "mean",  [self]) },
+        min:   fn(self) { return Expr("agg", "min",   [self]) },
+        max:   fn(self) { return Expr("agg", "max",   [self]) },
+        count: fn(self) { return Expr("agg", "count", [self]) },
+        std:   fn(self) { return Expr("agg", "std",   [self]) },
+        var:   fn(self) { return Expr("agg", "var",   [self]) },
+        first: fn(self) { return Expr("agg", "first", [self]) },
+        last:  fn(self) { return Expr("agg", "last",  [self]) },
+
+        # ── string operations ────────────────────────────────────────
+        str_upper:    fn(self) { return Expr("unary", "str_upper",    [self]) },
+        str_lower:    fn(self) { return Expr("unary", "str_lower",    [self]) },
+        str_contains: fn(self, needle) { return Expr("binop", "str_contains", [self, Expr("lit", needle, [])]) },
+        str_split:    fn(self, delim)  { return Expr("binop", "str_split",    [self, Expr("lit", delim, [])]) },
+        str_len:      fn(self) { return Expr("unary", "str_len", [self]) },
+
+        # ── window (partition) ───────────────────────────────────────
+        over: fn(self, partition_by) {
+            return Expr("window", partition_by, [self])
+        },
+
+        # ── display ──────────────────────────────────────────────────
+        to_string: fn(self) {
+            if self._kind == "col"       { return "col(" + self._value + ")" }
+            if self._kind == "lit"       { return "lit(" + self._value + ")" }
+            if self._kind == "alias"     { return self._args[0].to_string(self._args[0]) + ".alias(" + self._value + ")" }
+            if self._kind == "binop"     { return "(" + self._args[0].to_string(self._args[0]) + " " + self._value + " " + self._args[1].to_string(self._args[1]) + ")" }
+            if self._kind == "agg"       { return self._value + "(" + self._args[0].to_string(self._args[0]) + ")" }
+            if self._kind == "unary"     { return self._value + "(" + self._args[0].to_string(self._args[0]) + ")" }
+            if self._kind == "cast"      { return self._args[0].to_string(self._args[0]) + ".cast(" + self._value + ")" }
+            if self._kind == "fill_null" { return self._args[0].to_string(self._args[0]) + ".fill_null(" + self._value + ")" }
+            if self._kind == "window"    { return self._args[0].to_string(self._args[0]) + ".over(" + self._value + ")" }
+            return "Expr(" + self._kind + ")"
+        }
+    }
+}
+
+# ── shortcuts  ────────────────────────────────────────────────────────────────
+
+fn col(name)  { return Expr("col",  name,  []) }
+fn lit(value) { return Expr("lit",  value, []) }
+
+# ── expression evaluator ──────────────────────────────────────────────────────
+
+fn eval_expr(expr, df) {
+    # Returns a Column (or scalar for agg)
+    if expr._kind == "col" {
+        let c = df.col(expr._value)
+        if c == null { println("[df] Warning: column not found:", expr._value) }
+        return c
+    }
+
+    if expr._kind == "lit" {
+        # Broadcast a scalar literal to a column of the same length as df
+        let nr = df.nrows()
+        let data = []
+        let i = 0
+        while i < nr { data.push(expr._value)  i = i + 1 }
+        return Column("__lit__", "float", data, null)
+    }
+
+    if expr._kind == "alias" {
+        let inner = eval_expr(expr._args[0], df)
+        if inner == null { return null }
+        return inner.alias(expr._value)
+    }
+
+    if expr._kind == "cast" {
+        let inner = eval_expr(expr._args[0], df)
+        if inner == null { return null }
+        return inner.cast(expr._value)
+    }
+
+    if expr._kind == "unary" {
+        let inner = eval_expr(expr._args[0], df)
+        if inner == null { return null }
+        if expr._value == "is_null" {
+            let mask = []
+            let i = 0
+            while i < inner._data.len() {
+                mask.push(inner.is_null(i))
+                i = i + 1
+            }
+            return Column(inner._name + "_is_null", "bool", mask, null)
+        }
+        if expr._value == "!" {
+            let mask = []
+            let i = 0
+            while i < inner._data.len() {
+                mask.push(inner._data[i] == false || inner._data[i] == 0)
+                i = i + 1
+            }
+            return Column(inner._name + "_not", "bool", mask, null)
+        }
+        if expr._value == "str_upper"  { return inner.str_upper() }
+        if expr._value == "str_lower"  { return inner.str_lower() }
+        if expr._value == "str_len" {
+            let lens = []
+            let i = 0
+            while i < inner._data.len() {
+                lens.push(std::string::len(inner._data[i]))
+                i = i + 1
+            }
+            return Column(inner._name + "_len", "int", lens, null)
+        }
+        return inner
+    }
+
+    if expr._kind == "fill_null" {
+        let inner = eval_expr(expr._args[0], df)
+        if inner == null { return null }
+        return inner.fill_null(expr._value)
+    }
+
+    if expr._kind == "binop" {
+        let left  = eval_expr(expr._args[0], df)
+        let right = eval_expr(expr._args[1], df)
+        if left == null || right == null { return null }
+        let op = expr._value
+        let n = left._data.len()
+        let out = []
+        let i = 0
+        if op == "+" {
+            while i < n { out.push(left._data[i] + right._data[i])   i = i + 1 }
+            return Column("__expr__", "float", out, null)
+        }
+        if op == "-" {
+            while i < n { out.push(left._data[i] - right._data[i])   i = i + 1 }
+            return Column("__expr__", "float", out, null)
+        }
+        if op == "*" {
+            while i < n { out.push(left._data[i] * right._data[i])   i = i + 1 }
+            return Column("__expr__", "float", out, null)
+        }
+        if op == "/" {
+            while i < n {
+                let d = right._data[i]
+                if d == 0 { out.push(null) } else { out.push(left._data[i] / d) }
+                i = i + 1
+            }
+            return Column("__expr__", "float", out, null)
+        }
+        if op == ">"  { while i < n { out.push(left._data[i] > right._data[i])  i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "<"  { while i < n { out.push(left._data[i] < right._data[i])  i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == ">=" { while i < n { out.push(left._data[i] >= right._data[i]) i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "<=" { while i < n { out.push(left._data[i] <= right._data[i]) i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "==" { while i < n { out.push(left._data[i] == right._data[i]) i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "!=" { while i < n { out.push(left._data[i] != right._data[i]) i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "&&" { while i < n { out.push(left._data[i] && right._data[i]) i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "||" { while i < n { out.push(left._data[i] || right._data[i]) i = i + 1 } return Column("__expr__","bool",out,null) }
+        if op == "str_contains" {
+            while i < n {
+                out.push(std::string::contains(left._data[i], right._data[0]))
+                i = i + 1
+            }
+            return Column("__expr__", "bool", out, null)
+        }
+        return null
+    }
+
+    if expr._kind == "agg" {
+        let inner = eval_expr(expr._args[0], df)
+        if inner == null { return null }
+        let agg_name = expr._value
+        let val = null
+        if agg_name == "sum"   { val = std::math::sum(inner._data) }
+        if agg_name == "mean"  { val = std::math::mean(inner._data) }
+        if agg_name == "min"   { val = std::df::col_min(inner._data) }
+        if agg_name == "max"   { val = std::df::col_max(inner._data) }
+        if agg_name == "count" { val = inner._data.len() * 1 }
+        if agg_name == "std"   { val = std::df::col_std(inner._data) }
+        if agg_name == "first" { val = inner._data[0] }
+        if agg_name == "last"  { val = inner._data[inner._data.len() - 1] }
+        if val != null {
+            let out_name = inner._name + "_" + agg_name
+            return df::column::Column(out_name, "float", [val], null)
+        }
+        return null
+    }
+
+    return null
+}
+
+# Get the output name for an expr (used by with_columns)
+fn expr_output_name(expr) {
+    if expr._kind == "alias"   { return expr._value }
+    if expr._kind == "col"     { return expr._value }
+    if expr._kind == "agg"     { return expr._value + "_" + expr_output_name(expr._args[0]) }
+    if expr._kind == "binop"   { return "__expr__" }
+    if expr._kind == "unary"   { return expr._value }
+    if expr._kind == "cast"    { return expr_output_name(expr._args[0]) + "_cast" }
+    if expr._kind == "fill_null" { return expr_output_name(expr._args[0]) }
+    if expr._kind == "lit"     { return "__lit__" }
+    return "__expr__"
+}

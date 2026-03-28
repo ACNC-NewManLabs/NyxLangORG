@@ -1,0 +1,43 @@
+# Nyx ML Ensemble System (Area 57)
+# Combine multiple models for robust predictions
+
+fn WeightedEnsemble(models, weights) {
+    if weights == null {
+        weights = []
+        let i = 0
+        while i < models.len() { weights.push(1.0 / models.len()); i = i + 1 }
+    }
+    
+    return {
+        models: models,
+        weights: weights,
+        
+        predict: fn(self, x) {
+            println("[Ensemble] Aggregating predictions from {} models...", self.models.len())
+            let final_probs = null
+            let i = 0
+            while i < self.models.len() {
+                let p = self.models[i].forward(x)
+                # Weighted sum: final = sum(weight[i] * p[i])
+                let scaled_p = []
+                let j = 0
+                while j < p.data.len() {
+                    scaled_p.push(p.data[j] * self.weights[i])
+                    j = j + 1
+                }
+                
+                if final_probs == null {
+                    final_probs = scaled_p
+                } else {
+                    let k = 0
+                    while k < final_probs.len() {
+                        final_probs[k] = final_probs[k] + scaled_p[k]
+                        k = k + 1
+                    }
+                }
+                i = i + 1
+            }
+            return ml::tensor::Tensor(final_probs, self.models[0].forward(x).shape, false, null, "cpu")
+        }
+    }
+}

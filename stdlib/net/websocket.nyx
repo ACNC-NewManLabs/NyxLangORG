@@ -1,0 +1,277 @@
+/**
+ * WebSocket Module
+ * 
+ * Provides WebSocket client and server utilities.
+ * Re-exports and wraps the net_engine WebSocket functionality.
+ * 
+ * @module net::websocket
+ */
+
+// Import from net_engine
+import websocket.server;
+
+/**
+ * WebSocket connection type
+ */
+type WebSocket = server::WebSocket;
+
+/**
+ * WebSocket message type
+ */
+type Message = server::Message;
+
+/**
+ * Message types
+ */
+let TEXT = server::TEXT;
+let BINARY = server::BINARY;
+let CLOSE = server::CLOSE;
+let PING = server::PING;
+let PONG = server::PONG;
+
+/**
+ * WebSocket frame type
+ */
+type Frame = server::Frame;
+
+/**
+ * Register WebSocket connection handler
+ * 
+ * @param path - WebSocket path
+ * @param handler - Connection handler
+ */
+fn on_connection(path: string, handler: fn(WebSocket) -> void) {
+    server::on_connection(path, handler);
+}
+
+/**
+ * Create a WebSocket client
+ * 
+ * @param url - WebSocket URL
+ * @returns A new WebSocket client
+ */
+fn connect(url: string) -> WebSocket {
+    return server::connect(url);
+}
+
+/**
+ * Send text message
+ * 
+ * @param ws - WebSocket connection
+ * @param message - Message to send
+ */
+fn send(ws: WebSocket, message: string) {
+    server::send(ws, message);
+}
+
+/**
+ * Send binary message
+ * 
+ * @param ws - WebSocket connection
+ * @param data - Binary data
+ */
+fn send_binary(ws: WebSocket, data: string) {
+    server::send_binary(ws, data);
+}
+
+/**
+ * Close WebSocket connection
+ * 
+ * @param ws - WebSocket connection
+ * @param code - Close code
+ * @param reason - Close reason
+ */
+fn close(ws: WebSocket, code: i64 = 1000, reason: string = "") {
+    server::close(ws, code, reason);
+}
+
+/**
+ * WebSocket client for making outgoing connections
+ */
+type Client = {
+    url: string,
+    protocols: List<string>,
+    socket: WebSocket,
+    connected: bool
+};
+
+/**
+ * Create a new WebSocket client
+ * 
+ * @param url - WebSocket URL
+ * @param protocols - Sub protocols
+ * @returns A new WebSocket client
+ */
+fn Client(url: string, protocols: List<string> = []) -> Client {
+    return Client {
+        url: url,
+        protocols: protocols,
+        socket: none,
+        connected: false
+    };
+}
+
+/**
+ * Connect to WebSocket server
+ * 
+ * @param client - WebSocket client
+ * @param on_open - Callback when connected
+ * @param on_message - Callback for messages
+ * @param on_close - Callback when closed
+ * @param on_error - Callback for errors
+ */
+fn connect_client(
+    client: Client,
+    on_open: fn() -> void = none,
+    on_message: fn(string) -> void = none,
+    on_close: fn(i64, string) -> void = none,
+    on_error: fn(string) -> void = none
+) {
+    client.socket = connect(client.url);
+    client.connected = true;
+    
+    if on_open != none {
+        on_open();
+    }
+}
+
+/**
+ * Send message through client
+ * 
+ * @param client - WebSocket client
+ * @param message - Message to send
+ */
+fn send_client(client: Client, message: string) {
+    if client.connected and client.socket != none {
+        send(client.socket, message);
+    }
+}
+
+/**
+ * Close client connection
+ * 
+ * @param client - WebSocket client
+ */
+fn close_client(client: Client) {
+    if client.connected and client.socket != none {
+        close(client.socket);
+        client.connected = false;
+    }
+}
+
+/**
+ * Broadcast message to multiple clients
+ * 
+ * @param clients - List of WebSocket connections
+ * @param message - Message to broadcast
+ */
+fn broadcast(clients: List<WebSocket>, message: string) {
+    let i = 0;
+    while i < clients.length() {
+        send(clients[i], message);
+        i = i + 1;
+    }
+}
+
+/**
+ * WebSocket frame parser
+ */
+type FrameParser = {
+    buffer: string,
+    parsing: bool
+};
+
+/**
+ * Create a new frame parser
+ * 
+ * @returns A new FrameParser
+ */
+fn FrameParser() -> FrameParser {
+    return FrameParser {
+        buffer: "",
+        parsing: false
+    };
+}
+
+/**
+ * Parse incoming data
+ * 
+ * @param parser - Frame parser
+ * @param data - Data to parse
+ * @returns Parsed frames
+ */
+fn parse(parser: FrameParser, data: string) -> List<Frame> {
+    parser.buffer = parser.buffer + data;
+    // In a full implementation, this would parse WebSocket frames
+    return [];
+}
+
+/**
+ * Create a text frame
+ * 
+ * @param payload - Frame payload
+ * @returns A new text frame
+ */
+fn text_frame(payload: string) -> Frame {
+    return Frame {
+        opcode: 1,
+        payload: payload,
+        masked: false
+    };
+}
+
+/**
+ * Create a binary frame
+ * 
+ * @param payload - Frame payload
+ * @returns A new binary frame
+ */
+fn binary_frame(payload: string) -> Frame {
+    return Frame {
+        opcode: 2,
+        payload: payload,
+        masked: false
+    };
+}
+
+/**
+ * Create a close frame
+ * 
+ * @param code - Close code
+ * @param reason - Close reason
+ * @returns A new close frame
+ */
+fn close_frame(code: i64 = 1000, reason: string = "") -> Frame {
+    return Frame {
+        opcode: 8,
+        payload: to_string(code) + ":" + reason,
+        masked: false
+    };
+}
+
+export {
+    WebSocket,
+    Message,
+    Frame,
+    Client,
+    FrameParser,
+    TEXT,
+    BINARY,
+    CLOSE,
+    PING,
+    PONG,
+    on_connection,
+    connect,
+    send,
+    send_binary,
+    close,
+    Client as new_client,
+    connect_client,
+    send_client,
+    close_client,
+    broadcast,
+    parse,
+    text_frame,
+    binary_frame,
+    close_frame
+};

@@ -1,0 +1,306 @@
+/**
+ * WebSocket Chat Server Example
+ * 
+ * A real-time chat server demonstrating:
+ * - WebSocket connections
+ * - Broadcasting messages
+ * - User presence
+ * - Message types
+ * 
+ * Run with: nyx run websocket_chat.nyx
+ * 
+ * Open http://localhost:8080 in your browser to test.
+ * 
+ * @example
+ * import examples.server.websocket_chat;
+ * websocket_chat.main([]);
+ */
+
+import net.http;
+import net.websocket;
+
+// Connected clients
+let clients: List<ClientConnection> = [];
+let next_client_id = 1;
+
+/**
+ * Client connection info
+ */
+type ClientConnection = {
+    id: i64,
+    name: string,
+    socket: any,
+    joined_at: string
+};
+
+/**
+ * Chat message
+ */
+type ChatMessage = {
+    type: string,
+    sender: string,
+    content: string,
+    timestamp: string
+};
+
+/**
+ * Main function
+ */
+fn main(args: List<string>) {
+    print("Starting WebSocket Chat Server...");
+    print("");
+    
+    let server = net.HttpServer(port: 8080);
+    
+    // Serve static HTML for chat UI
+    server.get("/", fn(req, res) {
+        res.html(chat_html());
+    });
+    
+    // WebSocket endpoint
+    server.get("/ws", fn(req, res) {
+        // Upgrade to WebSocket
+        let ws = websocket.connect("ws://mock");
+        
+        // Create client connection
+        let client = ClientConnection {
+            id: next_client_id,
+            name: "User" + to_string(next_client_id),
+            socket: ws,
+            joined_at: get_timestamp()
+        };
+        
+        next_client_id = next_client_id + 1;
+        
+        // Add to clients
+        clients.push(client);
+        
+        print("Client connected: " + client.name + " (total: " + to_string(clients.length()) + ")");
+        
+        // Send welcome message
+        let welcome = ChatMessage {
+            type: "system",
+            sender: "Server",
+            content: "Welcome to the chat! Your name is " + client.name,
+            timestamp: get_timestamp()
+        };
+        send_to_client(client, welcome);
+        
+        // Broadcast join message
+        let join_msg = ChatMessage {
+            type: "system",
+            sender: "Server",
+            content: client.name + " has joined the chat",
+            timestamp: get_timestamp()
+        };
+        broadcast(join_msg, client.id);
+        
+        // Handle incoming messages
+        ws.on_message(fn(msg) {
+            handle_message(client, msg);
+        });
+        
+        // Handle disconnect
+        ws.on_close(fn() {
+            remove_client(client.id);
+            
+            let leave_msg = ChatMessage {
+                type: "system",
+                sender: "Server",
+                content: client.name + " has left the chat",
+                timestamp: get_timestamp()
+            };
+            broadcast(leave_msg, 0);
+            
+            print("Client disconnected: " + client.name + " (total: " + to_string(clients.length()) + ")");
+        });
+    });
+    
+    // API endpoint to get client count
+    server.get("/api/clients", fn(req, res) {
+        let client_list: List<Map<string, any>> = [];
+        let i = 0;
+        while i < clients.length() {
+            client_list.push({
+                "id": clients[i].id,
+                "name": clients[i].name,
+                "joined_at": clients[i].joined_at
+            });
+            i = i + 1;
+        }
+        
+        res.json({
+            "count": clients.length(),
+            "clients": client_list
+        });
+    });
+    
+    // Start server
+    server.start();
+    
+    print("Chat Server running at http://localhost:8080");
+    print("WebSocket endpoint: ws://localhost:8080/ws");
+    print("");
+    print("Press Ctrl+C to stop");
+}
+
+/**
+ * Handle incoming chat message
+ */
+fn handle_message(client: ClientConnection, content: string) {
+    // Parse message (could be JSON or plain text)
+    let msg = ChatMessage {
+        type: "message",
+        sender: client.name,
+        content: content,
+        timestamp: get_timestamp()
+    };
+    
+    // Broadcast to all clients
+    broadcast(msg, 0);
+    
+    print("<" + client.name + "> " + content);
+}
+
+/**
+ * Broadcast message to all clients except one
+ */
+fn broadcast(message: ChatMessage, exclude_id: i64) {
+    let i = 0;
+    while i < clients.length() {
+        if clients[i].id != exclude_id {
+            send_to_client(clients[i], message);
+        }
+        i = i + 1;
+    }
+}
+
+/**
+ * Send message to a specific client
+ */
+fn send_to_client(client: ClientConnection, message: ChatMessage) {
+    // Convert to JSON string
+    let json = "{";
+    json = json + "\"type\":\"" + message.type + "\",";
+    json = json + "\"sender\":\"" + message.sender + "\",";
+    json = json + "\"content\":\"" + message.content + "\",";
+    json = json + "\"timestamp\":\"" + message.timestamp + "\"";
+    json = json + "}";
+    
+    websocket.send(client.socket, json);
+}
+
+/**
+ * Remove client from list
+ */
+fn remove_client(id: i64) {
+    let new_clients: List<ClientConnection> = [];
+    let i = 0;
+    while i < clients.length() {
+        if clients[i].id != id {
+            new_clients.push(clients[i]);
+        }
+        i = i + 1;
+    }
+    clients = new_clients;
+}
+
+/**
+ * Get current timestamp
+ */
+fn get_timestamp() -> string {
+    return "2024-01-01T12:00:00Z";
+}
+
+/**
+ * Generate chat HTML page
+ */
+fn chat_html() -> string {
+    let html = "<!DOCTYPE html>";
+    html = html + "<html>";
+    html = html + "<head>";
+    html = html + "  <title>Nyx Chat</title>";
+    html = html + "  <meta charset=\"utf-8\">";
+    html = html + "  <style>";
+    html = html + "    * { box-sizing: border-box; }";
+    html = html + "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }";
+    html = html + "    #app { max-width: 800px; margin: 0 auto; }";
+    html = html + "    h1 { text-align: center; color: #2c3e50; }";
+    html = html + "    #messages { background: white; border-radius: 8px; height: 400px; overflow-y: auto; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }";
+    html = html + "    .message { padding: 10px; margin: 5px 0; border-radius: 8px; }";
+    html = html + "    .message.system { background: #e8f4f8; color: #2980b9; text-align: center; }";
+    html = html + "    .message.user { background: #e8f8e8; }";
+    html = html + "    .message.other { background: #f8f8f8; }";
+    html = html + "    .sender { font-weight: bold; color: #2c3e50; }";
+    html = html + "    .timestamp { font-size: 0.8em; color: #7f8c8d; }";
+    html = html + "    #input-area { display: flex; gap: 10px; }";
+    html = html + "    #message-input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }";
+    html = html + "    #send-btn { padding: 12px 24px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }";
+    html = html + "    #send-btn:hover { background: #2980b9; }";
+    html = html + "    #status { text-align: center; color: #7f8c8d; margin-bottom: 10px; }";
+    html = html + "    .connected { color: #27ae60; }";
+    html = html + "    .disconnected { color: #e74c3c; }";
+    html = html + "  </style>";
+    html = html + "</head>";
+    html = html + "<body>";
+    html = html + "  <div id=\"app\">";
+    html = html + "    <h1>💬 Nyx Chat</h1>";
+    html = html + "    <div id=\"status\" class=\"disconnected\">Connecting...</div>";
+    html = html + "    <div id=\"messages\"></div>";
+    html = html + "    <div id=\"input-area\">";
+    html = html + "      <input type=\"text\" id=\"message-input\" placeholder=\"Type a message...\" autocomplete=\"off\">";
+    html = html + "      <button id=\"send-btn\">Send</button>";
+    html = html + "    </div>";
+    html = html + "  </div>";
+    html = html + "  <script>";
+    html = html + "    const ws = new WebSocket('ws://' + location.host + '/ws');";
+    html = html + "    const messages = document.getElementById('messages');";
+    html = html + "    const input = document.getElementById('message-input');";
+    html = html + "    const sendBtn = document.getElementById('send-btn');";
+    html = html + "    const status = document.getElementById('status');";
+    html = html + "";
+    html = html + "    ws.onopen = function() {";
+    html = html + "      status.textContent = 'Connected';";
+    html = html + "      status.className = 'connected';";
+    html = html + "    };";
+    html = html + "";
+    html = html + "    ws.onmessage = function(event) {";
+    html = html + "      const msg = JSON.parse(event.data);";
+    html = html + "      addMessage(msg);";
+    html = html + "    };";
+    html = html + "";
+    html = html + "    ws.onclose = function() {";
+    html = html + "      status.textContent = 'Disconnected - Reconnecting...';";
+    html = html + "      status.className = 'disconnected';";
+    html = html + "    };";
+    html = html + "";
+    html = html + "    function addMessage(msg) {";
+    html = html + "      const div = document.createElement('div');";
+    html = html + "      div.className = 'message ' + msg.type;";
+    html = html + "      div.innerHTML = '<span class=\"sender\">' + msg.sender + '</span>: ' + msg.content + ' <span class=\"timestamp\">' + msg.timestamp + '</span>';";
+    html = html + "      messages.appendChild(div);";
+    html = html + "      messages.scrollTop = messages.scrollHeight;";
+    html = html + "    }";
+    html = html + "";
+    html = html + "    function sendMessage() {";
+    html = html + "      const text = input.value.trim();";
+    html = html + "      if (text) {";
+    html = html + "        ws.send(text);";
+    html = html + "        input.value = '';";
+    html = html + "      }";
+    html = html + "    }";
+    html = html + "";
+    html = html + "    sendBtn.addEventListener('click', sendMessage);";
+    html = html + "    input.addEventListener('keypress', function(e) {";
+    html = html + "      if (e.key === 'Enter') sendMessage();";
+    html = html + "    });";
+    html = html + "  </script>";
+    html = html + "</body>";
+    html = html + "</html>";
+    
+    return html;
+}
+
+export {
+    main
+};

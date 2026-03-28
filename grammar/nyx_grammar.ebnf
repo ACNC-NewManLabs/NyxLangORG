@@ -1,0 +1,350 @@
+/* =============================================================================
+   Nyx Programming Language - Official EBNF Grammar
+   Version: 2.0
+   =============================================================================
+   
+   This grammar defines the complete syntax of the Nyx programming language.
+   It is designed to be deterministic and suitable for LL(k) parsing.
+   
+   Grammar Notation:
+   - [x]    : Optional (zero or one)
+   - {x}    : Repetition (zero or more)
+   - x | y  : Alternation (one of)
+   - (x)    : Grouping
+   - "x"    : Terminal string
+   - <x>    : Non-terminal
+   ============================================================================= */
+
+/* ============================== LEXICAL TOKENS ============================== */
+
+/* Identifier */
+<IDENTIFIER>     = letter , { letter | digit | "_" } ;
+<TYPE_IDENT>     = uppercase_letter , { letter | digit | "_" } ;
+
+/* Keywords */
+keyword          = "fn" | "let" | "mut" | "return" | "if" | "else" 
+                 | "while" | "for" | "loop" | "match" | "break" | "continue"
+                 | "struct" | "enum" | "trait" | "impl" | "type"
+                 | "mod" | "use" | "export" | "pub" | "crate" | "super"
+                 | "true" | "false" | "null" | "self" | "Self"
+                 | "async" | "await" | "move" | "where"
+                 | "const" | "static" | "unsafe" | "extern";
+
+/* Literals */
+<INTEGER_LIT>    = [ "-" ] , digit , { digit } ;
+<FLOAT_LIT>      = [ "-" ] , digit , { digit } , "." , digit , { digit } ;
+<STRING_LIT>     = '"' , { string_character } , '"' ;
+<CHAR_LIT>       = "'" , character , "'" ;
+<BOOL_LIT>       = "true" | "false" ;
+<NULL_LIT>       = "null" ;
+
+/* Operators */
+<OPERATOR>       = "+" | "-" | "*" | "/" | "%" | "=" 
+                 | "==" | "!=" | "<" | ">" | "<=" | ">="
+                 | "&&" | "||" | "!" | "&" | "|" | "^" | "~" | "<<" | ">>"
+                 | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^="
+                 | "<<=" | ">>=" | "->" | "<-" | "=>" ;
+
+/* Delimiters */
+delimiter        = "(" | ")" | "{" | "}" | "[" | "]" | "," | ";" | ":" | "." ;
+
+/* Comments */
+<COMMENT>        = "//" , { non_newline_character } ;
+<MULTILINE_COMMENT> = "/*" , { character } , "*/" ;
+
+/* White Space */
+whitespace       = " " | "\t" | "\n" | "\r" ;
+
+/* ============================== SYNTACTIC RULES ============================== */
+
+/* Compilation Unit */
+<Program>        = { <ModuleItem> } ;
+
+<ModuleItem>     = <Function> 
+                 | <StructDecl> 
+                 | <EnumDecl> 
+                 | <TraitDecl> 
+                 | <ImplBlock>
+                 | <TypeAlias>
+                 | <ModuleDecl>
+                 | <ImportDecl>
+                 | <ExportDecl> ;
+
+/* ------------------- Function Declarations ------------------- */
+
+<Function>       = [ "pub" | "pub" "(" "crate" ")" | "pub" "(" "super" ")" | "extern" [ STRING_LIT ] ] , 
+                   "fn" , IDENTIFIER , 
+                   [ "async" ] ,
+                   "(" , [ <FunctionParam> { "," , <FunctionParam> } ] , ")" ,
+                   [ "->" , <Type> ] ,
+                   [ "where" , <WhereClause> ] ,
+                   <Block> ;
+
+<FunctionParam>   = [ "mut" ] , IDENTIFIER , ":" , <Type> 
+                 | "self" [ ":" , <Type> ] 
+                 | "&" [ "mut" ] , "self" ;
+
+<WhereClause>    = <WherePredicate> { "," , <WherePredicate> } ;
+
+<WherePredicate> = <TypePath> , [ "<" , <TypeArgs> , ">" ] , ":" , <TypeBounds> ;
+
+/* ------------------- Type Declarations ------------------- */
+
+<StructDecl>     = [ "pub" ] , "struct" , IDENTIFIER , 
+                   [ "<" , <GenericParams> , ">" ] ,
+                   [ "where" , <WhereClause> ] ,
+                   "{" , [ <StructField> { "," , <StructField> } [ "," ] ] , "}" ;
+
+<StructField>    = [ "pub" ] , IDENTIFIER , ":" , <Type> ;
+
+<EnumDecl>       = [ "pub" ] , "enum" , IDENTIFIER ,
+                   [ "<" , <GenericParams> , ">" ] ,
+                   [ "where" , <WhereClause> ] ,
+                   "{" , <EnumVariant> { "," , <EnumVariant> } [ "," ] , "}" ;
+
+<EnumVariant>    = IDENTIFIER , [ "(" , [ <Type> { "," , <Type> } ] , ")" ]
+                 | IDENTIFIER , "{" , <StructField> { "," , <StructField> } [ "," ] , "}" ;
+
+<TraitDecl>      = [ "pub" ] , "trait" , IDENTIFIER ,
+                   [ "<" , <GenericParams> , ">" ] ,
+                   [ ":" , <TypeBounds> ] ,
+                   [ "where" , <WhereClause> ] ,
+                   "{" , { <TraitItem> } , "}" ;
+
+<TraitItem>      = <FunctionSig> 
+                 | <TypeDecl> 
+                 | <ConstDecl> ;
+
+<ImplBlock>      = [ "pub" ] , "impl" , 
+                   [ IDENTIFIER , "<" , <TypeArgs> , ">" ] ,
+                   [ "for" , <Type> ] ,
+                   [ "where" , <WhereClause> ] ,
+                   "{" , { <ImplItem> } , "}" ;
+
+<ImplItem>       = <Function> 
+                 | <TypeAlias>
+                 | <ConstDecl> ;
+
+<TypeAlias>      = [ "pub" ] , "type" , IDENTIFIER ,
+                   [ "<" , <GenericParams> , ">" ] ,
+                   [ "where" , <WhereClause> ] ,
+                   "=" , <Type> , ";" ;
+
+/* ------------------- Module System ------------------- */
+
+<ModuleDecl>     = "mod" , IDENTIFIER , "{" , { <ModuleItem> } , "}"
+                 | "mod" , IDENTIFIER , ";" ;
+
+<ImportDecl>     = "use" , <UseTree> , ";" ;
+
+<UseTree>        = IDENTIFIER , [ "::" , <UseTree> ]
+                 | IDENTIFIER , "::" , "{" , <UseTreeItem> { "," , <UseTreeItem> } [ "," ] , "}"
+                 | "super" , [ "::" , <UseTree> ]
+                 | "crate" , [ "::" , <UseTree> ] ;
+
+<UseTreeItem>    = IDENTIFIER , [ "as" , IDENTIFIER ]
+                 | IDENTIFIER , "::" , "{" , <UseTreeItem> { "," , <UseTreeItem> } [ "," ] , "}" ;
+
+<ExportDecl>     = "export" , <ExportItem> { "," , <ExportItem> } , ";" ;
+
+<ExportItem>     = IDENTIFIER , [ "as" , IDENTIFIER ]
+                 | "{" , <ExportItem> { "," , <ExportItem> } , "}" ;
+
+/* ------------------- Statements ------------------- */
+
+<Block>          = "{" , { <Statement> } , "}" ;
+
+<Statement>      = <LetStmt> 
+                 | <ReturnStmt> 
+                 | <ExprStmt> 
+                 | <IfStmt> 
+                 | <WhileStmt> 
+                 | <ForStmt> 
+                 | <LoopStmt> 
+                 | <MatchStmt> 
+                 | <BreakStmt> 
+                 | <ContinueStmt> 
+                 | <AssignmentStmt> 
+                 | <CompoundAssignStmt> 
+                 | <UnsafeBlock>
+                 | <InlineAsm>;
+
+<LetStmt>        = [ "mut" ] , "let" , IDENTIFIER , [ ":" , <Type> ] , [ "=" , <Expression> ] , ";" ;
+
+<ReturnStmt>      = "return" , [ <Expression> ] , ";" ;
+
+<ExprStmt>       = <Expression> , ";" ;
+
+<IfStmt>         = "if" , <Expression> , <Block> , { "else" , "if" , <Expression> , <Block> } , [ "else" , <Block> ] ;
+
+<WhileStmt>       = "while" , <Expression> , <Block> ;
+
+<ForStmt>        = "for" , [ <LetStmt> | <Expression> ] , ";" , [ <Expression> ] , ";" , [ <Expression> ] , <Block> ;
+
+<LoopStmt>       = "loop" , <Block> ;
+
+<MatchStmt>      = "match" , <Expression> , "{" , { <MatchArm> } , "}" ;
+
+<MatchArm>       = <MatchPattern> , "=>" , <Expression> , [ "," ]
+                 | <MatchPattern> , "=>" , <Block> , [ "," ] ;
+
+<MatchPattern>   = "_" 
+                 | <Literal> 
+                 | IDENTIFIER 
+                 | IDENTIFIER , "@" , <MatchPattern>
+                 | <MatchPattern> , "|" , <MatchPattern>
+                 | IDENTIFIER , "(" , [ <MatchPattern> { "," , <MatchPattern> } ] , ")"
+                 | IDENTIFIER , "{" , [ IDENTIFIER : <MatchPattern> { "," , IDENTIFIER : <MatchPattern> } ] , "}" ;
+
+<BreakStmt>       = "break" , [ IDENTIFIER ] , ";" ;
+
+<ContinueStmt>    = "continue" , [ IDENTIFIER ] , ";" ;
+
+<AssignmentStmt> = <Expression> , "=" , <Expression> , ";" ;
+
+<CompoundAssignStmt> = <Expression> , <CompoundOp> , <Expression> , ";" ;
+
+<CompoundOp>     = "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+
+<UnsafeBlock>    = "unsafe" , <Block> ;
+
+<InlineAsm>      = "asm" , "(" , STRING_LIT , ")" , [ ":" , <AsmOutput> ] , [ ":" , <AsmInput> ] , ";" ;
+
+<AsmOutput>      = <AsmOperand> { "," , <AsmOperand> } ;
+
+<AsmInput>       = <AsmOperand> { "," , <AsmOperand> } ;
+
+<AsmOperand>      = "[" , <Expression> , "]" , [ "(" , IDENTIFIER , ")" ] ;
+
+/* ------------------- Expressions ------------------- */
+
+<Expression>     = <LogicalOr> ;
+
+<LogicalOr>      = <LogicalAnd> , { "||" , <LogicalAnd> } ;
+
+<LogicalAnd>     = <BitwiseOr> , { "&&" , <BitwiseOr> } ;
+
+<BitwiseOr>      = <BitwiseXor> , { "|" , <BitwiseXor> } ;
+
+<BitwiseXor>     = <BitwiseAnd> , { "^" , <BitwiseAnd> } ;
+
+<BitwiseAnd>     = <Equality> , { "&" , <Equality> } ;
+
+<Equality>       = <Relational> , { ( "==" | "!=" ) , <Relational> } ;
+
+<Relational>     = <Shift> , { ( "<" | ">" | "<=" | ">=" ) , <Shift> } ;
+
+<Shift>          = <Additive> , { ( "<<" | ">>" ) , <Additive> } ;
+
+<Additive>       = <Multiplicative> , { ( "+" | "-" ) , <Multiplicative> } ;
+
+<Multiplicative> = <Unary> , { ( "*" | "/" | "%" ) , <Unary> } ;
+
+<Unary>          = [ ( "!" | "-" | "&" | "&" "mut" | "*" | "move" ) ] , <Postfix> ;
+
+<Postfix>        = <Primary> , { <PostfixOp> } ;
+
+<PostfixOp>      = "." , IDENTIFIER
+                 | "[" , <Expression> , "]"
+                 | "(" , [ <Expression> { "," , <Expression> } ] , ")"
+                 | "?" 
+                 | "." , <MethodCall> ;
+
+<MethodCall>     = IDENTIFIER , "(" , [ <Expression> { "," , <Expression> } ] , ")" ;
+
+<Primary>        = <Literal>
+                 | IDENTIFIER
+                 | "self" | "Self"
+                 | <Block>
+                 | <Closure>
+                 | <TupleExpr>
+                 | <ArrayExpr>
+                 | <StructExpr>
+                 | <IfExpr>
+                 | <MatchExpr>
+                 | <LoopExpr>
+                 | <RangeExpr>
+                 | <AsyncBlock> ;
+
+<Literal>         = INTEGER_LIT | FLOAT_LIT | STRING_LIT | CHAR_LIT | BOOL_LIT | NULL_LIT ;
+
+<Closure>         = [ "move" ] , "|" , [ <ClosureParam> { "," , <ClosureParam> } ] , "|" , [ "->" , <Type> ] , <Expression> ;
+
+<ClosureParam>    = [ "mut" ] , IDENTIFIER , [ ":" , <Type> ] ;
+
+<TupleExpr>      = "(" , [ <Expression> { "," , <Expression> } ] , ")" ;
+
+<ArrayExpr>      = "[" , [ <Expression> { "," , <Expression> } ] , "]" ;
+
+<StructExpr>     = IDENTIFIER , "{" , [ <StructFieldInit> { "," , <StructFieldInit> } [ "," ] ] , "}" ;
+
+<StructFieldInit> = [ IDENTIFIER , ":" ] , <Expression> ;
+
+<IfExpr>         = "if" , <Expression> , <Expression> , [ "else" , <Expression> ] ;
+
+<MatchExpr>      = "match" , <Expression> , "{" , { <MatchArm> } , "}" ;
+
+<LoopExpr>       = "loop" , <Expression> ;
+
+<RangeExpr>      = [ <Expression> ] , ".." , [ <Expression> ] ;
+
+<AsyncBlock>     = "async" , [ "move" ] , <Block> ;
+
+/* ------------------- Types ------------------- */
+
+<Type>           = <TypePath> , [ "|" , <Type> ] ;
+
+<TypePath>       = [ "::" ] , <TypeSegment> , { "::" , <TypeSegment> } ;
+
+<TypeSegment>    = IDENTIFIER , [ "<" , <TypeArgs> , ">" ] ;
+
+<TypeArgs>       = <Type> { "," , <Type> } ;
+
+<TypeBounds>     = <TypeBound> { "+" , <TypeBound> } ;
+
+<TypeBound>      = <TypePath> , [ "+" , <Type> ] ;
+
+<GenericParams>  = <GenericParam> { "," , <GenericParam> } ;
+
+<GenericParam>   = IDENTIFIER , [ ":" , <TypeBounds> ] , [ "=" , <Type> ] ;
+
+/* ============================== KEYWORDS LIST ==============================
+
+Keywords:
+  fn         - Function declaration
+  let        - Variable declaration
+  mut        - Mutable binding
+  return     - Return statement
+  if         - Conditional
+  else       - Alternative branch
+  while      - While loop
+  for        - For loop
+  loop       - Infinite loop
+  match      - Pattern matching
+  break      - Break loop
+  continue   - Continue loop
+  struct     - Struct declaration
+  enum       - Enum declaration
+  trait      - Trait declaration
+  impl       - Implementation block
+  type       - Type alias
+  mod        - Module declaration
+  use        - Import
+  export     - Export
+  pub        - Public visibility
+  crate      - Crate-relative path
+  super      - Parent module
+  self       - Self reference
+  Self       - Self type
+  async      - Async function/block
+  await      - Await expression
+  move       - Move closure
+  where      - Where clause
+  const      - Constant
+  static     - Static variable
+  unsafe     - Unsafe block
+  extern     - External function
+
+================================================================================
+*/
+

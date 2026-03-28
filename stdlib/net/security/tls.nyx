@@ -1,0 +1,237 @@
+/**
+ * TLS/SSL Implementation
+ * 
+ * Provides TLS/SSL server functionality for secure HTTPS connections.
+ * 
+ * @module security::tls
+ */
+
+import tcp.server as tcp_server;
+type TlsServer = {
+    host: string,
+    port: i64,
+    config: TlsConfig,
+    tcp_server: any,
+    handler: fn(any),
+    running: bool
+};
+
+type TlsConfig = {
+    cert_path: string,
+    key_path: string,
+    cert_data: string,
+    key_data: string,
+    protocols: List<string>,
+    ciphers: List<string>,
+    verify_client: bool,
+    ca_path: string?,
+    min_version: i64,
+    max_version: i64
+};
+
+/**
+ * Create TLS configuration
+ * 
+ * @param cert_path - Path to certificate file
+ * @param key_path - Path to private key file
+ * @returns TLS configuration
+ */
+fn create_config(cert_path: string, key_path: string) -> TlsConfig {
+    let cert_data = read_file(cert_path);
+    let key_data = read_file(key_path);
+    
+    return TlsConfig {
+        cert_path: cert_path,
+        key_path: key_path,
+        cert_data: cert_data,
+        key_data: key_data,
+        protocols: ["TLSv1.2", "TLSv1.3"],
+        ciphers: [
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256"
+        ],
+        verify_client: false,
+        ca_path: none,
+        min_version: 0x0303,  // TLS 1.2
+        max_version: 0x0304   // TLS 1.3
+    };
+}
+
+/**
+ * Create TLS server
+ * 
+ * @param config - TLS configuration
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns TLS server
+ */
+fn create(config: TlsConfig, host: string, port: i64) -> TlsServer {
+    return TlsServer {
+        host: host,
+        port: port,
+        config: config,
+        tcp_server: none,
+        handler: none,
+        running: false
+    };
+}
+/**
+ * 
+ * @param server - The TLS server
+ * @param handler - Handler for connections
+ * @returns The same server for chaining
+ */
+fn on_connect(server: TlsServer, handler: fn(any)) -> TlsServer {
+    server.handler = handler;
+    return server;
+}
+
+/**
+ * Start TLS server
+ * 
+ * @param server - The TLS server
+ * @returns Whether the server started
+ */
+fn start(server: TlsServer) -> bool {
+    if server.running {
+        return false;
+    }
+    
+    // Initialize TLS context
+    let ctx = init_tls_context(server.config);
+    
+    if ctx == none {
+        return false;
+    }
+    
+    // Create TCP server
+    let tcp = tcp_server::create(server.host, server.port);
+    
+    tcp_server::on_connect(tcp, fn(conn: any) {
+        handle_tls_connection(server, conn);
+    });
+    
+    if !tcp_server::start(tcp) {
+        return false;
+    }
+    
+    server.tcp_server = some(tcp);
+    server.running = true;
+    
+    return true;
+}
+
+/**
+ * Stop TLS server
+ * 
+ * @param server - The TLS server
+ */
+fn stop(server: TlsServer) {
+    if !server.running {
+        return;
+    }
+    
+    server.running = false;
+    
+    if server.tcp_server != none {
+        tcp_server::stop(server.tcp_server as any);
+    }
+}
+
+/**
+ * Handle incoming TLS connection
+ */
+fn handle_tls_connection(server: TlsServer, conn: any) {
+    // Perform TLS handshake
+    let tls_conn = accept_tls(conn, server.config);
+    
+    if tls_conn == none {
+        tcp_server::close_connection(conn);
+        return;
+    }
+    
+    // Call handler
+    if server.handler != none {
+        server.handler(tls_conn);
+    }
+}
+
+/**
+ * Initialize TLS context
+ * Creates a TLS context for server-side operations
+ */
+fn init_tls_context(config: TlsConfig) -> any? {
+    // Native implementation creates TLS context
+    return __native_tls_init_context(config.cert_data, config.key_data, config.protocols, config.min_version, config.max_version);
+}
+
+/**
+ * Accept TLS connection
+ * Performs TLS handshake on incoming connection
+ */
+fn accept_tls(conn: any, config: TlsConfig) -> any? {
+    return __native_tls_accept(conn, config.cert_data, config.key_data);
+}
+
+/**
+ * Read from TLS connection
+ */
+fn read(conn: any, size: i64) -> string {
+    return __native_tls_read(conn, size);
+}
+
+/**
+ * Write to TLS connection
+ */
+fn write(conn: any, data: string) -> i64 {
+    return __native_tls_write(conn, data);
+}
+
+/**
+ * Close TLS connection
+ */
+fn close(conn: any) {
+    __native_tls_close(conn);
+}
+
+/**
+ * Get peer certificate
+ */
+fn get_peer_certificate(conn: any) -> string? {
+    return __native_tls_get_peer_cert(conn);
+}
+
+/**
+ * Get cipher info
+ */
+fn get_cipher(conn: any) -> string? {
+    return __native_tls_get_cipher(conn);
+}
+
+/**
+ * Check if connection is verified
+ */
+fn is_verified(conn: any) -> bool {
+    return __native_tls_is_verified(conn);
+}
+
+// Native TLS functions - implemented by VM/runtime
+fn __native_tls_init_context(cert: string, key: string, protocols: List<string>, min_ver: i64, max_ver: i64) -> any?;
+fn __native_tls_accept(conn: any, cert: string, key: string) -> any?;
+fn __native_tls_read(conn: any, size: i64) -> string;
+fn __native_tls_write(conn: any, data: string) -> i64;
+fn __native_tls_close(conn: any);
+fn __native_tls_get_peer_cert(conn: any) -> string?;
+fn __native_tls_get_cipher(conn: any) -> string?;
+fn __native_tls_is_verified(conn: any) -> bool;
+
+// Helper functions - using native file operations
+fn read_file(path: string) -> string {
+    return __native_file_read(path);
+}
+
+fn __native_file_read(path: string) -> string;
+
+// TCP server implementation provided by net_engine::tcp::server

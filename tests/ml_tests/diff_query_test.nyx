@@ -1,0 +1,84 @@
+import ml;
+import df;
+
+fn test_agg_mean_grad() {
+    println("--- Testing agg_mean Gradient ---");
+    let data_df = df::DataFrame([
+        df::Column("val", "float", [10.0, 20.0, 30.0, 40.0], null)
+    ], null)
+    
+    let d_df = ml::query::DifferentiableDataFrame(data_df, true)
+    let mean_tensor = d_df.agg_mean("val")
+    
+    println("Mean Tensor: ", mean_tensor.data, " shape: ", mean_tensor.shape)
+    
+    mean_tensor.backward()
+    
+    # Check gradients in d_df._grads
+    let grads = d_df._grads
+    if grads == null {
+        println("FAILED: _grads is null")
+        return
+    }
+    
+    let val_grad = grads.val
+    println("val_grad: ", val_grad)
+    
+    # Expected: 1/4 = 0.25 for each
+    let i = 0
+    while i < val_grad.len() {
+        let diff = (val_grad[i] - 0.25)
+        if diff < 0 { diff = -diff }
+        if diff > 1e-6 {
+            println("FAILED: Expected 0.25 at index ", i, " got ", val_grad[i])
+            return
+        }
+        i = i + 1
+    }
+    println("PASSED: agg_mean gradient is correct")
+}
+
+fn test_df_to_tensor_grad() {
+    println("--- Testing df_to_tensor Gradient ---");
+    let data_df = df::DataFrame([
+        df::Column("a", "float", [1.0, 2.0], null),
+        df::Column("b", "float", [3.0, 4.0], null)
+    ], null)
+    
+    let d_df = ml::query::DifferentiableDataFrame(data_df, true)
+    let t = d_df.to_tensor()
+    
+    # t = [[1, 3], [2, 4]]
+    # Let's do some operation on t
+    let loss = t.sum()
+    loss.backward()
+    
+    # Check grads
+    let grads = d_df._grads
+    println("a_grad: ", grads.a)
+    println("b_grad: ", grads.b)
+    
+    # Expected grads: 1.0 for all
+    let i = 0
+    while i < 2 {
+        let diff_a = grads.a[i] - 1.0
+        if diff_a < 0 { diff_a = -diff_a }
+        if diff_a > 1e-6 {
+            println("FAILED: a_grad incorrect at ", i)
+            return
+        }
+        let diff_b = grads.b[i] - 1.0
+        if diff_b < 0 { diff_b = -diff_b }
+        if diff_b > 1e-6 {
+            println("FAILED: b_grad incorrect at ", i)
+            return
+        }
+        i = i + 1
+    }
+    println("PASSED: df_to_tensor gradient is correct")
+}
+
+fn main() {
+    test_agg_mean_grad()
+    test_df_to_tensor_grad()
+}

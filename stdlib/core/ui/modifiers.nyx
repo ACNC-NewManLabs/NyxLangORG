@@ -1,0 +1,113 @@
+//! Nyx Native UI Modifiers STDLIB
+
+pub fn Background(val) {
+    return "background:" + val + ";"
+}
+
+pub fn Color(val) {
+    return "color:" + val + ";"
+}
+
+pub fn Font(val) {
+    // If it's a number like "3rem", set font-size. If it's "bold", set font-weight. Else font-family.
+    if val == "bold" {
+        return "font-weight:bold;"
+    }
+    return "font-family:" + val + "; font-size:" + val + ";"
+}
+
+pub fn Bold() {
+    return "font-weight:bold;"
+}
+
+pub fn Padding(val, side) {
+    if side != null {
+        return "padding-" + val + ":" + side + ";"
+    }
+    return "padding:" + val + ";"
+}
+
+pub fn Margin(val, side) {
+    if side != null {
+        return "margin-" + val + ":" + side + ";"
+    }
+    return "margin:" + val + ";"
+}
+
+pub fn Spacing(val) {
+    return "gap:" + val + ";"
+}
+
+pub fn Gap(val) {
+    return "gap:" + val + ";"
+}
+
+pub fn Width(val) {
+    return "width:" + val + ";"
+}
+
+pub fn Height(val) {
+    return "height:" + val + ";"
+}
+
+pub fn BorderRadius(val) {
+    return "border-radius:" + val + ";"
+}
+
+pub fn Border(val, style) {
+    if style != null {
+        // Handle Border("bottom", "1px solid red")
+        return "border-" + val + ":" + style + ";"
+    }
+    return "border:" + val + ";"
+}
+
+pub fn BoxShadow(val) {
+    return "box-shadow:" + val + ";"
+}
+
+pub fn AlignCenter() {
+    return "align-items:center; justify-content:center; text-align:center;"
+}
+
+pub fn JustifyBetween() {
+    return "justify-content:space-between;"
+}
+
+// Pseudo-modifiers for HTML attributes 
+// (In a true production compiler these would be structurally separate from CSS, but mapped here for VM execution testing)
+pub fn Href(val) {
+    return "" // Requires specific element binding support
+}
+
+pub fn Action(val) {
+    return ""
+}
+
+pub fn Method(val) {
+    return ""
+}
+
+pub fn Required() {
+    return ""
+}
+
+export Background
+export Color
+export Font
+export Bold
+export Padding
+export Margin
+export Spacing
+export Gap
+export Width
+export Height
+export BorderRadius
+export Border
+export BoxShadow
+export AlignCenter
+export JustifyBetween
+export Href
+export Action
+export Method
+export Required

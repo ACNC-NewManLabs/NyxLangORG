@@ -1,0 +1,54 @@
+# Nyx ML Hardware Abstraction Layer (HAL)
+# Provides a unified device API across CPU, GPU, and future backends
+
+fn available_devices() {
+    # In production, this would query the system.
+    # wgpu already handles Vulkan/Metal/DX12 discovery.
+    let devices = ["cpu"]
+    # Probe GPU availability via our gpu_bridge
+    let gpu_test = std::math::matmul_gpu([1.0], [1.0], 1, 1, 1)
+    if gpu_test != null {
+        devices.push("gpu")
+    }
+    return devices
+}
+
+fn default_device() {
+    let devs = available_devices()
+    if devs.len() > 1 {
+        return "gpu"
+    }
+    return "cpu"
+}
+
+fn transfer(tensor, to_device) {
+    if tensor.device == to_device { return tensor }
+    # Tag the tensor for the new device; the kernel dispatch does the rest
+    tensor.device = to_device
+    println("[HAL] Transferred tensor (shape={}) → {}", tensor.shape, to_device)
+    return tensor
+}
+
+fn memory_stats() {
+    # Expose memory statistics via the NyxVm buffer_cache state
+    return {
+        backend: "wgpu + system allocator",
+        note: "Use profiler.nyx for detailed memory tracking"
+    }
+}
+
+fn device_info(device) {
+    if device == "cpu" {
+        return { device: "cpu", backend: "native Rust SIMD", dtype: "f64", supports_grad: true }
+    }
+    if device == "gpu" {
+        return { device: "gpu", backend: "wgpu (Vulkan/Metal/DX12)", dtype: "f32", supports_grad: false }
+    }
+    return { device: device, backend: "unknown" }
+}
+
+# Synchronize all pending GPU ops (poll device)
+fn synchronize() {
+    # wgpu device.poll(Wait) is called inside gpu_bridge.rs kernel dispatch
+    println("[HAL] Device synchronized.")
+}

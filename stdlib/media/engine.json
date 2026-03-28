@@ -1,0 +1,8 @@
+{
+  "name": "media",
+  "modules": [
+    "./image.nyx",
+    "./svg.nyx",
+    "./graph.nyx"
+  ]
+}

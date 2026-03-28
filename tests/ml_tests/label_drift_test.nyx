@@ -1,0 +1,73 @@
+import ml;
+import std::df;
+
+# --- Reuse Advanced Stats ---
+
+fn sort_array(arr) {
+    let indices = std::df::col_sort(arr, false)
+    let sorted = []
+    let i = 0
+    while i < indices.len() {
+        sorted.push(arr[indices[i]])
+        i = i + 1
+    }
+    return sorted
+}
+
+fn ks_test(arr1, arr2) {
+    let n1 = arr1.len()
+    let n2 = arr2.len()
+    if n1 == 0 || n2 == 0 { return 0.0 }
+    let s1 = sort_array(arr1)
+    let s2 = sort_array(arr2)
+    let i = 0 let j = 0 let max_d = 0.0
+    while i < n1 || j < n2 {
+        let val = 0.0
+        if i < n1 && j < n2 { if s1[i] < s2[j] { val = s1[i] } else { val = s2[j] } }
+        else if i < n1 { val = s1[i] } else { val = s2[j] }
+        while i < n1 && s1[i] <= val { i = i + 1 }
+        while j < n2 && s2[j] <= val { j = j + 1 }
+        let e1 = i * 1.0 / n1 let e2 = j * 1.0 / n2
+        let diff = std::math::abs(e1 - e2)
+        if diff > max_d { max_d = diff }
+    }
+    return max_d
+}
+
+fn _randn() {
+    let a = std::math::randn_array(1)
+    if a == null { return 0.0 }
+    return a[0]
+}
+
+# --- Test Case: Label Drift ---
+
+fn test_label_drift() {
+    println("--- Testing Label Drift Monitoring ---")
+    
+    # 1. Training labels (50/50 balance)
+    let train_labels = []
+    let i = 0
+    while i < 100 { train_labels.push(0.0) train_labels.push(1.0) i = i + 1 }
+    
+    # 2. Production labels (90/10 shift)
+    let prod_labels = []
+    let i = 0
+    while i < 180 { prod_labels.push(0.0) i = i + 1 }
+    i = 0
+    while i < 20 { prod_labels.push(1.0) i = i + 1 }
+    
+    println("Comparing Training vs Production label distribution...")
+    let ks = ks_test(train_labels, prod_labels)
+    println("  Label Drift (KS Statistic): ", ks)
+    
+    if ks > 0.2 {
+        println("WARN: Significant label drift detected! Model behavior may be biased.")
+    } else {
+        println("SUCCESS: Label distribution is stable")
+    }
+}
+
+fn main() {
+    test_label_drift()
+}

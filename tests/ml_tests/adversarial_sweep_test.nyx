@@ -1,0 +1,70 @@
+import ml;
+import std::df;
+
+# --- Helper: Model Sensitivity ---
+
+fn predict_adversarial_v2(val) {
+    if val > 0.5 { return 1 }
+    return 0
+}
+
+fn simulate_fgsm_attack(val, epsilon) {
+    # simulated gradient and direction
+    return val - epsilon
+}
+
+fn simulate_random_attack(val, epsilon) {
+    let noise = (std::math::randn_array(1)[0]) * epsilon
+    return val + noise
+}
+
+# --- Test Case ---
+
+fn test_adversarial_sweep() {
+    println("--- Testing Adversarial Epsilon Sweep & Failure Curve ---")
+    
+    let base_input = 0.55 # Target observation
+    let base_pred = predict_adversarial_v2(base_input)
+    println("Base input: ", base_input, " Pred: ", base_pred)
+    
+    let epsilons = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1]
+    
+    println("Attack Type: Directional (Simulated FGSM)")
+    let i = 0
+    while i < epsilons.len() {
+        let eps = epsilons[i]
+        let p_input = simulate_fgsm_attack(base_input, eps)
+        let p_pred = predict_adversarial_v2(p_input)
+        
+        let status = "STABLE"
+        if p_pred != base_pred { status = "FLIPPED (FAILURE)" }
+        
+        println("  eps=", eps, " Input=", p_input, " Status=", status)
+        i = i + 1
+    }
+    
+    println("Attack Type: Random Stochastic Perturbation")
+    let j = 0
+    while j < epsilons.len() {
+        let eps = epsilons[j]
+        let flips = 0
+        let trials = 100
+        let t = 0
+        while t < trials {
+            let p_input = simulate_random_attack(base_input, eps)
+            if predict_adversarial_v2(p_input) != base_pred { flips = flips + 1 }
+            t = t + 1
+        }
+        let rate = flips * 1.0 / trials
+        let status = "ROBUST"
+        if rate > 0.05 { status = "DRIFTING" }
+        if rate > 0.5 { status = "FAILED" }
+        
+        println("  eps=", eps, " FlipRate=", rate * 100, "% Status=", status)
+        j = j + 1
+    }
+}
+
+fn main() {
+    test_adversarial_sweep()
+}

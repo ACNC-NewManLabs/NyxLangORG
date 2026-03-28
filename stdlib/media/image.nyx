@@ -1,0 +1,30 @@
+# Nyx Media Library: Image Generation
+# Provides high-level image generation and manipulation
+
+fn save(path, data, width, height) {
+    return std::media::save_image(path, data, width, height)
+}
+
+fn load(path) {
+    return std::media::load_image(path)
+}
+
+fn Image(width, height) {
+    return {
+        width: width,
+        height: height,
+        data: std::math::zeros([width * height * 3]), # Default RGB
+        
+        set_pixel: fn(self, x, y, r, g, b) {
+            if x < 0 || x >= self.width || y < 0 || y >= self.height { return null }
+            let idx = (y * self.width + x) * 3
+            self.data[idx] = r
+            self.data[idx+1] = g
+            self.data[idx+2] = b
+        },
+        
+        save: fn(self, path) {
+            return save(path, self.data, self.width, self.height)
+        }
+    }
+}

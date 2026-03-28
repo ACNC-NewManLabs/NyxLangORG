@@ -1,0 +1,52 @@
+//! Nyx UI Style Presets
+//! Reusable style blocks using native `css` template literals.
+
+import tokens as t
+
+pub fn preset_btn_primary() {
+    return css`
+        background: linear-gradient(135deg, ${t.color_primary()}, ${t.color_secondary()});
+        color: white;
+        padding: 0.8rem 2rem;
+        border-radius: ${t.radius_full()};
+        font-weight: 700;
+        text-decoration: none;
+        box-shadow: 0 10px 20px rgba(0, 102, 255, 0.2);
+        display: inline-block;
+        transition: transform 0.2s;
+    `
+}
+
+pub fn preset_card() {
+    return css`
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: ${t.radius_lg()};
+        padding: ${t.spacing_xl()};
+        backdrop-filter: blur(10px);
+     Glassmorphism effect */
+        -webkit-backdrop-filter: blur(10px);
+    `
+}
+
+pub fn preset_nav() {
+    return css`
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: ${t.spacing_sm()} ${t.spacing_xl()};
+        background: rgba(10, 10, 15, 0.8);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        z-index: 1000;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    `
+}
+
+export preset_btn_primary
+export preset_card
+export preset_nav

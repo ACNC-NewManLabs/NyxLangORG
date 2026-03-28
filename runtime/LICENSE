@@ -1,0 +1,29 @@
+# 📄 Nyx Runtime: Proprietary Software License Agreement
+
+**Copyright (c) 2026 SURYA SEKHAR ROY. All Rights Reserved.**
+
+---
+
+### 1. OWNERSHIP AND INTELLECTUAL PROPERTY
+The **Nyx Runtime Components** (including the sandbox, task scheduler, memory management system, threading primitives, and module loading logic), are the sole and exclusive intellectual property of **SURYA SEKHAR ROY**.
+
+This software is protected by international copyright laws, trade secret protections, and trademark laws. All rights not expressly granted in this Agreement are reserved by the Owner.
+
+### 2. TRADEMARK POLICY
+The names **Nyx™**, **Nyx Sandbox™**, **Nyx Scheduler™**, and all associated logos are trademarks owned by **SURYA SEKHAR ROY**.
+- Unauthorized usage of these trademarks for commercial or branding purposes is strictly prohibited.
+- Technical implementations linking to these components must acknowledge the Owner.
+
+### 3. LICENSE GRANT
+The Owner grants a limited, non-transferable license to execute and test the Nyx Runtime solely for the purpose of running applications within the Nyx Ecosystem.
+
+### 4. RESTRICTIONS
+- **No Redistribution**: You may not redistribute, package, or sell the Nyx Runtime as a standalone product.
+- **No Authorship Alteration**: All copyright/trademark notices must remain intact in all copies of the software.
+
+---
+
+**BY USING THE NYX RUNTIME, YOU AGREE TO THESE PROPRIETARY TERMS.**
+
+**AUTHOR & OWNER:** SURYA SEKHAR ROY
+**DATE:** March 14, 2026

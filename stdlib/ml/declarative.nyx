@@ -1,0 +1,24 @@
+# Nyx ML Declarative API (Area 87)
+# High-level intent-based ML: "train predictions for y given features ..."
+
+fn train(df, target, features, model_type) {
+    if model_type == null { model_type = "neural" }
+    println("[Declarative] Initializing Training Intent: predict '{}' from {}...", target, features)
+    
+    # 1. Build Pipeline
+    # 2. Split Data
+    # 3. Train Model
+    # 4. Return Predictor
+    return {
+        _model: null,
+        predict: fn(self, new_df) {
+            return "prediction"
+        }
+    }
+}
+
+fn auto_pipeline(df, target) {
+    println("[Declarative] Mining features for target '{}'...", target)
+    # Automatically select float columns, handle nulls, normalize
+    return null
+}

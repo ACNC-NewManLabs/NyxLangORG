@@ -1,0 +1,150 @@
+# Nyx Dataframe Engine: Streaming DataFrames
+# Event streams, sliding windows, incremental computation.
+
+fn StreamFrame(source_fn, window_size, schema) {
+    # source_fn: a Nyx closure that returns a batch (DataFrame) each call, or null when done
+    # window_size: how many batches to keep in the sliding window
+    if window_size == null { window_size = 1 }
+    return {
+        _source: source_fn,
+        _window: window_size,
+        _pipeline: [],
+        _window_buffer: [],
+
+        # ── add streaming operators ──────────────────────────────────
+        filter: fn(self, expr) {
+            let new_pipeline = []
+            let i = 0
+            while i < self._pipeline.len() { new_pipeline.push(self._pipeline[i])  i = i + 1 }
+            new_pipeline.push({ op: "filter", expr: expr })
+            return StreamFrame_with_pipeline(self._source, self._window, new_pipeline)
+        },
+
+        with_columns: fn(self, exprs) {
+            let new_pipeline = []
+            let i = 0
+            while i < self._pipeline.len() { new_pipeline.push(self._pipeline[i])  i = i + 1 }
+            new_pipeline.push({ op: "with_columns", exprs: exprs })
+            return StreamFrame_with_pipeline(self._source, self._window, new_pipeline)
+        },
+
+        # ── sink: consume all batches ────────────────────────────────
+        sink: fn(self, sink_fn) {
+            let batch_count = 0
+            let running = true
+            while running {
+                let batch = self._source()
+                if batch == null {
+                    running = false
+                } else {
+                    # Apply pipeline to batch
+                    let current = batch
+                    let i = 0
+                    while i < self._pipeline.len() {
+                        let step = self._pipeline[i]
+                        if step.op == "filter" {
+                            let mask = eval_expr(step.expr, current)
+                            if mask != null { current = current.filter(mask) }
+                        }
+                        if step.op == "with_columns" {
+                            let j = 0
+                            while j < step.exprs.len() {
+                                let result = eval_expr(step.exprs[j], current)
+                                if result != null {
+                                    let nm = expr_output_name(step.exprs[j])
+                                    current = current.with_column(result.alias(nm))
+                                }
+                                j = j + 1
+                            }
+                        }
+                        i = i + 1
+                    }
+                    sink_fn(current, batch_count)
+                    batch_count = batch_count + 1
+                }
+            }
+            return batch_count
+        },
+
+        # ── windowed sink: accumulates window_size batches then calls fn ─
+        windowed_sink: fn(self, agg_fn) {
+            let buffer = []
+            let batch_count = 0
+            let running = true
+            while running {
+                let batch = self._source()
+                if batch == null {
+                    running = false
+                } else {
+                    buffer.push(batch)
+                    if buffer.len() > self._window {
+                        # Drop oldest batch (simulate sliding window)
+                        let new_buf = []
+                        let i = 1
+                        while i < buffer.len() { new_buf.push(buffer[i])  i = i + 1 }
+                        buffer = new_buf
+                    }
+                    agg_fn(buffer, batch_count)
+                    batch_count = batch_count + 1
+                }
+            }
+            return batch_count
+        },
+
+        # ── collect all batches into a single DataFrame ──────────────
+        collect: fn(self) {
+            let all_rows = null
+            let running = true
+            while running {
+                let batch = self._source()
+                if batch == null {
+                    running = false
+                } else {
+                    if all_rows == null {
+                        all_rows = batch
+                    } else {
+                        # Concatenate batch to all_rows
+                        let c = 0
+                        while c < all_rows._columns.len() {
+                            let col_a = all_rows._columns[c]
+                            let col_b = batch.col(col_a._name)
+                            if col_b != null {
+                                let new_data = []
+                                let i = 0
+                                while i < col_a._data.len() { new_data.push(col_a._data[i])  i = i + 1 }
+                                let j = 0
+                                while j < col_b._data.len() { new_data.push(col_b._data[j])  j = j + 1 }
+                                col_a._data = new_data
+                            }
+                            c = c + 1
+                        }
+                    }
+                }
+            }
+            return all_rows
+        }
+    }
+}
+
+fn StreamFrame_with_pipeline(source, window, pipeline) {
+    let sf = StreamFrame(source, window, null)
+    sf._pipeline = pipeline
+    return sf
+}
+
+# ── convenience: stream a static DataFrame in micro-batches ──────────────────
+
+fn stream_dataframe(df, batch_size) {
+    if batch_size == null { batch_size = 100 }
+    let nr = df.nrows()
+    let state = { "offset": 0 }
+    let source_fn = fn() {
+        if state.offset >= nr { return null }
+        let length = batch_size
+        if state.offset + length > nr { length = nr - state.offset }
+        let batch = df.slice(state.offset, length)
+        state.offset = state.offset + length
+        return batch
+    }
+    return StreamFrame(source_fn, 1, null)
+}

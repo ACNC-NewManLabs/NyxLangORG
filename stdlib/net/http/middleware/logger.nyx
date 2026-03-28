@@ -1,0 +1,257 @@
+/**
+ * Logger Middleware Module
+ * 
+ * Provides request/response logging middleware for HTTP servers.
+ * 
+ * @module http::middleware::logger
+ */
+
+type Logger = {
+    log_requests: bool,
+    log_responses: bool,
+    log_headers: bool,
+    log_body: bool,
+    log_level: string,
+    formatter: fn(HttpRequest, HttpResponse?) -> string,
+    logger: any
+};
+
+type LoggerOptions = {
+    log_requests?: bool,
+    log_responses?: bool,
+    log_headers?: bool,
+    log_body?: bool,
+    log_level?: string,
+    format?: string
+};
+
+/**
+ * Create logger middleware with default options
+ * 
+ * @returns Logger middleware
+ */
+fn create(options: LoggerOptions?) -> fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+    let opts = options ?? default_options();
+    
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        let start_time = current_time_ms();
+        
+        // Log request
+        if opts.log_requests {
+            log_request(req, opts);
+        }
+        
+        // Call next middleware/handler
+        let resp = next(req);
+        
+        // Log response
+        if opts.log_responses {
+            let elapsed = current_time_ms() - start_time;
+            log_response(req, resp, elapsed, opts);
+        }
+        
+        return some(resp);
+    };
+}
+
+/**
+ * Create default logger options
+ */
+fn default_options() -> LoggerOptions {
+    return LoggerOptions {
+        log_requests: true,
+        log_responses: true,
+        log_headers: false,
+        log_body: false,
+        log_level: "info"
+    };
+}
+
+/**
+ * Log incoming request
+ */
+fn log_request(req: HttpRequest, opts: LoggerOptions) {
+    let method = get_method(req);
+    let path = get_path(req);
+    let ip = get_client_ip(req);
+    let user_agent = get_user_agent(req);
+    
+    let log_line = format_request_line(method, path, ip, user_agent);
+    
+    log(opts.log_level, log_line);
+    
+    // Log headers if enabled
+    if opts.log_headers {
+        let headers = get_headers(req);
+        
+        for key in keys(headers) {
+            log(opts.log_level, "  " + key + ": " + headers[key]);
+        }
+    }
+}
+
+/**
+ * Log outgoing response
+ */
+fn log_response(req: HttpRequest, resp: HttpResponse, elapsed_ms: i64, opts: LoggerOptions) {
+    let status = get_status(resp);
+    let method = get_method(req);
+    let path = get_path(req);
+    
+    let log_line = format_response_line(method, path, status, elapsed_ms);
+    
+    // Choose log level based on status code
+    let level = get_log_level(status);
+    
+    log(level, log_line);
+}
+
+/**
+ * Format request log line
+ */
+fn format_request_line(method: string, path: string, ip: string, user_agent: string) -> string {
+    return ip + " - - [" + get_timestamp() + "] \\\"" + method + " " + path + " HTTP/1.1\\\" - " + user_agent;
+}
+
+/**
+ * Format response log line
+ */
+fn format_response_line(method: string, path: string, status: i64, elapsed_ms: i64) -> string {
+    return method + " " + path + " " + str(status) + " " + str(elapsed_ms) + "ms";
+}
+
+/**
+ * Get log level based on status code
+ */
+fn get_log_level(status: i64) -> string {
+    if status >= 500 {
+        return "error";
+    } else if status >= 400 {
+        return "warn";
+    } else if status >= 300 {
+        return "info";
+    }
+    return "info";
+}
+
+/**
+ * Get client IP from request
+ */
+fn get_client_ip(req: HttpRequest) -> string {
+    // Check X-Forwarded-For header first
+    let forwarded = get_header(req, "X-Forwarded-For");
+    
+    if forwarded != "" {
+        // Take first IP if multiple
+        let ips = split(forwarded, ",");
+        return trim(ips[0]);
+    }
+    
+    // Check X-Real-IP header
+    let real_ip = get_header(req, "X-Real-IP");
+    
+    if real_ip != "" {
+        return real_ip;
+    }
+    
+    // Fall back to remote address
+    return "unknown";
+}
+
+/**
+ * Create JSON logging middleware
+ * 
+ * @param options - Logger options
+ * @returns JSON logger middleware
+ */
+fn json(options: LoggerOptions?) -> fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        let start_time = current_time_ms();
+        
+        let resp = next(req);
+        
+        let elapsed = current_time_ms() - start_time;
+        
+        // Build JSON log
+        let json_log = build_json_log(req, resp, elapsed);
+        
+        log("info", json_log);
+        
+        return some(resp);
+    };
+}
+
+/**
+ * Build JSON log entry
+ */
+fn build_json_log(req: HttpRequest, resp: HttpResponse, elapsed: i64) -> string {
+    // Would build JSON string
+    return "{\"method\": \"GET\", \"path\": \"/\", \"status\": 200}";
+}
+
+/**
+ * Create custom formatter
+ */
+fn with_formatter(formatter: fn(HttpRequest, HttpResponse?) -> string) -> LoggerOptions {
+    return LoggerOptions {
+        format: "custom"
+    };
+}
+
+// Helper functions
+
+fn get_method(req: HttpRequest) -> string {
+    return "";  // Placeholder
+}
+
+fn get_path(req: HttpRequest) -> string {
+    return "";  // Placeholder
+}
+
+fn get_status(resp: HttpResponse) -> i64 {
+    return 200;  // Placeholder
+}
+
+fn get_headers(req: HttpRequest) -> Map<string, string> {
+    return {};  // Placeholder
+}
+
+fn get_header(req: HttpRequest, name: string) -> string {
+    return "";  // Placeholder
+}
+
+fn get_user_agent(req: HttpRequest) -> string {
+    return "";  // Placeholder
+}
+
+fn get_timestamp() -> string {
+    return "";  // Placeholder
+}
+
+fn current_time_ms() -> i64 {
+    return 0;  // Placeholder
+}
+
+fn log(level: string, message: string) {
+    // Placeholder - would use logging system
+}
+
+fn format(s: string, args: List<string>) -> string {
+    return s;  // Placeholder
+}
+
+fn str(n: i64) -> string {
+    return "";  // Placeholder
+}
+
+fn split(s: string, delimiter: string) -> List<string> {
+    return [];  // Placeholder
+}
+
+fn trim(s: string) -> string {
+    return s;  // Placeholder
+}
+
+fn keys(m: Map<string, string>) -> List<string> {
+    return [];  // Placeholder
+}

@@ -1,0 +1,81 @@
+import ml;
+import std::df;
+
+# --- Helper: Data Drift Detection ---
+
+fn detect_drift(df_train, df_live, threshold) {
+    if threshold == null { threshold = 0.2 }
+    let col_names = df_train.col_names()
+    let i = 0
+    let passed = true
+    
+    while i < col_names.len() {
+        let name = col_names[i]
+        let col_train = df_train.col(name)
+        let col_live = df_live.col(name)
+        
+        if col_live == null {
+            println("WARN: Column '", name, "' missing in live data")
+        } else if col_train._dtype == "float" || col_train._dtype == "int" {
+            # Simple Mean Drift calculation
+            let desc_train = std::df::col_describe(col_train._data)
+            let desc_live = std::df::col_describe(col_live._data)
+            
+            let m_train = desc_train.mean
+            let m_live = desc_live.mean
+            
+            # Relative difference
+            let diff = m_live - m_train
+            if diff < 0 { diff = 0.0 - diff }
+            
+            let rel_diff = 0.0
+            if m_train != 0 { rel_diff = diff / m_train }
+            else { rel_diff = diff }
+            
+            if rel_diff > threshold {
+                println("FAIL: Drift detected in '", name, "'. Train Mean: ", m_train, ", Live Mean: ", m_live, ", Rel Diff: ", rel_diff)
+                passed = false
+            } else {
+                println("SUCCESS: '", name, "' is stable. Rel Diff: ", rel_diff)
+            }
+        }
+        i = i + 1
+    }
+    return passed
+}
+
+# --- Test Case ---
+
+fn test_data_drift() {
+    println("--- Testing Data Drift Foundation ---")
+    
+    # 1. Create Training Data (Stable)
+    let train_col1 = std::df::Column("feat1", "float", [1.0, 1.1, 0.9, 1.05, 0.95], null)
+    let train_col2 = std::df::Column("feat2", "float", [100.0, 105.0, 95.0, 102.0, 98.0], null)
+    let df_train = std::df::DataFrame([train_col1, train_col2], null)
+    
+    # 2. Create Live Data (Stable)
+    let live_stable_col1 = std::df::Column("feat1", "float", [1.02, 0.98, 1.01, 0.99, 1.0], null)
+    let live_stable_col2 = std::df::Column("feat2", "float", [101.0, 99.0, 100.5, 99.5, 100.0], null)
+    let df_live_stable = std::df::DataFrame([live_stable_col1, live_stable_col2], null)
+    
+    # 3. Create Live Data (Drifted)
+    let live_drift_col1 = std::df::Column("feat1", "float", [1.5, 1.6, 1.4, 1.55, 1.45], null) # 50% drift
+    let live_drift_col2 = std::df::Column("feat2", "float", [100.0, 101.0, 99.0, 100.5, 99.5], null) # Stable
+    let df_live_drift = std::df::DataFrame([live_drift_col1, live_drift_col2], null)
+    
+    # 4. Run detection
+    println("Checking stable live data...")
+    if detect_drift(df_train, df_live_stable, 0.1) {
+        println("SUCCESS: Stable data identified correctly")
+    }
+    
+    println("Checking drifted live data (expected to fail for feat1)...")
+    if detect_drift(df_train, df_live_drift, 0.1) == false {
+        println("SUCCESS: Drift in 'feat1' detected correctly")
+    }
+}
+
+fn main() {
+    test_data_drift()
+}

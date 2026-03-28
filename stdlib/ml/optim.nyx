@@ -1,0 +1,334 @@
+# Nyx Standard Library: ML Optimizers
+# World-class optimizer suite - SGD, Adam, AdamW, RMSProp + LR Schedulers
+
+fn Adam(layers, lr, beta1, beta2, epsilon) {
+    if lr == null { lr = 0.001 }
+    if beta1 == null { beta1 = 0.9 }
+    if beta2 == null { beta2 = 0.999 }
+    if epsilon == null { epsilon = 1e-8 }
+    
+    return {
+        type: "Adam",
+        layers: layers,
+        lr: lr,
+        beta1: beta1,
+        beta2: beta2,
+        epsilon: epsilon,
+        t: 1.0,
+        
+        zero_grad: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight != null { layer.weight.grad = null }
+                if layer.bias != null { layer.bias.grad = null }
+                i = i + 1
+            }
+        },
+        
+        step: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                
+                # Area 28: NaN detection
+                if layer.weight != null && !layer.weight.is_finite() {
+                    println("[Optimizer] Adam FATAL: NaN detected in layer {} weights.", i)
+                }
+
+                if layer.weight.grad != null {
+                    std::math::adam_step(
+                        layer.weight.data, layer.weight.grad, layer.m_w.data, layer.v_w.data,
+                        self.lr, self.beta1, self.beta2, self.epsilon, self.t
+                    )
+                }
+                if layer.bias.grad != null {
+                    std::math::adam_step(
+                        layer.bias.data, layer.bias.grad, layer.m_b.data, layer.v_b.data,
+                        self.lr, self.beta1, self.beta2, self.epsilon, self.t
+                    )
+                }
+                i = i + 1
+            }
+            self.t = self.t + 1.0
+        }
+    }
+}
+
+# AdamW: Adam + decoupled weight decay (better regularization)
+fn AdamW(layers, lr, beta1, beta2, epsilon, weight_decay) {
+    if lr == null { lr = 0.001 }
+    if beta1 == null { beta1 = 0.9 }
+    if beta2 == null { beta2 = 0.999 }
+    if epsilon == null { epsilon = 1e-8 }
+    if weight_decay == null { weight_decay = 0.01 }
+    
+    return {
+        type: "AdamW",
+        layers: layers,
+        lr: lr,
+        beta1: beta1,
+        beta2: beta2,
+        epsilon: epsilon,
+        weight_decay: weight_decay,
+        t: 1.0,
+        
+        zero_grad: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight != null { layer.weight.grad = null }
+                if layer.bias != null { layer.bias.grad = null }
+                i = i + 1
+            }
+        },
+        
+        step: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight.grad != null {
+                    std::math::adamw_step(
+                        layer.weight.data, layer.weight.grad, layer.m_w.data, layer.v_w.data,
+                        self.lr, self.beta1, self.beta2, self.epsilon, self.t, self.weight_decay
+                    )
+                }
+                if layer.bias.grad != null {
+                    std::math::adam_step(
+                        layer.bias.data, layer.bias.grad, layer.m_b.data, layer.v_b.data,
+                        self.lr, self.beta1, self.beta2, self.epsilon, self.t
+                    )
+                }
+                i = i + 1
+            }
+            self.t = self.t + 1.0
+        }
+    }
+}
+
+# SGD with momentum and optional Nesterov
+fn SGD(layers, lr, momentum, weight_decay) {
+    if lr == null { lr = 0.01 }
+    if momentum == null { momentum = 0.9 }
+    if weight_decay == null { weight_decay = 0.0 }
+    
+    # Pre-allocate velocity buffers
+    let i = 0
+    while i < layers.len() {
+        let layer = layers[i]
+        if layer.weight != null {
+            layer.vel_w = zeros(layer.weight.shape, false)
+            layer.vel_b = zeros(layer.bias.shape, false)
+        }
+        i = i + 1
+    }
+    
+    return {
+        type: "SGD",
+        layers: layers,
+        lr: lr,
+        momentum: momentum,
+        weight_decay: weight_decay,
+        
+        zero_grad: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight != null { layer.weight.grad = null }
+                if layer.bias != null { layer.bias.grad = null }
+                i = i + 1
+            }
+        },
+        
+        step: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight.grad != null {
+                    std::math::sgd_step(
+                        layer.weight.data, layer.weight.grad, layer.vel_w.data,
+                        self.lr, self.momentum, self.weight_decay
+                    )
+                }
+                if layer.bias.grad != null {
+                    std::math::sgd_step(
+                        layer.bias.data, layer.bias.grad, layer.vel_b.data,
+                        self.lr, self.momentum, 0.0
+                    )
+                }
+                i = i + 1
+            }
+        }
+    }
+}
+
+# RMSProp optimizer
+fn RMSProp(layers, lr, alpha, epsilon, weight_decay) {
+    if lr == null { lr = 0.01 }
+    if alpha == null { alpha = 0.99 }
+    if epsilon == null { epsilon = 1e-8 }
+    if weight_decay == null { weight_decay = 0.0 }
+    
+    let i = 0
+    while i < layers.len() {
+        let layer = layers[i]
+        if layer.weight != null {
+            layer.sq_w = zeros(layer.weight.shape, false)
+            layer.sq_b = zeros(layer.bias.shape, false)
+        }
+        i = i + 1
+    }
+    
+    return {
+        type: "RMSProp",
+        layers: layers,
+        lr: lr,
+        alpha: alpha,
+        epsilon: epsilon,
+        weight_decay: weight_decay,
+        
+        zero_grad: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight != null { layer.weight.grad = null }
+                if layer.bias != null { layer.bias.grad = null }
+                i = i + 1
+            }
+        },
+        
+        step: fn(self) {
+            let i = 0
+            while i < self.layers.len() {
+                let layer = self.layers[i]
+                if layer.weight.grad != null {
+                    std::math::rmsprop_step(
+                        layer.weight.data, layer.weight.grad, layer.sq_w.data,
+                        self.lr, self.alpha, self.epsilon, self.weight_decay
+                    )
+                }
+                if layer.bias.grad != null {
+                    std::math::rmsprop_step(
+                        layer.bias.data, layer.bias.grad, layer.sq_b.data,
+                        self.lr, self.alpha, self.epsilon, 0.0
+                    )
+                }
+                i = i + 1
+            }
+        }
+    }
+}
+
+# StepLR: multiply lr by gamma every step_size epochs
+fn StepLR(optimizer, step_size, gamma) {
+    if gamma == null { gamma = 0.1 }
+    return {
+        optimizer: optimizer,
+        step_size: step_size,
+        gamma: gamma,
+        last_epoch: 0,
+        
+        step: fn(self, epoch) {
+            if epoch != null { self.last_epoch = epoch }
+            if self.last_epoch > 0 && self.last_epoch % self.step_size == 0 {
+                self.optimizer.lr = self.optimizer.lr * self.gamma
+                println("StepLR: lr decayed to {}", self.optimizer.lr)
+            }
+            self.last_epoch = self.last_epoch + 1
+        },
+        
+        get_lr: fn(self) {
+            return self.optimizer.lr
+        },
+
+        # New step function for compatibility with DistributedOptimizer
+        step: fn(self) {
+            self.optimizer.step()
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Distributed Optimizer Wrapper (Phase 4 Scaling)
+# Automatically synchronizes gradients across all nodes
+# ─────────────────────────────────────────────────────────────
+fn DistributedOptimizer(optimizer) {
+    return {
+        type: "DistributedOptimizer",
+        optimizer: optimizer,
+        world_size: std::dist::get_world_size(),
+        rank: std::dist::get_rank(),
+
+        step: fn(self, params) {
+            # 1. Synchronize gradients before optimizer step
+            if self.world_size > 1 {
+                for p in params {
+                    if p.grad != null {
+                        # All-Reduce gradients (sum and average)
+                        std::dist::all_reduce(p.grad, "mean")
+                    }
+                }
+            }
+            
+            # 2. Local optimizer step
+            self.optimizer.step()
+            
+            # 3. Global barrier to ensure all nodes are in sync
+            if self.world_size > 1 {
+                std::dist::barrier()
+            }
+        }
+    }
+}
+
+# CosineAnnealingLR
+fn CosineAnnealingLR(optimizer, T_max, eta_min) {
+    if eta_min == null { eta_min = 0.0 }
+    let base_lr = optimizer.lr
+    return {
+        optimizer: optimizer,
+        T_max: T_max,
+        eta_min: eta_min,
+        base_lr: base_lr,
+        epoch: 0,
+        
+        step: fn(self) {
+            # cos annealing: lr = eta_min + 0.5*(base_lr - eta_min)*(1 + cos(pi*t/T))
+            let t = self.epoch
+            let T = self.T_max
+            let pi = 3.141592653589793
+            let cos_val = std::math::cos(pi * t / T)
+            let new_lr = self.eta_min + 0.5 * (self.base_lr - self.eta_min) * (1.0 + cos_val)
+            self.optimizer.lr = new_lr
+            self.epoch = self.epoch + 1
+        }
+    }
+}
+# ─────────────────────────────────────────────────────────────
+# Gradient Utilities (Area 6)
+# ─────────────────────────────────────────────────────────────
+
+fn clip_grad_norm(layers, max_norm) {
+    let all_grads = []
+    let i = 0
+    while i < layers.len() {
+        let l = layers[i]
+        if l.weight != null && l.weight.grad != null { all_grads.push(l.weight.grad) }
+        if l.bias != null && l.bias.grad != null { all_grads.push(l.bias.grad) }
+        i = i + 1
+    }
+    return std::math::clip_grad_norm(all_grads, max_norm)
+}
+
+# [Production] Top-level functional helpers for Optimizer stability
+fn optim_step(optimizer) {
+    let f = optimizer.step
+    if f != null { return f(optimizer) }
+    return null
+}
+
+fn optim_zero_grad(optimizer) {
+    let f = optimizer.zero_grad
+    if f != null { return f(optimizer) }
+    return null
+}

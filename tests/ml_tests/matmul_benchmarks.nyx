@@ -1,0 +1,49 @@
+import ml;
+import std;
+
+fn benchmark(name, n_iters, warmup_iters, func) {
+    println("Benchmarking: " + name)
+    let i = 0
+    while (i < warmup_iters) { func(); i = i + 1 }
+    let start = std::time::now()
+    i = 0
+    while (i < n_iters) { func(); i = i + 1 }
+    let end = std::time::now()
+    let avg = (end - start) / n_iters
+    println("  Avg: " + avg + "ms")
+    return avg
+}
+fn main() {
+    # 1. MatMul 32x32 (CPU SIMD / Tier 1)
+    let a32 = ml::tensor::ones([32, 32], false)
+    let b32 = ml::tensor::ones([32, 32], false)
+    benchmark("MatMul 32x32 (CPU SIMD)", 100, 10, fn() { a32.matmul(b32) })
+
+    # 2. MatMul 64x64 (CPU SIMD / Tier 1)
+    let a64 = ml::tensor::ones([64, 64], false)
+    let b64 = ml::tensor::ones([64, 64], false)
+    benchmark("MatMul 64x64 (CPU SIMD)", 50, 5, fn() { a64.matmul(b64) })
+
+    # 3. MatMul 128x128 (GPU / Tier 2)
+    let a128 = ml::tensor::ones([128, 128], false)
+    let b128 = ml::tensor::ones([128, 128], false)
+    benchmark("MatMul 128x128 (GPU Dispatch)", 10, 2, fn() { a128.matmul(b128) })
+
+    # 2. MatMul 512x512 (CPU vs GPU)
+    let a512 = ml::tensor::ones([512, 512], false)
+    let b512 = ml::tensor::ones([512, 512], false)
+    benchmark("MatMul 512x512 (CPU)", 5, 1, fn() { a512.matmul(b512) })
+
+    let a512g = a512.move_to("gpu")
+    let b512g = b512.move_to("gpu")
+    benchmark("MatMul 512x512 (GPU)", 5, 1, fn() { a512g.matmul(b512g) })
+
+    # 3. MatMul 1024x1024 (GPU)
+    let a1024 = ml::tensor::ones([1024, 1024], false)
+    let b1024 = ml::tensor::ones([1024, 1024], false)
+    let a1024g = a1024.move_to("gpu")
+    let b1024g = b1024.move_to("gpu")
+    benchmark("MatMul 1024x1024 (GPU)", 5, 1, fn() { a1024g.matmul(b1024g) })
+
+    println("Phase 3 MatMul Benchmarks complete.")
+}

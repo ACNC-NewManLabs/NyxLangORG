@@ -1,0 +1,296 @@
+/**
+ * Logger Implementation
+ * 
+ * Provides structured logging with multiple levels and outputs.
+ * 
+ * @module logging::logger
+ */
+
+type Logger = {
+    name: string,
+    level: Level,
+    outputs: List<LogOutput>,
+    formatter: fn(Logger, Level, string, any?) -> string,
+    context: Map<string, any>
+};
+
+type LogOutput = {
+    type: OutputType,
+    writer: fn(string),
+    min_level: Level
+};
+
+type OutputType = 
+    | "console"
+    | "file"
+    | "custom";
+
+type Level = i64;
+
+// Log levels
+let DEBUG = 0;
+let INFO = 1;
+let WARN = 2;
+let ERROR = 3;
+
+let level_names = ["DEBUG", "INFO", "WARN", "ERROR"];
+
+/**
+ * Create a new logger
+ * 
+ * @param name - Logger name
+ * @returns A new logger
+ */
+fn create(name: string) -> Logger {
+    return Logger {
+        name: name,
+        level: INFO,
+        outputs: [],
+        formatter: default_formatter,
+        context: {}
+    };
+}
+
+/**
+ * Get default logger
+ */
+fn default() -> Logger {
+    let log = create("nyx");
+    
+    // Add console output
+    log.add_console(DEBUG);
+    
+    return log;
+}
+
+/**
+ * Set log level
+ * 
+ * @param logger - The logger
+ * @param level - Minimum level to log
+ * @returns The same logger for chaining
+ */
+fn level(logger: Logger, level: Level) -> Logger {
+    logger.level = level;
+    return logger;
+}
+
+/**
+ * Add console output
+ * 
+ * @param logger - The logger
+ * @param min_level - Minimum level to output
+ * @returns The same logger for chaining
+ */
+fn add_console(logger: Logger, min_level: Level) -> Logger {
+    let output = LogOutput {
+        type: "console",
+        writer: write_console,
+        min_level: min_level
+    };
+    
+    logger.outputs = logger.outputs + [output];
+    return logger;
+}
+
+/**
+ * Add file output
+ * 
+ * @param logger - The logger
+ * @param filename - Log file path
+ * @param min_level - Minimum level to output
+ * @returns The same logger for chaining
+ */
+fn add_file(logger: Logger, filename: string, min_level: Level) -> Logger {
+    let output = LogOutput {
+        type: "file",
+        writer: fn(message: string) {
+            write_to_file(filename, message);
+        },
+        min_level: min_level
+    };
+    
+    logger.outputs = logger.outputs + [output];
+    return logger;
+}
+
+/**
+ * Add custom output
+ * 
+ * @param logger - The logger
+ * @param writer - Custom writer function
+ * @param min_level - Minimum level to output
+ * @returns The same logger for chaining
+ */
+fn add_output(logger: Logger, writer: fn(string), min_level: Level) -> Logger {
+    let output = LogOutput {
+        type: "custom",
+        writer: writer,
+        min_level: min_level
+    };
+    
+    logger.outputs = logger.outputs + [output];
+    return logger;
+}
+
+/**
+ * Set custom formatter
+ * 
+ * @param logger - The logger
+ * @param formatter - Custom formatter function
+ * @returns The same logger for chaining
+ */
+fn format(logger: Logger, formatter: fn(Logger, Level, string, any?) -> string) -> Logger {
+    logger.formatter = formatter;
+    return logger;
+}
+
+/**
+ * Add context
+ * 
+ * @param logger - The logger
+ * @param key - Context key
+ * @param value - Context value
+ * @returns The same logger for chaining
+ */
+fn context(logger: Logger, key: string, value: any) -> Logger {
+    logger.context[key] = value;
+    return logger;
+}
+
+/**
+ * Log debug message
+ * 
+ * @param logger - The logger
+ * @param message - Message to log
+ */
+fn debug(logger: Logger, message: string) {
+    log(logger, DEBUG, message);
+}
+
+/**
+ * Log info message
+ * 
+ * @param logger - The logger
+ * @param message - Message to log
+ */
+fn info(logger: Logger, message: string) {
+    log(logger, INFO, message);
+}
+
+/**
+ * Log warning message
+ * 
+ * @param logger - The logger
+ * @param message - Message to log
+ */
+fn warn(logger: Logger, message: string) {
+    log(logger, WARN, message);
+}
+
+/**
+ * Log error message
+ * 
+ * @param logger - The logger
+ * @param message - Message to log
+ */
+fn error(logger: Logger, message: string) {
+    log(logger, ERROR, message);
+}
+
+/**
+ * Log message
+ * 
+ * @param logger - The logger
+ * @param level - Log level
+ * @param message - Message to log
+ */
+fn log(logger: Logger, level: Level, message: string) {
+    if level < logger.level {
+        return;
+    }
+    
+    let formatted = logger.formatter(logger, level, message, none);
+    
+    for output in logger.outputs {
+        if level >= output.min_level {
+            output.writer(formatted);
+        }
+    }
+}
+
+/**
+ * Log with data
+ * 
+ * @param logger - The logger
+ * @param level - Log level
+ * @param message - Message to log
+ * @param data - Additional data
+ */
+fn log_with_data(logger: Logger, level: Level, message: string, data: any?) {
+    if level < logger.level {
+        return;
+    }
+    
+    let formatted = logger.formatter(logger, level, message, data);
+    
+    for output in logger.outputs {
+        if level >= output.min_level {
+            output.writer(formatted);
+        }
+    }
+}
+
+/**
+ * Default formatter
+ */
+fn default_formatter(logger: Logger, level: Level, message: string, data: any?) -> string {
+    let timestamp = get_timestamp();
+    let level_name = level_names[level];
+    
+    let log_line = timestamp + " [" + level_name + "] " + logger.name + ": " + message;
+    
+    if data != none {
+        // Would add data to output
+    }
+    
+    return log_line;
+}
+
+/**
+ * JSON formatter
+ */
+fn json_formatter(logger: Logger, level: Level, message: string, data: any?) -> string {
+    // Would produce JSON output
+    return "{}";
+}
+
+/**
+ * Simple formatter (no timestamp)
+ */
+fn simple_formatter(logger: Logger, level: Level, message: string, data: any?) -> string {
+    let level_name = level_names[level];
+    return level_name + ": " + message;
+}
+
+/**
+ * Write to console
+ */
+fn write_console(message: string) {
+    // Would use print or console.log
+}
+
+// Helper functions
+
+fn write_to_file(filename: string, message: string) {
+    // Would append to file
+}
+
+fn get_timestamp() -> string {
+    // Would get current timestamp
+    return "";  // Placeholder
+}
+
+fn len(list: List<any>) -> i64 {
+    return 0;  // Placeholder
+}

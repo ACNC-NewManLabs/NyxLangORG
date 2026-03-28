@@ -1,0 +1,397 @@
+/**
+ * Task Module
+ * 
+ * Provides task spawning and management for concurrent execution.
+ * Tasks are lightweight green threads managed by the async runtime.
+ * 
+ * @module task
+ */
+
+type Task = {
+    id: i64,
+    state: TaskState,
+    func: fn(),
+    result: any,
+    error: any,
+    spawned_at: i64,
+    completed_at: i64?
+};
+
+type TaskState = 
+    | "pending"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled";
+
+type TaskHandle = {
+    id: i64,
+    task: Task?
+};
+
+// Global task registry
+let next_task_id: i64 = 0;
+let active_tasks: List<Task> = [];
+let completed_tasks: List<Task> = [];
+let task_queue: List<fn()> = [];
+
+/**
+ * Spawn a new async task
+ * 
+ * @param func - The function to execute asynchronously
+ * @returns Task handle for tracking and awaiting
+ * 
+ * @example
+ * let handle = spawn(fn() {
+ *     let result = do_work();
+ *     print("Task completed: " + result);
+ * });
+ */
+fn spawn(func: fn()) -> TaskHandle {
+    next_task_id = next_task_id + 1;
+    
+    let task = Task {
+        id: next_task_id,
+        state: "pending",
+        func: func,
+        result: none,
+        error: none,
+        spawned_at: current_time_ms(),
+        completed_at: none
+    };
+    
+    active_tasks = active_tasks + [task];
+    
+    // Add to task queue for execution
+    task_queue = task_queue + [fn() {
+        execute_task(task.id);
+    }];
+    
+    return TaskHandle {
+        id: next_task_id,
+        task: some(task)
+    };
+}
+
+/**
+ * Await a task completion
+ * 
+ * @param handle - The task handle to wait for
+ * @returns The result of the task execution
+ * 
+ * @example
+ * let result = await(task_handle);
+ */
+fn await(handle: TaskHandle) -> any {
+    // Poll for completion
+    while true {
+        // Find the task
+        let task_opt = find_task(handle.id);
+        
+        if task_opt == none {
+            return none;
+        }
+        
+        let task = task_opt as Task;
+        
+        match task.state {
+            "completed" => {
+                return task.result;
+            },
+            "failed" => {
+                // In Nyx, we might throw the error
+                panic("Task failed: " + str(task.error));
+            },
+            "cancelled" => {
+                return none;
+            },
+            _ => {
+                // Still running, yield to event loop
+                sleep(1);
+            }
+        }
+    }
+    
+    return none;
+}
+
+/**
+ * Execute a task by ID
+ */
+fn execute_task(task_id: i64) {
+    // Find and update task state
+    let mut updated: List<Task> = [];
+    
+    for task in active_tasks {
+        if task.id == task_id {
+            let mut t = {...task, state: "running"};
+            updated = updated + [t];
+            
+            // Execute the task function
+            try {
+                t.func();
+                t.state = "completed";
+                t.completed_at = some(current_time_ms());
+            } catch e {
+                t.state = "failed";
+                t.error = e;
+                t.completed_at = some(current_time_ms());
+            }
+            
+            // Move to completed tasks
+            completed_tasks = completed_tasks + [t];
+        } else {
+            updated = updated + [task];
+        }
+    }
+    
+    active_tasks = updated;
+}
+
+/**
+ * Find a task by ID
+ */
+fn find_task(id: i64) -> Task? {
+    // Check active tasks
+    for task in active_tasks {
+        if task.id == id {
+            return some(task);
+        }
+    }
+    
+    // Check completed tasks
+    for task in completed_tasks {
+        if task.id == id {
+            return some(task);
+        }
+    }
+    
+    return none;
+}
+
+/**
+ * Cancel a running task
+ * 
+ * @param handle - The task handle to cancel
+ * @returns Whether the cancellation was successful
+ */
+fn cancel(handle: TaskHandle) -> bool {
+    let mut cancelled = false;
+    let mut updated: List<Task> = [];
+    
+    for task in active_tasks {
+        if task.id == handle.id {
+            let mut t = {...task, state: "cancelled"};
+            updated = updated + [t];
+            cancelled = true;
+        } else {
+            updated = updated + [task];
+        }
+    }
+    
+    active_tasks = updated;
+    return cancelled;
+}
+
+/**
+ * Check if a task is completed
+ * 
+ * @param handle - The task handle to check
+ * @returns Whether the task is completed
+ */
+fn is_completed(handle: TaskHandle) -> bool {
+    let task_opt = find_task(handle.id);
+    
+    if task_opt == none {
+        return false;
+    }
+    
+    let task = task_opt as Task;
+    return task.state == "completed";
+}
+
+/**
+ * Check if a task failed
+ * 
+ * @param handle - The task handle to check
+ * @returns Whether the task failed
+ */
+fn is_failed(handle: TaskHandle) -> bool {
+    let task_opt = find_task(handle.id);
+    
+    if task_opt == none {
+        return false;
+    }
+    
+    let task = task_opt as Task;
+    return task.state == "failed";
+}
+
+/**
+ * Get the error from a failed task
+ * 
+ * @param handle - The task handle
+ * @returns The error if the task failed
+ */
+fn get_error(handle: TaskHandle) -> any {
+    let task_opt = find_task(handle.id);
+    
+    if task_opt == none {
+        return none;
+    }
+    
+    let task = task_opt as Task;
+    return task.error;
+}
+
+/**
+ * Get the result from a completed task
+ * 
+ * @param handle - The task handle
+ * @returns The result if the task completed
+ */
+fn get_result(handle: TaskHandle) -> any {
+    let task_opt = find_task(handle.id);
+    
+    if task_opt == none {
+        return none;
+    }
+    
+    let task = task_opt as Task;
+    return task.result;
+}
+
+/**
+ * Get the number of active tasks
+ */
+fn active_count() -> i64 {
+    return len(active_tasks);
+}
+
+/**
+ * Get the number of completed tasks
+ */
+fn completed_count() -> i64 {
+    return len(completed_tasks);
+}
+
+/**
+ * Get all active tasks
+ */
+fn get_active_tasks() -> List<Task> {
+    return active_tasks;
+}
+
+/**
+ * Get all completed tasks
+ */
+fn get_completed_tasks() -> List<Task> {
+    return completed_tasks;
+}
+
+/**
+ * Clear completed tasks
+ */
+fn clear_completed() {
+    completed_tasks = [];
+}
+
+/**
+ * Wait for all tasks to complete
+ */
+fn wait_all(handles: List<TaskHandle>) {
+    for handle in handles {
+        await(handle);
+    }
+}
+
+/**
+ * Spawn multiple tasks and wait for all
+ */
+fn spawn_all(funcs: List<fn()>) -> List<TaskHandle> {
+    let handles: List<TaskHandle> = [];
+    
+    for f in funcs {
+        let h = spawn(f);
+        handles = handles + [h];
+    }
+    
+    wait_all(handles);
+    return handles;
+}
+
+/**
+ * Spawn tasks with results
+ */
+fn spawn_result(func: fn() -> any) -> TaskHandle {
+    next_task_id = next_task_id + 1;
+    
+    let task = Task {
+        id: next_task_id,
+        state: "pending",
+        func: fn() {
+            // This would capture the result
+        },
+        result: none,
+        error: none,
+        spawned_at: current_time_ms(),
+        completed_at: none
+    };
+    
+    active_tasks = active_tasks + [task];
+    
+    // Execute and capture result
+    task_queue = task_queue + [fn() {
+        let mut t_opt = find_task(task.id);
+        if t_opt != none {
+            let mut t = t_opt as Task;
+            try {
+                let res = func();
+                t.result = res;
+                t.state = "completed";
+            } catch e {
+                t.error = e;
+                t.state = "failed";
+            }
+            t.completed_at = some(current_time_ms());
+            
+            // Update task in lists
+            let mut updated: List<Task> = [];
+            for active in active_tasks {
+                if active.id == t.id {
+                    updated = updated + [t];
+                } else {
+                    updated = updated + [active];
+                }
+            }
+            active_tasks = updated;
+            completed_tasks = completed_tasks + [t];
+        }
+    }];
+    
+    return TaskHandle {
+        id: next_task_id,
+        task: some(task)
+    };
+}
+
+/**
+ * Get current time in milliseconds
+ */
+fn current_time_ms() -> i64 {
+    return 0;  // Placeholder
+}
+
+/**
+ * Sleep for specified milliseconds
+ */
+fn sleep(ms: i64) {
+    // Placeholder
+}
+
+/**
+ * Convert any to string
+ */
+fn str(val: any) -> string {
+    return "value";  // Placeholder
+}

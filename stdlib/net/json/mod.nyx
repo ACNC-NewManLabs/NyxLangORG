@@ -1,0 +1,77 @@
+/**
+ * JSON Module
+ * 
+ * Provides JSON encoding and decoding utilities for the network engine.
+ * 
+ * @module json
+ * @version 1.0.0
+ */
+
+mod encoder;
+
+/**
+ * @param value - Value to encode
+ * @returns JSON string
+ * 
+ * @example
+ * let json_str = json::encode({"name": "John", "age": 30});
+ */
+fn encode(value: any) -> string {
+    return encoder::encode(value);
+}
+
+/**
+ * Decode JSON string to value
+ * 
+ * @param json - JSON string
+ * @returns Decoded value
+ * 
+ * @example
+ * let obj = json::decode('{"name": "John", "age": 30}');
+ */
+fn decode(json: string) -> any? {
+    return encoder::decode(json);
+}
+
+/**
+ * Pretty print JSON
+ * 
+ * @param value - Value to encode
+ * @returns Formatted JSON string
+ */
+fn pretty(value: any) -> string {
+    return encoder::encode_pretty(value);
+}
+
+/**
+ * Validate JSON string
+ * 
+ * @param json - JSON string to validate
+ * @returns Whether the JSON is valid
+ */
+fn is_valid(json: string) -> bool {
+    return encoder::is_valid(json);
+}
+
+/**
+ * Parse JSON safely (returns null on error)
+ * 
+ * @param json - JSON string
+ * @returns Parsed value or null
+ */
+fn parse(json: string) -> any? {
+    if is_valid(json) {
+        return decode(json);
+    }
+    return none;
+}
+
+/**
+ * Stringify value to JSON
+ * 
+ * @param value - Value to stringify
+ * @returns JSON string
+ */
+fn stringify(value: any) -> string {
+    return encode(value);
+}

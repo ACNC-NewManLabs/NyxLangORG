@@ -1,0 +1,80 @@
+# Nyx Media Library: Data Visualization
+# High-level plotting using SVG
+
+fn Plot(width, height) {
+    return {
+        canvas: media::svg::Canvas(width, height),
+        padding: 40,
+        
+        line_chart: fn(self, data, color) {
+            if data.len() < 2 { return }
+            
+            let w = self.canvas.width - self.padding * 2
+            let h = self.canvas.height - self.padding * 2
+            
+            # Find max
+            let max_val = 0.0
+            let i = 0
+            while i < data.len() {
+                if data[i] > max_val { max_val = data[i] }
+                i = i + 1
+            }
+            if max_val == 0 { max_val = 1.0 }
+            
+            # Draw axes
+            self.canvas.line(self.padding, self.padding, self.padding, self.canvas.height - self.padding, "black", 2)
+            self.canvas.line(self.padding, self.canvas.height - self.padding, self.canvas.width - self.padding, self.canvas.height - self.padding, "black", 2)
+            
+            # Draw data
+            let step = w / (data.len() - 1)
+            i = 0
+            while i < data.len() - 1 {
+                let x1 = self.padding + i * step
+                let y1 = (self.canvas.height - self.padding) - (data[i] / max_val * h)
+                let x2 = self.padding + (i + 1) * step
+                let y2 = (self.canvas.height - self.padding) - (data[i+1] / max_val * h)
+                
+                self.canvas.line(x1, y1, x2, y2, color, 2)
+                i = i + 1
+            }
+        },
+        
+        bar_chart: fn(self, data, labels, color) {
+            let n = data.len()
+            let w = self.canvas.width - self.padding * 2
+            let h = self.canvas.height - self.padding * 2
+            let bar_w = (w / n) * 0.8
+            let gap = (w / n) * 0.2
+            
+            let max_val = 0.0
+            let i = 0
+            while i < n {
+                if data[i] > max_val { max_val = data[i] }
+                i = i + 1
+            }
+            if max_val == 0 { max_val = 1.0 }
+            
+            i = 0
+            while i < n {
+                let bw = bar_w
+                let bh = (data[i] / max_val) * h
+                let bx = self.padding + i * (bar_w + gap) + gap/2
+                let by = (self.canvas.height - self.padding) - bh
+                
+                self.canvas.rect(bx, by, bw, bh, color)
+                if labels != null && i < labels.len() {
+                    self.canvas.text(bx, self.canvas.height - self.padding + 20, labels[i], 12, "black")
+                }
+                i = i + 1
+            }
+        },
+        
+        scatter: fn(self, x_data, y_data, color) {
+             # ... implementation ...
+        },
+        
+        save: fn(self, path) {
+            return self.canvas.save(path)
+        }
+    }
+}

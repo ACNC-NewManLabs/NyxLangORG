@@ -1,0 +1,63 @@
+import ml;
+
+# --- Helper: Runtime Prediction Guard ---
+
+fn calculate_entropy(probs) {
+    let entropy = 0.0
+    let i = 0
+    while i < probs.len() {
+        let p = probs[i]
+        if p > 0 { entropy = entropy - (p * std::math::log(p)) }
+        i = i + 1
+    }
+    return entropy
+}
+
+fn protect_prediction(probs, ood_score) {
+    let threshold_conf = 0.75
+    let threshold_ent  = 0.50
+    let threshold_ood  = 0.20
+    
+    # 1. Confidence Check (Max probability)
+    let p_max = probs[0]
+    if probs.len() > 1 && probs[1] > p_max { p_max = probs[1] }
+    
+    # 2. Uncertainty Check (Entropy)
+    let ent = calculate_entropy(probs)
+    
+    println("Audit: p_max=", p_max, " entropy=", ent, " ood_score=", ood_score)
+    
+    # Logic Gate: Combined Enforcement
+    if p_max < threshold_conf {
+        return "REJECTED (LOW_CONFIDENCE)"
+    }
+    if ent > threshold_ent {
+        return "REJECTED (HIGH_UNCERTAINTY)"
+    }
+    if ood_score > threshold_ood {
+        return "REJECTED (OUT_OF_DISTRIBUTION)"
+    }
+    
+    return "APPROVED"
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("--- Testing Nyx Runtime Prediction Guard: Selective Rejection ---")
+    
+    # 1. Safe, Confident Primary Case
+    println("Scenario 1: Confident, Expected Input")
+    let s1 = protect_prediction([0.9, 0.1], 0.05)
+    println("  Result: ", s1)
+    
+    # 2. Uncertain Case (Ambiguous decision)
+    println("Scenario 2: Low Confidence (Ambiguous)")
+    let s2 = protect_prediction([0.55, 0.45], 0.05)
+    println("  Result: ", s2)
+    
+    # 3. OOD Case (Weird outlier)
+    println("Scenario 3: Confident but Out-of-Distribution")
+    let s3 = protect_prediction([0.9, 0.1], 0.85)
+    println("  Result: ", s3)
+}

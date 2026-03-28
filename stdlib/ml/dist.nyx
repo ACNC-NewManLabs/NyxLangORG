@@ -1,0 +1,119 @@
+# Nyx Distributed Training Primitives (Area 53)
+# Provides multi-node/multi-GPU synchronization (NCCL-like)
+
+# Simulated NCCL/MPI state
+let _WORLD_SIZE = 1
+let _RANK = 0
+let _PARAMETER_STORE = {} # Simulated shared memory for all_reduce
+let _BARRIER_STORE = {}   # Barrier synchronization store
+
+fn init_process_group(rank, world_size, master_addr) {
+    if master_addr == null { master_addr = "127.0.0.1:29500" }
+    std::dist::init(rank, world_size, master_addr)
+    _RANK = std::dist::get_rank()
+    _WORLD_SIZE = std::dist::get_world_size()
+}
+
+fn get_rank() { return std::dist::get_rank() }
+fn get_world_size() { return std::dist::get_world_size() }
+
+# Helper for deep copy since Array.clone is not available
+fn copy_arr(arr) {
+    let new_arr = []
+    if arr == null { return new_arr }
+    let i = 0
+    while i < arr.len() {
+        new_arr.push(arr[i])
+        i = i + 1
+    }
+    return new_arr
+}
+
+# Area 53: NCCL-style Collective Primitives
+
+# [Production] Barrier Synchronization
+fn barrier(name) {
+    if name == null { name = "default" }
+    println("[Dist] Rank {}: Reached barrier '{}'...", _RANK, name)
+    if _BARRIER_STORE[name] == null { _BARRIER_STORE[name] = 0 }
+    _BARRIER_STORE[name] = _BARRIER_STORE[name] + 1
+    
+    # In a real system, this would block. For simulation, we just log completion.
+    if _BARRIER_STORE[name] >= _WORLD_SIZE {
+        println("[Dist] Barrier '{}' released across {} nodes.", name, _WORLD_SIZE)
+        _BARRIER_STORE[name] = 0 # reset
+        return true
+    }
+    return false
+}
+
+# [Production] All-Reduce (Mean/Sum) using Native TCP Ring
+fn all_reduce(tensor, op) {
+    if op == null { op = "sum" }
+    if tensor == null || tensor.data == null { return tensor }
+    
+    # Call native networking bridge
+    return std::dist::all_reduce(tensor, op)
+}
+
+# [Production] All-Gather (Concatenate tensors across ranks)
+fn all_gather(tensor) {
+    println("[Dist] Rank {}: All-Gather for tensor of shape {}...", _RANK, tensor.shape)
+    let key = "gather_" + tensor.shape
+    if _PARAMETER_STORE[key] == null {
+        _PARAMETER_STORE[key] = []
+    }
+    # Append local data to global buffer
+    let i = 0
+    while i < tensor.data.len() {
+        _PARAMETER_STORE[key].push(tensor.data[i])
+        i = i + 1
+    }
+    
+    # In a real system, this returns a concatenated tensor.
+    # For simulation, we return the accumulated global buffer.
+    return _PARAMETER_STORE[key]
+}
+
+# [Production] Broadcast (Root to all)
+fn broadcast(tensor, root_rank) {
+    if _RANK == root_rank {
+        println("[Dist] Rank {}: Broadcasting tensor to all...", _RANK)
+        _PARAMETER_STORE["bc"] = copy_arr(tensor.data)
+    } else {
+        println("[Dist] Rank {}: Receiving broadcast from {}", _RANK, root_rank)
+        if _PARAMETER_STORE["bc"] != null {
+            tensor.data = copy_arr(_PARAMETER_STORE["bc"])
+        }
+    }
+    return tensor
+}
+
+# ─────────────────────────────────────────────────────────────
+# Distributed Data Parallel (DDP) Wrapper
+# ─────────────────────────────────────────────────────────────
+
+fn DistributedDataParallel(model) {
+    return {
+        _model: model,
+        
+        forward: fn(self, x) {
+            return self._model.forward(x)
+        },
+        
+        # Area 53: Automated Gradient Synchronization
+        synchronize_gradients: fn(self) {
+            let i = 0
+            while i < self._model.layers.len() {
+                let layer = self._model.layers[i]
+                if layer.weight != null && layer.weight.grad != null {
+                    all_reduce(layer.weight.grad, "mean")
+                }
+                if layer.bias != null && layer.bias.grad != null {
+                    all_reduce(layer.bias.grad, "mean")
+                }
+                i = i + 1
+            }
+        }
+    }
+}

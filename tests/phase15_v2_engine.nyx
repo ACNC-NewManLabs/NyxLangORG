@@ -1,0 +1,61 @@
+fn main() {
+    let data = {
+        "_columns": [
+            { "_name": "a", "_data": [1.0, 2.0, 3.0] },
+            { "_name": "b", "_data": [10.0, 20.0, 30.0] }
+        ]
+    };
+
+    println("Input Data: a=[1,2,3], b=[10,20,30]");
+
+    # Plan: 
+    # 1. Scan 'df1'
+    # 2. Filter a > 1.5  (should keep [2,3])
+    # 3. Project a + b   (should be [22, 33])
+
+    let plan = {
+        "_op": "p_projection",
+        "input": {
+            "_op": "p_filter",
+            "input": { "_op": "p_scan", "source_id": "df1" },
+            "predicate": { 
+                "_kind": "binop", 
+                "_value": ">", 
+                "_args": [
+                    { "_kind": "col", "_value": "a", "_args": [] }, 
+                    { "_kind": "lit", "_value": 1.5, "_args": [] }
+                ] 
+            }
+        },
+        "exprs": [
+            { 
+                "_kind": "binop", 
+                "_value": "+", 
+                "_args": [
+                    { "_kind": "col", "_value": "a", "_args": [] }, 
+                    { "_kind": "col", "_value": "b", "_args": [] }
+                ] 
+            }
+        ]
+    };
+
+    let sources = { "df1": data };
+
+    println("Executing Plan v2...");
+    let res = std::df::execute_plan(plan, sources);
+
+    println("Result columns:", res._columns.len());
+    let first_col = res._columns[0];
+    println("Result Data (a + b where a > 1.5):", first_col._data);
+
+    # Expected: [22.0, 33.0]
+    if first_col._data.len() == 2 {
+        if first_col._data[0] == 22.0 && first_col._data[1] == 33.0 {
+            println("✅ Phase 15 Engine V2 Test Passed!");
+        } else {
+            println("❌ Phase 15 Engine V2 Test Failed: Wrong values");
+        }
+    } else {
+        println("❌ Phase 15 Engine V2 Test Failed: Wrong length", first_col._data.len());
+    }
+}

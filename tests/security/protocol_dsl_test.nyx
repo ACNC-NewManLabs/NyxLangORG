@@ -1,0 +1,59 @@
+secure protocol Messaging {
+    roles: Client, Server
+
+    handshake {
+        Client -> Server: client_hello {
+            id = 0
+            payload = "init"
+        }
+        Server -> Client: server_hello {
+            id = 1
+            session_key = "init"
+        }
+        derive {
+            shared_secret = "kdf_result"
+        }
+        finish {
+            notify_ready
+        }
+    }
+}
+
+fn main() {
+    print("Protocol Parsed Successfully")
+
+    let client = Messaging_Client::new()
+    let server = Messaging_Server::new()
+
+    print("Initial States:")
+    print("  Client: " + client.state)
+    print("  Server: " + server.state)
+
+    // Step 1: Client -> Server
+    let hello = client.send_client_hello()
+    print("Client sent client_hello, length: " + hello.len())
+
+    let ok1 = server.recv_client_hello(hello)
+    print("Server received client_hello: " + ok1)
+
+    // Step 2: Server -> Client
+    let s_hello = server.send_server_hello()
+    print("Server sent server_hello, length: " + s_hello.len())
+
+    let ok2 = client.recv_server_hello(s_hello)
+    print("Client received server_hello: " + ok2)
+
+    // Step 3: Derive
+    print("Executing Derivation...")
+    client.step_2_derive()
+    server.step_2_derive()
+
+    // Step 4: Finish
+    print("Completing Handshake...")
+    client.complete_handshake()
+    server.complete_handshake()
+
+    print("Final States:")
+    print("  Client: " + client.state)
+    print("  Server: " + server.state)
+}

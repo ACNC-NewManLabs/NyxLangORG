@@ -1,0 +1,463 @@
+/**
+ * Template Engine Implementation
+ * 
+ * Provides template rendering with variables, loops, conditionals, and filters.
+ * 
+ * @module templates::engine
+ */
+
+type TemplateEngine = {
+    directory: string,
+    templates: Map<string, Template>,
+    delimiters: Delimiters,
+    auto_escape: bool,
+    cache_enabled: bool
+};
+
+type Template = {
+    name: string,
+    source: string,
+    compiled: CompiledTemplate?
+};
+
+type CompiledTemplate = {
+    tokens: List<Token>
+};
+
+type Token = 
+    | {type: "text", value: string}
+    | {type: "variable", name: string}
+    | {type: "for", variable: string, iterable: string, body: List<Token>}
+    | {type: "if", condition: string, then: List<Token>, else: List<Token>?}
+    | {type: "include", name: string};
+
+type Delimiters = {
+    variable_start: string,
+    variable_end: string,
+    block_start: string,
+    block_end: string
+};
+
+// Default delimiters: {{ variable }}, {% block %}, {% endfor %}, etc.
+
+let default_delimiters = Delimiters {
+    variable_start: "{{",
+    variable_end: "}}",
+    block_start: "{%",
+    block_end: "%}"
+};
+
+/**
+ * Create a new template engine
+ * 
+ * @param directory - Template directory
+ * @returns A new template engine
+ */
+fn create(directory: string) -> TemplateEngine {
+    return TemplateEngine {
+        directory: directory,
+        templates: {},
+        delimiters: default_delimiters,
+        auto_escape: true,
+        cache_enabled: true
+    };
+}
+
+/**
+ * Set custom delimiters
+ * 
+ * @param engine - The template engine
+ * @param delimiters - Custom delimiters
+ * @returns The same engine for chaining
+ */
+fn delimiters(engine: TemplateEngine, delimiters: Delimiters) -> TemplateEngine {
+    engine.delimiters = delimiters;
+    return engine;
+}
+
+/**
+ * Enable/disable auto-escape
+ * 
+ * @param engine - The template engine
+ * @param enable - Whether to enable auto-escape
+ * @returns The same engine for chaining
+ */
+fn auto_escape(engine: TemplateEngine, enable: bool) -> TemplateEngine {
+    engine.auto_escape = enable;
+    return engine;
+}
+
+/**
+ * Enable/disable template caching
+ * 
+ * @param engine - The template engine
+ * @param enable - Whether to enable caching
+ * @returns The same engine for chaining
+ */
+fn cache(engine: TemplateEngine, enable: bool) -> TemplateEngine {
+    engine.cache_enabled = enable;
+    return engine;
+}
+
+/**
+ * Load template from file
+ * 
+ * @param engine - The template engine
+ * @param name - Template name
+ * @returns The template
+ */
+fn load_template(engine: TemplateEngine, name: string) -> Template? {
+    // Check cache first
+    if engine.cache_enabled && name in engine.templates {
+        return some(engine.templates[name]);
+    }
+    
+    // Load from file system
+    let path = engine.directory + "/" + name;
+    let content = read_file(path);
+    
+    if content == "" {
+        return none;
+    }
+    
+    let template = Template {
+        name: name,
+        source: content,
+        compiled: none
+    };
+    
+    // Cache if enabled
+    if engine.cache_enabled {
+        engine.templates[name] = template;
+    }
+    
+    return some(template);
+}
+
+/**
+ * Render a template
+ * 
+ * @param name - Template name
+ * @param context - Template context
+ * @returns Rendered string
+ */
+fn render_template(name: string, context: Map<string, any>) -> string {
+    let template = load_template(create(""), name);
+    
+    if template == none {
+        return "";
+    }
+    
+    return render(template as Template, context);
+}
+
+/**
+ * Render template string directly
+ * 
+ * @param source - Template source
+ * @param context - Template context
+ * @returns Rendered string
+ */
+fn render_string(source: string, context: Map<string, any>) -> string {
+    let template = Template {
+        name: "inline",
+        source: source,
+        compiled: none
+    };
+    
+    return render(template, context);
+}
+
+/**
+ * Render a template with context
+ */
+fn render(template: Template, context: Map<string, any>) -> string {
+    // Compile if not compiled
+    let compiled = template.compiled;
+    
+    if compiled == none {
+        let c = compile(template.source);
+        template.compiled = some(c);
+    }
+    
+    return execute(template.compiled as CompiledTemplate, context);
+}
+
+/**
+ * Compile template source to tokens
+ */
+fn compile(source: string) -> CompiledTemplate {
+    let tokens: List<Token> = [];
+    let pos = 0;
+    
+    while pos < len(source) {
+        // Find next delimiter
+        let var_start = find(source, "{{", pos);
+        let block_start = find(source, "{%", pos);
+        
+        // Find earliest delimiter
+        let next = min(var_start, block_start);
+        
+        if next < 0 {
+            // No more delimiters, add remaining text
+            let remaining = substring(source, pos, len(source));
+            
+            if remaining != "" {
+                tokens = tokens + [{type: "text", value: remaining}];
+            }
+            
+            break;
+        }
+        
+        // Add text before delimiter
+        if next > pos {
+            let text = substring(source, pos, next);
+            tokens = tokens + [{type: "text", value: text}];
+        }
+        
+        // Check which delimiter
+        if var_start >= 0 && (block_start < 0 || var_start < block_start) {
+            // Variable
+            let var_end = find(source, "}}", var_start);
+            
+            if var_end < 0 {
+                break;
+            }
+            
+            let var_name = trim(substring(source, var_start + 2, var_end));
+            tokens = tokens + [{type: "variable", name: var_name}];
+            
+            pos = var_end + 2;
+        } else if block_start >= 0 {
+            // Block
+            let block_end = find(source, "%}", block_start);
+            
+            if block_end < 0 {
+                break;
+            }
+            
+            let block_content = trim(substring(source, block_start + 2, block_end));
+            
+            // Parse block
+            let block_tokens = parse_block(block_content);
+            tokens = tokens + block_tokens;
+            
+            pos = block_end + 2;
+        } else {
+            pos = pos + 1;
+        }
+    }
+    
+    return CompiledTemplate {
+        tokens: tokens
+    };
+}
+
+/**
+ * Parse block content
+ */
+fn parse_block(content: string) -> List<Token> {
+    let tokens: List<Token> = [];
+    
+    let parts = split(content, " ");
+    let command = parts[0];
+    
+    if command == "for" {
+        // For loop: {% for item in items %}
+        if len(parts) >= 5 && parts[2] == "in" {
+            let variable = parts[1];
+            let iterable = parts[3];
+            
+            tokens = tokens + [{
+                type: "for",
+                variable: variable,
+                iterable: iterable,
+                body: []
+            }];
+        }
+    } else if command == "if" {
+        // If statement: {% if condition %}
+        tokens = tokens + [{
+            type: "if",
+            condition: join(parts[1:], " "),
+            then: [],
+            else: none
+        }];
+    } else if command == "include" {
+        // Include: {% include "template.html" %}
+        let template_name = trim(parts[1], '"');
+        
+        tokens = tokens + [{
+            type: "include",
+            name: template_name
+        }];
+    }
+    
+    return tokens;
+}
+
+/**
+ * Execute compiled template with context
+ */
+fn execute(compiled: CompiledTemplate, context: Map<string, any>) -> string {
+    let result = "";
+    
+    for token in compiled.tokens {
+        match token.type {
+            "text" => {
+                result = result + (token as {type: "text", value: string}).value;
+            },
+            "variable" => {
+                let name = (token as {type: "variable", name: string}).name;
+                let value = resolve_variable(name, context);
+                result = result + value;
+            },
+            "for" => {
+                // Handle for loop
+            },
+            "if" => {
+                // Handle if
+            },
+            "include" => {
+                let name = (token as {type: "include", name: string}).name;
+                let included = render_template(name, context);
+                result = result + included;
+            }
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Resolve variable name to value
+ */
+fn resolve_variable(name: string, context: Map<string, any>) -> string {
+    // Handle dot notation: user.name
+    let parts = split(name, ".");
+    let mut current: any = context;
+    
+    for part in parts {
+        if is_map(current) {
+            let m = current as Map<string, any>;
+            
+            if part in m {
+                current = m[part];
+            } else {
+                return "";
+            }
+        } else {
+            return "";
+        }
+    }
+    
+    return to_string(current);
+}
+
+/**
+ * Convert value to string
+ */
+fn to_string(value: any) -> string {
+    if value == none {
+        return "";
+    }
+    
+    if is_string(value) {
+        return value as string;
+    }
+    
+    if is_number(value) {
+        return str(value as i64);
+    }
+    
+    if is_bool(value) {
+        if value {
+            return "true";
+        }
+        return "false";
+    }
+    
+    if is_list(value) {
+        return join_list(value as List<any>);
+    }
+    
+    return str(value);
+}
+
+/**
+ * Join list to string
+ */
+fn join_list(list: List<any>) -> string {
+    let parts: List<string> = [];
+    
+    for item in list {
+        parts = parts + [to_string(item)];
+    }
+    
+    return join(parts, ", ");
+}
+
+// Helper functions
+
+fn read_file(path: string) -> string {
+    return "";  // Placeholder
+}
+
+fn find(s: string, substr: string, start: i64) -> i64 {
+    return -1;  // Placeholder
+}
+
+fn substring(s: string, start: i64, end: i64) -> string {
+    return "";  // Placeholder
+}
+
+fn trim(s: string) -> string {
+    return s;  // Placeholder
+}
+
+fn trim(s: string, chars: string) -> string {
+    return s;  // Placeholder
+}
+
+fn split(s: string, delimiter: string) -> List<string> {
+    return [];  // Placeholder
+}
+
+fn join(list: List<string>, separator: string) -> string {
+    return "";  // Placeholder
+}
+
+fn len(s: string) -> i64 {
+    return 0;  // Placeholder
+}
+
+fn min(a: i64, b: i64) -> i64 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+
+fn str(n: i64) -> string {
+    return "";  // Placeholder
+}
+
+fn is_string(value: any) -> bool {
+    return false;  // Placeholder
+}
+
+fn is_number(value: any) -> bool {
+    return false;  // Placeholder
+}
+
+fn is_bool(value: any) -> bool {
+    return false;  // Placeholder
+}
+
+fn is_list(value: any) -> bool {
+    return false;  // Placeholder
+}
+
+fn is_map(value: any) -> bool {
+    return false;  // Placeholder
+}

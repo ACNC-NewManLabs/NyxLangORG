@@ -1,0 +1,32 @@
+{
+  "name": "web_engine",
+  "entry": "./src/main.nyx",
+  "modules": [
+    "./src/main.nyx",
+    "./src/framework/framework.nyx",
+    "./src/router/router.nyx",
+    "./src/middleware/middleware.nyx",
+    "./src/api/rest.nyx",
+    "./src/api/graphql.nyx",
+    "./src/ui/components.nyx",
+    "./src/ui/templates.nyx",
+    "./src/realtime/websocket.nyx",
+    "./src/realtime/events.nyx",
+    "./src/server/http_server.nyx",
+    "./src/security/auth.nyx",
+    "./src/security/jwt.nyx",
+    "./src/deployment/serverless.nyx",
+    "./src/deployment/edge.nyx"
+  ],
+  "language": "nyx",
+  "type": "application",
+  "version": "1.0.0",
+  "description": "Hyper-advanced web development engine for Nyx",
+  "dependencies": [
+    "network",
+    "crypto",
+    "concurrency",
+    "filesystem"
+  ]
+}
+

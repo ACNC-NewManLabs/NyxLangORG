@@ -1,0 +1,82 @@
+# Nyx Kernel Scheduler
+# Implements cooperative and preemptive multitasking using context switching.
+
+import std::kernel::cpu
+import std::kernel::pmm
+
+struct Task {
+    id: i64,
+    stack_ptr: i64,
+    state: i64,
+}
+
+let _tasks = []
+let _current_task_idx = 0
+let _task_count = 0
+
+# Initialize the scheduler. The current execution flow becomes Task 0.
+fn init() {
+    _tasks[0] = { id: 0, stack_ptr: 0, state: 1 }
+    _task_count = 1
+    _current_task_idx = 0
+}
+
+# Spawn a new task.
+# This manually prepares a stack to look like it was interrupted mid-execution.
+fn spawn(entry_point) {
+    if _task_count >= 64 {
+        return
+    }
+    
+    # Allocate a 4KB stack for the new task
+    let stack = std::kernel::pmm::alloc_page()
+    if stack == 0 {
+        return
+    }
+    
+    let stack_top = stack + 4096
+    
+    # We write the entry point address to the "return" position
+    std::kernel::memory::write_u64(stack_top - 8, entry_point)
+    # Clear the saved registers (rbp, rbx, r12-r15)
+    let i = 2
+    while i <= 7 {
+        std::kernel::memory::write_u64(stack_top - (i * 8), 0)
+        i = i + 1
+    }
+    
+    _tasks[_task_count] = { id: _task_count, stack_ptr: stack_top - 56, state: 0 }
+    _task_count = _task_count + 1
+}
+
+# Yield to the next available ready task.
+fn yield_task() {
+    if _task_count <= 1 {
+        return
+    }
+    
+    let old_idx = _current_task_idx
+    let new_idx = (old_idx + 1) % _task_count
+    
+    # Find next ready task
+    while _tasks[new_idx].state != 0 && new_idx != old_idx {
+        new_idx = (new_idx + 1) % _task_count
+    }
+    
+    if old_idx == new_idx {
+        return
+    }
+    
+    _current_task_idx = new_idx
+    # Update states
+    _tasks[old_idx].state = 0
+    _tasks[new_idx].state = 1
+    
+    # Trigger the hardware context switch
+    std::kernel::cpu::context_switch(_tasks[old_idx].stack_ptr, _tasks[new_idx].stack_ptr)
+}
+
+# Get current task ID
+fn current_id() {
+    return _tasks[_current_task_idx].id
+}

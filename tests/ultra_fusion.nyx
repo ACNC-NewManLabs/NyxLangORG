@@ -1,0 +1,49 @@
+// Nyx-Ultra Verification: Extreme High + Extreme Low Fusion
+// This test demonstrates raw memory work fused with functional programming and reflection.
+
+fn main() {
+    println("--- Nyx-Ultra Fusion Verification ---");
+
+    // 1. Extreme Low-Level: Raw Buffer
+    let buf = std::mem::alloc(5);
+    unsafe {
+        std::mem::poke(buf, 0, 72);  // 'H'
+        std::mem::poke(buf, 1, 101);  // 'e'
+        std::mem::poke(buf, 2, 108);  // 'l'
+        std::mem::poke(buf, 3, 108);  // 'l'
+        std::mem::poke(buf, 4, 111);  // 'o'
+    }
+
+    // 2. Runtime Reflection
+    let buf_type = std::meta::typeof(buf);
+    println("Buffer Type: {}", buf_type);
+
+    // 3. Extreme High-Level: Functional Transformation
+    // We convert the raw bytes to a List, then map them to hex strings.
+    let byte_list = [72, 101, 108, 108, 111]; 
+    
+    println("Mapping bytes to strings...");
+    let hex_list = byte_list.map(fn(b) { return "0x" + b.to_string(); });
+    println("Hex strings: {}", hex_list);
+
+    // 4. Filtering and Reducing
+    println("Filtering bytes > 105...");
+    let filtered = byte_list.filter(fn(b) { return b > 105; });
+    println("Filtered: {}", filtered);
+
+    println("Reducing to sum...");
+    let sum = byte_list.reduce(0, fn(acc, b) { return acc + b; });
+    println("Sum of bytes: {}", sum);
+
+    // 5. Reflection on Objects
+    let obj = { name: "Nyx-Ultra", version: 1.0, capability: "Extreme" };
+    println("Object Fields: {}", obj.fields());
+
+    if buf_type == "Bytes" and sum == 500 {
+        println("SUCCESS: Nyx-Ultra Fusion verified.");
+    } else {
+        println("FAILURE: Verification mismatch! Sum was {}", sum);
+    }
+
+    println("Verification complete.");
+}

@@ -1,0 +1,366 @@
+// Nyx Web Server - HTTP
+// High-performance HTTP server
+
+// HTTP Server
+struct HttpServer {
+    host: string
+    port: u16
+    router: Router
+    middleware: List<Middleware>
+    tls_config: TlsConfig
+    state: ServerState
+    workers: u32
+}
+
+// Server state
+enum ServerState {
+    Initializing
+    Running
+    ShuttingDown
+    Stopped
+}
+
+// TLS configuration
+struct TlsConfig {
+    enabled: bool
+    cert_file: string
+    key_file: string
+    min_version: string
+    cipher_suites: List<string>
+}
+
+// Server config
+struct ServerConfig {
+    host: string
+    port: u16
+    workers: u32
+    max_connections: u32
+    keep_alive: u32
+    read_timeout: u32
+    write_timeout: u32
+    static_dir: string
+    cors_enabled: bool
+    compression_enabled: bool
+}
+
+// Create new HTTP server
+fn new_server(config: ServerConfig) -> HttpServer {
+    return HttpServer {
+        host: config.host
+        port: config.port
+        router: new_router()
+        middleware: List::new()
+        tls_config: TlsConfig::default()
+        state: ServerState::Initializing
+        workers: config.workers
+    }
+}
+
+// Get default server config
+fn default_config() -> ServerConfig {
+    return ServerConfig {
+        host: "0.0.0.0"
+        port: 8080
+        workers: 4
+        max_connections: 10000
+        keep_alive: 60
+        read_timeout: 30
+        write_timeout: 30
+        static_dir: "./public"
+        cors_enabled: true
+        compression_enabled: true
+    }
+}
+
+// Get default TLS config
+fn TlsConfig::default() -> TlsConfig {
+    return TlsConfig {
+        enabled: false
+        cert_file: ""
+        key_file: ""
+        min_version: "TLSv1.2"
+        cipher_suites: [
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "TLS_AES_128_GCM_SHA256"
+        ]
+    }
+}
+
+// Use middleware
+fn use(server: HttpServer, middleware: Middleware) {
+    server.middleware.push(middleware)
+}
+
+// Use router
+fn use_router(server: HttpServer, router: Router) {
+    server.router = router
+}
+
+// Start server
+fn listen(server: HttpServer, host: string, port: u16) -> Result<(), Error> {
+    server.host = host
+    server.port = port
+    server.state = ServerState::Running
+    
+    // In a full implementation, this would start the actual server
+    // using the network engine's TCP/UDP capabilities
+    
+    console::log("Server starting on " + host + ":" + port.to_string())
+    
+    return Result::ok(())
+}
+
+// Start with TLS/HTTPS
+fn listen_tls(server: HttpServer, host: string, port: u16, tls: TlsConfig) -> Result<(), Error> {
+    server.tls_config = tls
+    server.state = ServerState::Running
+    
+    console::log("HTTPS server starting on " + host + ":" + port.to_string())
+    
+    return Result::ok(())
+}
+
+// Stop server
+fn stop(server: HttpServer) -> Result<(), Error> {
+    server.state = ServerState::ShuttingDown
+    
+    // Wait for connections to close
+    
+    server.state = ServerState::Stopped
+    
+    console::log("Server stopped")
+    
+    return Result::ok()
+}
+
+// Handle request (called for each request)
+fn handle_request(server: HttpServer, req: Request) -> Response {
+    // Create context
+    let ctx = create_context(req)
+    
+    // Apply global middleware
+    for middleware in server.middleware {
+        ctx = middleware(ctx)
+        if ctx.response.status_code != 200 && ctx.response.status_code != 0 {
+            return ctx.response
+        }
+    }
+    
+    // Route request
+    return handle_request(server.router, ctx)
+}
+
+// Parse HTTP request
+fn parse_request(raw: string) -> Option<Request> {
+    let lines = raw.split("\r\n")
+    
+    if lines.len() < 1 {
+        return Option::none()
+    }
+    
+    // Parse request line
+    let request_line = lines[0].split(" ")
+    
+    if request_line.len() < 2 {
+        return Option::none()
+    }
+    
+    let method = request_line[0]
+    let path = request_line[1]
+    let proto = request_line[2]
+    
+    // Parse headers
+    let headers = Map::new()
+    let mut body_start = 1
+    
+    for i in 1..lines.len() {
+        let line = lines[i]
+        
+        if line == "" {
+            body_start = i + 1
+            break
+        }
+        
+        let parts = line.split(": ")
+        if parts.len() >= 2 {
+            headers.insert(parts[0], parts[1])
+        }
+    }
+    
+    // Parse body
+    let body_lines = lines.slice(body_start)
+    let body = body_lines.join("\r\n").to_bytes()
+    
+    // Parse query string
+    let query_params = Map::new()
+    let path_parts = path.split("?")
+    let actual_path = path_parts[0]
+    
+    if path_parts.len() > 1 {
+        let query = path_parts[1]
+        let pairs = query.split("&")
+        
+        for pair in pairs {
+            let kv = pair.split("=")
+            if kv.len() >= 2 {
+                query_params.insert(url_decode(kv[0]), url_decode(kv[1]))
+            }
+        }
+    }
+    
+    return Option::some(Request {
+        method: method
+        path: actual_path
+        headers: headers
+        query_params: query_params
+        body: body
+        path_params: Map::new()
+        cookies: parse_cookies(headers.get("cookie").unwrap_or(""))
+        remote_addr: "0.0.0.0"
+        proto: proto
+    })
+}
+
+// Parse cookies from header
+fn parse_cookies(cookie_header: string) -> Map<string, string> {
+    let cookies = Map::new()
+    
+    if cookie_header == "" {
+        return cookies
+    }
+    
+    let pairs = cookie_header.split(";")
+    
+    for pair in pairs {
+        let kv = pair.trim().split("=")
+        if kv.len() >= 2 {
+            cookies.insert(kv[0], kv[1])
+        }
+    }
+    
+    return cookies
+}
+
+// Build HTTP response
+fn build_response(response: Response) -> string {
+    let status_line = get_status_line(response.status_code)
+    
+    let headers = ""
+    for key in response.headers.keys() {
+        let value = response.headers.get(key)
+        headers = headers + key + ": " + value + "\r\n"
+    }
+    
+    return status_line + "\r\n" + headers + "\r\n" + response.body.to_string()
+}
+
+// Get status line
+fn get_status_line(code: u16) -> string {
+    match code {
+        200 => return "HTTP/1.1 200 OK"
+        201 => return "HTTP/1.1 201 Created"
+        204 => return "HTTP/1.1 204 No Content"
+        301 => return "HTTP/1.1 301 Moved Permanently"
+        302 => return "HTTP/1.1 302 Found"
+        304 => return "HTTP/1.1 304 Not Modified"
+        400 => return "HTTP/1.1 400 Bad Request"
+        401 => return "HTTP/1.1 401 Unauthorized"
+        403 => return "HTTP/1.1 403 Forbidden"
+        404 => return "HTTP/1.1 404 Not Found"
+        405 => return "HTTP/1.1 405 Method Not Allowed"
+        429 => return "HTTP/1.1 429 Too Many Requests"
+        500 => return "HTTP/1.1 500 Internal Server Error"
+        502 => return "HTTP/1.1 502 Bad Gateway"
+        503 => return "HTTP/1.1 503 Service Unavailable"
+        _ => return "HTTP/1.1 " + code.to_string() + " Unknown"
+    }
+}
+
+// Content type mapping
+fn get_content_type(path: string) -> string {
+    let ext = path.split(".").last()
+    
+    match ext {
+        "html" => return "text/html"
+        "htm" => return "text/html"
+        "css" => return "text/css"
+        "js" => return "application/javascript"
+        "json" => return "application/json"
+        "xml" => return "application/xml"
+        "txt" => return "text/plain"
+        "png" => return "image/png"
+        "jpg" => return "image/jpeg"
+        "jpeg" => return "image/jpeg"
+        "gif" => return "image/gif"
+        "svg" => return "image/svg+xml"
+        "ico" => return "image/x-icon"
+        "woff" => return "font/woff"
+        "woff2" => return "font/woff2"
+        "ttf" => return "font/ttf"
+        "eot" => return "application/vnd.ms-fontobject"
+        "pdf" => return "application/pdf"
+        "zip" => return "application/zip"
+        "wasm" => return "application/wasm"
+        _ => return "application/octet-stream"
+    }
+}
+
+// Static file handler
+fn serve_static(server: HttpServer, ctx: Context) -> Response {
+    let static_dir = server.middleware
+    let file_path = static_dir + ctx.request.path
+    
+    if filesystem::exists(file_path) {
+        let content = filesystem::read(file_path)
+        let content_type = get_content_type(file_path)
+        
+        ctx.response.status_code = 200
+        ctx.response.headers.insert("Content-Type", content_type)
+        ctx.response.headers.insert("Content-Length", content.length().to_string())
+        
+        // Add cache headers for static assets
+        if file_path.contains("/static/") {
+            ctx.response.headers.insert("Cache-Control", "public, max-age=31536000")
+        }
+        
+        return ctx.response
+    }
+    
+    return error(ctx, "File not found", 404)
+}
+
+// Graceful shutdown
+fn graceful_shutdown(server: HttpServer, timeout: u32) {
+    console::log("Starting graceful shutdown...")
+    
+    server.state = ServerState::ShuttingDown
+    
+    // Stop accepting new connections
+    // Wait for existing connections to complete
+    
+    console::log("Shutdown complete")
+    server.state = ServerState::Stopped
+}
+
+export {
+    HttpServer,
+    ServerState,
+    TlsConfig,
+    ServerConfig,
+    new_server,
+    default_config,
+    use,
+    use_router,
+    listen,
+    listen_tls,
+    stop,
+    handle_request,
+    parse_request,
+    parse_cookies,
+    build_response,
+    get_status_line,
+    get_content_type,
+    serve_static,
+    graceful_shutdown
+}

@@ -1,0 +1,78 @@
+import ml;
+import std;
+
+fn benchmark_matmul() {
+    println("--- MatMul Benchmarks ---")
+    
+    # 128x128 CPU
+    let a128 = ml::tensor::seeded_randn([128, 128], false)
+    let b128 = ml::tensor::seeded_randn([128, 128], false)
+    let t0 = std::time::now()
+    let c128 = a128.matmul(b128)
+    let t1 = std::time::now()
+    println("128x128 CPU: ", (t1 - t0) / 1000.0, "s")
+    
+    # 512x512 CPU vs GPU
+    let a512 = ml::tensor::seeded_randn([512, 512], false)
+    let b512 = ml::tensor::seeded_randn([512, 512], false)
+    
+    let t2 = std::time::now()
+    let c512_cpu = a512.matmul(b512)
+    let t3 = std::time::now()
+    println("512x512 CPU: ", (t3 - t2) / 1000.0, "s")
+    
+    let t4 = std::time::now()
+    let c512_gpu = a512.matmul_gpu(b512)
+    let t5 = std::time::now()
+    println("512x512 GPU: ", (t5 - t4) / 1000.0, "s")
+    
+    # 1024x1024 GPU
+    let a1024 = ml::tensor::seeded_randn([1024, 1024], false)
+    let b1024 = ml::tensor::seeded_randn([1024, 1024], false)
+    let t6 = std::time::now()
+    let c1024_gpu = a1024.matmul_gpu(b1024)
+    let t7 = std::time::now()
+    println("1024x1024 GPU: ", (t7 - t6) / 1000.0, "s")
+    # Persistent operation (Final Form)
+    println("--- Persistent GPU Timing (Goal: 10-12ms) ---")
+    let a_p = ml::tensor::seeded_randn([1024, 1024], false)
+    let b_p = ml::tensor::seeded_randn([1024, 1024], false)
+    # First operation: Force upload and setup
+    let res1 = a_p.matmul_gpu(b_p)
+    
+    # Second operation: Truly zero-copy
+    let t8 = std::time::now()
+    let res2 = res1.matmul_gpu(a_p)
+    let t9 = std::time::now()
+    println("1024x1024 Persistent MatMul: ", (t9 - t8) / 1000.0, "s")
+}
+
+fn benchmark_elementwise() {
+    println("--- Element-wise Ops Benchmarks ---")
+    println("(Note: WGPU backend currently only implements matmul natively. Element-wise runs on CPU)")
+    
+    # 1024x1024 size (~1M elements)
+    let a = ml::tensor::seeded_randn([1024, 1024], false)
+    let b = ml::tensor::seeded_randn([1024, 1024], false)
+    let c = ml::tensor::seeded_randn([1024, 1024], false)
+    
+    let t0 = std::time::now()
+    let sum = a.add(b)
+    let t1 = std::time::now()
+    println("1024x1024 Add (CPU): ", (t1 - t0) / 1000.0, "s")
+    
+    let t2 = std::time::now()
+    let prod = a.mul(b)
+    let t3 = std::time::now()
+    println("1024x1024 Mul (CPU): ", (t3 - t2) / 1000.0, "s")
+    
+    let t4 = std::time::now()
+    let fused = a.add(b.mul(c))
+    let t5 = std::time::now()
+    println("1024x1024 Add+Mul (CPU): ", (t5 - t4) / 1000.0, "s")
+}
+
+fn main() {
+    benchmark_matmul()
+    benchmark_elementwise()
+}

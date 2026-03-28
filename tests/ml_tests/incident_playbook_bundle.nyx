@@ -1,0 +1,46 @@
+import ml;
+
+# --- Nyx Incident Playbook Bundle (Process Compliance) ---
+
+fn trigger_incident_response(event_type, context) {
+    println("--- Nyx Supervisor: Incident Response Pipeline Activated ---")
+    println("  EVENT:   ", event_type)
+    println("  CONTEXT: ", context)
+    println("")
+
+    if event_type == "DRIFT_DETECTION" {
+        println("  PLAYBOOK [P1]: Statistical Drift Violation")
+        println("  STEP 1: Notify Data Science team.")
+        println("  STEP 2: Capture drift payload for validation.")
+        println("  STEP 3: Trigger Safety Gate check for retraining.")
+        println("  ACTION: DEPLOYMENT_BLOCK")
+    }
+    
+    if event_type == "BIAS_ALERT" {
+        println("  PLAYBOOK [P2]: Fairness Policy Breach")
+        println("  STEP 1: Identify impacted demographic subgroup.")
+        println("  STEP 2: Switch to Demographic-Neutral Rule-Engine.")
+        println("  STEP 3: Audit training data for skewed labels.")
+        println("  ACTION: SYSTEM_FAIL_SOFT")
+    }
+    
+    if event_type == "ADVERSARIAL_ATTACK" {
+        println("  PLAYBOOK [P3]: Persistent High-Epsilon Attack")
+        println("  STEP 1: Log attacker IP / Source fingerprint.")
+        println("  STEP 2: Engage Hardened Envelope (clamping).")
+        println("  STEP 3: Notify Security Ops (SOC).")
+        println("  ACTION: DEFENSIVE_ROUTING")
+    }
+
+    println("")
+    println("STATUS: Incident handled. Procedural logs captured for audit.")
+    return true
+}
+
+# --- Test Case ---
+
+fn main() {
+    trigger_incident_response("DRIFT_DETECTION", "Mean delta > 0.05")
+    println("")
+    trigger_incident_response("BIAS_ALERT", "Group_B Rejection Rate > 0.30")
+}

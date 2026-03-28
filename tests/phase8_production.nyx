@@ -1,0 +1,82 @@
+# Nyx Dataframe Engine: Phase 8 - Production Readiness Test
+# Verifies Server Mode, Observability/Profiling, and Security Sandboxing.
+
+import df.column;
+import df.schema;
+import df.dataframe;
+import df.expr;
+import df.lazy;
+import df.server;
+
+fn main() {
+    println("=== Phase 8: Production Readiness Verification ===")
+    let all_passed = true
+
+    # 1. Setup Test Data
+    let names = ["Alice", "Bob", "Charlie", "David", "Eve"]
+    let scores = [85.0, 92.0, 78.0, 95.0, 88.0]
+    let ages = [25.0, 30.0, 35.0, 40.0, 45.0]
+
+    let df = df::dataframe::DataFrame([
+        df::column::Column("name", "str", names, null),
+        df::column::Column("score", "float", scores, null),
+        df::column::Column("age", "float", ages, null)
+    ], null)
+
+    # 2. Test Observability (Explain)
+    println("\n[1/3] Testing Observability (Explain)...")
+    let lazy_plan = df.lazy()
+        .filter(df::expr::col("score").gt(df::expr::lit(80)))
+        .select([df::expr::col("name"), df::expr::col("score")])
+    
+    let plan_tree = lazy_plan.explain()
+    if plan_tree != null {
+        println("✅ Plan Explanation generated.")
+        # println(plan_tree)
+    } else {
+        println("❌ Plan Explanation failed.")
+        all_passed = false
+    }
+
+    # 3. Test Profiling
+    println("\n[2/3] Testing Profiling...")
+    let metrics = lazy_plan.profile()
+    if metrics != null && metrics.total_ms >= 0 {
+        println("✅ Profiling metrics captured: total_ms=" + metrics.total_ms + " rows=" + metrics.rows)
+    } else {
+        println("❌ Profiling failed.")
+        all_passed = false
+    }
+
+    # 4. Test Server Mode (Mock/Start)
+    println("\n[3/3] Testing Server Mode...")
+    let srv = df::server::DfServer(8082)
+    # Registering tables
+    srv.register_table("students", df)
+    
+    # Starting server (non-blocking in native code)
+    let server_ok = srv.start()
+    if server_ok {
+        println("✅ Server started on port 8082.")
+    } else {
+        println("❌ Server failed to start.")
+        all_passed = false
+    }
+
+    # 5. Test Security Sandboxing
+    println("\n[Bonus] Testing Sandboxed Eval...")
+    let sandboxed_res = std::df::sandboxed_eval("score > 90", df.col("score")._data)
+    if sandboxed_res != null {
+        println("✅ Sandboxed eval executed successfully.")
+    } else {
+        println("❌ Sandboxed eval failed.")
+        all_passed = false
+    }
+
+    if all_passed {
+        println("\n=== PHASE 8 VERIFICATION: ALL TESTS PASSED ✓ ===")
+    } else {
+        println("\n=== PHASE 8 VERIFICATION: FAILED ❌ ===")
+        exit(1)
+    }
+}

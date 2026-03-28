@@ -1,0 +1,149 @@
+# Nyx ML Functional API (nn.F)
+# Stateless neural network operations for custom model building and research
+
+# ─────────────────────────────────────────────────────────────
+# Linear & Core Math Ops
+# ─────────────────────────────────────────────────────────────
+
+fn linear(input, weight, bias) {
+    if bias == null {
+        return ml::tensor::matmul(input, weight)
+    }
+    return ml::tensor::matmul_bias(input, weight, bias)
+}
+
+# ─────────────────────────────────────────────────────────────
+# Activation Functions
+# ─────────────────────────────────────────────────────────────
+
+fn relu(input) { return ml::tensor::relu(input) }
+fn leaky_relu(input, alpha) { return ml::tensor::leaky_relu(input, alpha) }
+fn elu(input, alpha) { return ml::tensor::elu(input, alpha) }
+fn gelu(input) { return ml::tensor::gelu(input) }
+fn sigmoid(input) { return ml::tensor::sigmoid(input) }
+fn tanh(input) { return ml::tensor::tanh(input) }
+fn softmax(input, dim) { return ml::tensor::softmax(input, dim) }
+fn log_softmax(input, dim) {
+    let sm = input.softmax(dim)
+    # Stability: log(softmax) -> x - log(sum(exp(x)))
+    let req = input.requires_grad
+    let ctx = null
+    if req {
+        ctx = { op: "log_softmax", parents: [input] }
+    }
+    return ml::tensor::Tensor(std::math::log_softmax(input.data), input.shape, req, ctx)
+}
+
+# ─────────────────────────────────────────────────────────────
+# Attention Primitive (FlashAttention Primer)
+# ─────────────────────────────────────────────────────────────
+
+fn scaled_dot_product_attention(query, key, value, attn_mask, dropout_p, is_causal) {
+    let scale = 1.0 / std::math::sqrt(query.shape[3])
+    if query.device == "gpu" {
+        let res = std::math::flash_attention(
+            query.data, key.data, value.data, 
+            query.shape[0], query.shape[1], query.shape[2], query.shape[3], 
+            scale
+        )
+        if res != null {
+            let req = query.requires_grad || key.requires_grad || value.requires_grad
+            let ctx = null
+            if req {
+                ctx = { op: "flash_attention", parents: [query, key, value] }
+            }
+            return ml::tensor::Tensor(res, query.shape, req, ctx, "gpu")
+        }
+    }
+    
+    # Fallback/Discrete implementation: softmax(Q * K^T / sqrt(d)) * V
+    let scores = query.matmul(key.transpose())
+    
+    # Scale
+    scores = scores.mul(scale)
+    
+    let attn_weights = scores.softmax()
+    if dropout_p != null && dropout_p > 0.0 {
+        attn_weights = attn_weights.dropout(dropout_p, true)
+    }
+    
+    return attn_weights.matmul(value)
+}
+
+# ─────────────────────────────────────────────────────────────
+# Convolution & Pooling
+# ─────────────────────────────────────────────────────────────
+
+fn conv2d(input, weight, bias, stride, padding) {
+    return input.conv2d(weight, bias, stride, padding)
+}
+
+fn max_pool2d(input, kernel_size, stride) {
+    return input.maxpool2d(kernel_size, stride)
+}
+
+fn avg_pool2d(input, kernel_size, stride) {
+    # Currently use adaptive_avg_pool2d or implement specific kernel version
+    return input.adaptive_avg_pool2d(input.shape[2] / stride, input.shape[3] / stride)
+}
+
+# ─────────────────────────────────────────────────────────────
+# Loss Functions (Area 5)
+# ─────────────────────────────────────────────────────────────
+
+fn mse_loss(preds, targets) {
+    return ml::nn::mse_loss(preds, targets)
+}
+
+fn cross_entropy(preds, targets) {
+    return ml::nn::cross_entropy(preds, targets)
+}
+
+fn binary_cross_entropy(preds, targets) {
+    return ml::nn::bce_loss(preds, targets)
+}
+
+fn binary_cross_entropy_with_logits(logits, targets) {
+    # Numerical stability: L = max(x, 0) - x * z + log(1 + exp(-|x|))
+    let preds = logits.sigmoid()
+    return ml::nn::bce_loss(preds, targets)
+}
+
+fn huber_loss(preds, targets, delta) {
+    if delta == null { delta = 1.0 }
+    let diff = preds.sub(targets)
+    # |diff| < delta -> 0.5 * diff^2
+    # |diff| >= delta -> delta * (|diff| - 0.5 * delta)
+    # Simplified implementation using element-wise logic
+    let res_data = []
+    let i = 0
+    while i < diff.data.len() {
+        let abs_d = diff.data[i]
+        if abs_d < 0 { abs_d = -abs_d }
+        if abs_d < delta {
+            res_data.push(0.5 * abs_d * abs_d)
+        } else {
+            res_data.push(delta * (abs_d - 0.5 * delta))
+        }
+        i = i + 1
+    }
+    return ml::tensor::Tensor([std::math::mean(res_data)], [1], preds.requires_grad, null)
+}
+
+# ─────────────────────────────────────────────────────────────
+# Utility
+# ─────────────────────────────────────────────────────────────
+
+fn dropout(input, p, training) {
+    return ml::tensor::dropout(input, p, training)
+}
+
+# MC Dropout: Dropout at inference for uncertainty estimation (Area 33)
+fn mc_dropout(input, p) {
+    return ml::tensor::dropout(input, p, true)
+}
+
+fn layer_norm(input, gamma, beta, eps) {
+    # Call the tensor module function directly to avoid UFCS recursion in this module
+    return ml::tensor::layer_norm(input, input.shape, gamma, beta, eps)
+}

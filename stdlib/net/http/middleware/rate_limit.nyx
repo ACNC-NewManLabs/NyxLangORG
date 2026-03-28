@@ -1,0 +1,338 @@
+/**
+ * Rate Limit Middleware Module
+ * 
+ * Provides rate limiting middleware for HTTP servers to prevent abuse.
+ * 
+ * @module http::middleware::rate_limit
+ */
+
+type RateLimit = {
+    max_requests: i64,
+    window_ms: i64,
+    key_generator: fn(HttpRequest) -> string,
+    handler: fn(HttpRequest, RateLimitInfo) -> HttpResponse,
+    skip_successful_requests: bool,
+    skip_failed_requests: bool,
+    store: RateLimitStore
+};
+
+type RateLimitOptions = {
+    max_requests?: i64,
+    window_ms?: i64,
+    key_generator?: fn(HttpRequest) -> string,
+    handler?: fn(HttpRequest, RateLimitInfo) -> HttpResponse,
+    skip_successful_requests?: bool,
+    skip_failed_requests?: bool
+};
+
+type RateLimitInfo = {
+    limit: i64,
+    remaining: i64,
+    reset: i64,
+    total: i64
+};
+
+type RateLimitStore = {
+    hits: Map<string, RateLimitEntry>
+};
+
+type RateLimitEntry = {
+    count: i64,
+    reset_time: i64,
+    first_hit: i64
+};
+
+// Default configuration
+let default_max_requests = 100;
+let default_window_ms = 60000;  // 1 minute
+
+/**
+ * Create rate limiting middleware with default options
+ * 
+ * @param options - Rate limit configuration options
+ * @returns Rate limiting middleware function
+ * 
+ * @example
+ * server.use(rate_limit(RateLimitOptions {
+ *     max_requests: 100,
+ *     window_ms: 60000
+ * }));
+ */
+fn create(options: RateLimitOptions) -> fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+    let config = build_config(options);
+    
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        // Generate key for this client
+        let key = config.key_generator(req);
+        
+        // Check rate limit
+        let info = check_rate_limit(config, key);
+        
+        if info.remaining <= 0 {
+            // Rate limit exceeded - return error response
+            return some(config.handler(req, info));
+        }
+        
+        // Execute the handler
+        let resp = next(req);
+        
+        // Update rate limit (unless configured to skip)
+        let should_skip = should_skip(config, resp);
+        
+        if !should_skip {
+            increment_rate_limit(config, key);
+        }
+        
+        // Add rate limit headers to response
+        let resp_with_headers = add_rate_limit_headers(resp, info);
+        
+        return some(resp_with_headers);
+    };
+}
+
+/**
+ * Build rate limit configuration
+ */
+fn build_config(options: RateLimitOptions) -> RateLimit {
+    return RateLimit {
+        max_requests: options.max_requests ?? default_max_requests,
+        window_ms: options.window_ms ?? default_window_ms,
+        key_generator: options.key_generator ?? default_key_generator,
+        handler: options.handler ?? default_rate_limit_handler,
+        skip_successful_requests: options.skip_successful_requests ?? false,
+        skip_failed_requests: options.skip_failed_requests ?? false,
+        store: create_store()
+    };
+}
+
+/**
+ * Create rate limit store
+ */
+fn create_store() -> RateLimitStore {
+    return RateLimitStore {
+        hits: {}
+    };
+}
+
+/**
+ * Generate default client key
+ */
+fn default_key_generator(req: HttpRequest) -> string {
+    // Try to get IP from various headers
+    let ip = get_header(req, "X-Forwarded-For");
+    
+    if ip == "" {
+        ip = get_header(req, "X-Real-IP");
+    }
+    
+    if ip == "" {
+        ip = get_remote_addr(req);
+    }
+    
+    return ip;
+}
+
+/**
+ * Check current rate limit for a key
+ */
+fn check_rate_limit(config: RateLimit, key: string) -> RateLimitInfo {
+    let now = current_time_ms();
+    let entry = get_entry(config.store, key);
+    
+    if entry == none {
+        // No previous hits - allow request
+        return RateLimitInfo {
+            limit: config.max_requests,
+            remaining: config.max_requests - 1,
+            reset: now + config.window_ms,
+            total: config.max_requests
+        };
+    }
+    
+    let e = entry as RateLimitEntry;
+    
+    // Check if window has expired
+    if now >= e.reset_time {
+        // Reset the counter
+        return RateLimitInfo {
+            limit: config.max_requests,
+            remaining: config.max_requests - 1,
+            reset: now + config.window_ms,
+            total: config.max_requests
+        };
+    }
+    
+    // Within window - check count
+    let remaining = config.max_requests - e.count;
+    
+    return RateLimitInfo {
+        limit: config.max_requests,
+        remaining: remaining,
+        reset: e.reset_time,
+        total: config.max_requests
+    };
+}
+
+/**
+ * Increment rate limit counter
+ */
+fn increment_rate_limit(config: RateLimit, key: string) {
+    let now = current_time_ms();
+    let entry = get_entry(config.store, key);
+    
+    if entry == none {
+        // First request in window
+        set_entry(config.store, key, RateLimitEntry {
+            count: 1,
+            reset_time: now + config.window_ms,
+            first_hit: now
+        });
+    } else {
+        // Increment existing
+        let e = entry as RateLimitEntry;
+        
+        if now >= e.reset_time {
+            // Window expired - reset
+            set_entry(config.store, key, RateLimitEntry {
+                count: 1,
+                reset_time: now + config.window_ms,
+                first_hit: now
+            });
+        } else {
+            // Increment
+            set_entry(config.store, key, RateLimitEntry {
+                count: e.count + 1,
+                reset_time: e.reset_time,
+                first_hit: e.first_hit
+            });
+        }
+    }
+}
+
+/**
+ * Get entry from store
+ */
+fn get_entry(store: RateLimitStore, key: string) -> RateLimitEntry? {
+    if key in store.hits {
+        return some(store.hits[key]);
+    }
+    return none;
+}
+
+/**
+ * Set entry in store
+ */
+fn set_entry(store: RateLimitStore, key: string, entry: RateLimitEntry) {
+    store.hits[key] = entry;
+}
+
+/**
+ * Check if request should be skipped from rate limiting
+ */
+fn should_skip(config: RateLimit, resp: HttpResponse) -> bool {
+    let status = get_status(resp);
+    
+    if status >= 200 && status < 300 {
+        return config.skip_successful_requests;
+    }
+    
+    if status >= 400 {
+        return config.skip_failed_requests;
+    }
+    
+    return false;
+}
+
+/**
+ * Add rate limit headers to response
+ */
+fn add_rate_limit_headers(resp: HttpResponse, info: RateLimitInfo) -> HttpResponse {
+    resp.headers["X-RateLimit-Limit"] = str(info.limit);
+    resp.headers["X-RateLimit-Remaining"] = str(info.remaining);
+    resp.headers["X-RateLimit-Reset"] = str(info.reset);
+    
+    return resp;
+}
+
+/**
+ * Default rate limit exceeded handler
+ */
+fn default_rate_limit_handler(req: HttpRequest, info: RateLimitInfo) -> HttpResponse {
+    return HttpResponse {
+        status_code: 429,
+        status_text: "Too Many Requests",
+        headers: {
+            "Content-Type": "application/json",
+            "Retry-After": str((info.reset - current_time_ms()) / 1000)
+        },
+        body: "{\"error\": \"Too many requests\", \"retry_after\": " + str(info.reset) + "}",
+        version: "HTTP/1.1"
+    };
+}
+
+/**
+ * Create rate limiter with custom key generator
+ * 
+ * @param generator - Function to generate rate limit keys
+ * @returns Rate limiting middleware
+ */
+fn by_key(generator: fn(HttpRequest) -> string) -> fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+    return create(RateLimitOptions {
+        key_generator: generator
+    });
+}
+
+/**
+ * Create rate limiter based on API key
+ * 
+ * @param header - Header name containing API key
+ * @returns Rate limiting middleware
+ */
+fn by_api_key(header: string) -> fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+    return create(RateLimitOptions {
+        key_generator: fn(req: HttpRequest) -> string {
+            return get_header(req, header);
+        }
+    });
+}
+
+/**
+ * Create rate limiter based on user ID
+ * 
+ * @returns Rate limiting middleware
+ */
+fn by_user() -> fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+    return create(RateLimitOptions {
+        key_generator: fn(req: HttpRequest) -> string {
+            let auth = get_header(req, "Authorization");
+            // Extract user ID from auth header
+            return auth;
+        }
+    });
+}
+
+// Helper functions
+
+fn get_header(req: HttpRequest, name: string) -> string {
+    return "";  // Placeholder
+}
+
+fn get_remote_addr(req: HttpRequest) -> string {
+    return "";  // Placeholder
+}
+
+fn get_status(resp: HttpResponse) -> i64 {
+    return 200;  // Placeholder
+}
+
+fn current_time_ms() -> i64 {
+    return 0;  // Placeholder
+}
+
+fn str(n: i64) -> string {
+    return "";  // Placeholder
+}
+
+// Re-export types
+type HttpRequest = any;
+type HttpResponse = any;

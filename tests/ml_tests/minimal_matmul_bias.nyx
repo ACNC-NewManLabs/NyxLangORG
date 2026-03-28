@@ -1,0 +1,12 @@
+import ml;
+fn main() {
+    println("--- Minimal matmul_bias Test ---")
+    let x = ml::tensor::randn([1, 2], false)
+    let w = ml::tensor::randn([2, 1], false)
+    let b = ml::tensor::randn([1], false)
+    
+    println("Calling matmul_bias...")
+    let h = x.matmul_bias(w, b)
+    println("Result shape: ", h.shape)
+    println("SUCCESS")
+}

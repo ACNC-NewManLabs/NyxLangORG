@@ -1,0 +1,981 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║           NYX™ MASTER TRADEMARK & BRAND PROTECTION POLICY                    ║
+║                                                                              ║
+║                         Version 1.0 — March 2026                             ║
+║                                                                              ║
+║   Owner   : Surya Sekhar Roy                                                 ║
+║   Website : https://nyxprogramminglanguage.wuaze.com                         ║
+║   GitHub  : https://github.com/NyxProgrammingLanguage/                       ║
+║             Nyx-Programming-Language                                         ║
+║   Contact : nyxprogramminglanguage@gmail.com                                 ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+◆ PLAIN ENGLISH SUMMARY (For Developers — Read This First)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  This document is about protecting the name "Nyx" and everything
+  built under it. Here is what it means for you in plain language:
+
+  ✅ YOU CAN:
+     • Say your project "runs on Nyx™" or is "built with Nyx™"
+     • Write tutorials, blog posts, and courses about Nyx™
+     • Build plugins, libraries, and tools that work with Nyx™
+     • Name your community tool "nyx-something" (e.g., nyx-redis)
+     • Use Nyx™ in your company if you meet the license terms
+
+  ❌ YOU CANNOT:
+     • Name a competing language, runtime, or platform "Nyx anything"
+     • Use the Nyx name or logo in a way that looks official
+     • Register domain names designed to look like official Nyx sites
+     • Imply that Surya Sekhar Roy endorses your product without
+       written permission
+
+  🤝 THE SPIRIT OF THIS POLICY:
+     Nyx™ is built to grow. This policy protects the name and
+     identity of the platform — not to restrict the community,
+     but to ensure that the Nyx brand always means one thing:
+     the original platform created by Surya Sekhar Roy.
+
+     Build freely. Contribute openly. Just don't pretend to be us.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART I — FOUNDATION & OWNERSHIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 1.1 — DECLARATION OF TRADEMARK OWNERSHIP
+
+Surya Sekhar Roy, an individual creator based in India ("the Owner"),
+hereby declares sole and exclusive common law trademark ownership of
+NYX™ as a master umbrella trademark, together with all sub-brands,
+component marks, and derived marks operating under the NYX™ name
+(collectively "the NYX Marks").
+
+The NYX™ master mark covers the entire NYX unified software ecosystem
+as defined in this Policy, including all present components and all
+future technologies, products, services, and modules developed under
+the NYX name by Surya Sekhar Roy.
+
+SECTION 1.2 — ESTABLISHMENT OF RIGHTS
+
+Common law trademark rights in the NYX Marks have been established
+through prior and continuous use in commerce, including:
+
+  (a) First use in commerce:          2026
+  (b) First public release:           2026
+  (c) First use on the internet:      2026
+  (d) Continuous use since:           2026 to present
+  (e) Geographic scope of use:        Worldwide
+
+Evidence of use includes:
+  • Public release of the Nyx Programming Language
+  • Operation of the official website at
+    https://nyxprogramminglanguage.wuaze.com
+  • Maintenance of the official GitHub repository
+  • Distribution to 144+ users across multiple countries
+  • Publication of technical documentation and content
+    under the NYX name
+
+SECTION 1.3 — THE ™ SYMBOL
+
+The ™ symbol appearing after "NYX" and all NYX sub-brands in this
+document and in all official NYX publications indicates a valid,
+enforceable claim of trademark ownership under common law. Use of
+™ does not indicate registered trademark status. Common law trademark
+rights are fully enforceable against infringers and unauthorized users
+in applicable jurisdictions regardless of registration status.
+
+The Owner intends to pursue formal trademark registration in India
+and internationally. Upon registration, affected marks will display
+the ® symbol in place of ™.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART II — THE NYX™ MASTER TRADEMARK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 2.1 — SCOPE OF THE MASTER TRADEMARK
+
+NYX™ is established as the primary, dominant, and master umbrella
+trademark covering the entire unified NYX software ecosystem. The
+NYX™ master mark protects:
+
+  CATEGORY 1 — LANGUAGE & RUNTIME
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ • Nyx Programming Language™    — the primary programming lang   │
+  │ • NyxVM™                       — the bytecode virtual machine   │
+  │ • Nyx JIT™                     — the Cranelift JIT compiler     │
+  │ • Nyx Runtime™                 — the execution runtime          │
+  │ • Nyx GC™                      — the garbage collector          │
+  │ • Nyx Bytecode™                — the bytecode format            │
+  └─────────────────────────────────────────────────────────────────┘
+
+  CATEGORY 2 — SYSTEMS & FIRMWARE
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ • Nyx Hypervisor™              — the KVM-based hypervisor       │
+  │ • Nyx BIOS™                    — the custom x86 BIOS firmware   │
+  │ • Nyx OS™                      — any future OS components       │
+  │ • Nyx Kernel™                  — any future kernel components   │
+  └─────────────────────────────────────────────────────────────────┘
+
+  CATEGORY 3 — FRAMEWORKS & DEVELOPER TOOLS
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ • Nyx Web™                     — the web framework              │
+  │ • Nyx UI™                      — the native UI framework        │
+  │ • Nyx CLI™                     — the command-line toolchain     │
+  │ • Nyx SDK™                     — software development kit       │
+  │ • Nyx API™                     — official API platform          │
+  │ • Nyx Package Manager™         — the package ecosystem          │
+  │ • Nyx Formatter™               — code formatting tool           │
+  │ • Nyx Debugger™                — debugging tools                │
+  │ • Nyx LSP™                     — language server protocol       │
+  └─────────────────────────────────────────────────────────────────┘
+
+  CATEGORY 4 — CLOUD & SERVICES
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ • Nyx Cloud™                   — cloud platform services        │
+  │ • Nyx Playground™              — online code environment        │
+  │ • Nyx Registry™                — package registry service       │
+  │ • Nyx SaaS™                    — software-as-a-service          │
+  └─────────────────────────────────────────────────────────────────┘
+
+  CATEGORY 5 — FUTURE TECHNOLOGIES
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ • Any technology, module, product, service, or platform         │
+  │   bearing the NYX name or any name derived from NYX™,          │
+  │   developed by Surya Sekhar Roy under the NYX ecosystem,       │
+  │   is automatically and immediately covered under the NYX™       │
+  │   master trademark from the moment of its creation or          │
+  │   first public use.                                             │
+  └─────────────────────────────────────────────────────────────────┘
+
+SECTION 2.2 — MASTER TRADEMARK COVERAGE DECLARATION
+
+All technologies, modules, and products bearing the NYX name or
+derived from it are protected under the NYX™ master trademark.
+
+This coverage is:
+  (a) AUTOMATIC — new components do not require separate trademark
+      filings to be protected; they fall under the NYX™ master mark
+      from the moment of first use under the NYX name.
+
+  (b) PROSPECTIVE — covers not only current components but all
+      future components, services, and technologies developed by
+      Surya Sekhar Roy under the NYX ecosystem.
+
+  (c) COMPREHENSIVE — covers the mark in connection with software,
+      hardware, services, documentation, APIs, cloud services,
+      and any other goods or services associated with NYX.
+
+  (d) EXCLUSIVE — only Surya Sekhar Roy may authorize use of the
+      NYX Marks. No third party acquires any trademark rights in
+      the NYX Marks through use, contribution, or partnership
+      without a separate written trademark license agreement.
+
+SECTION 2.3 — MASTER MARK IN THE INTERNATIONAL CLASSES
+
+The NYX™ master trademark and all sub-brands claim rights in:
+
+  International Class 9:
+    Computer software; programming language compilers and
+    interpreters; virtual machine software; operating system
+    software; firmware; BIOS software; hypervisor software;
+    software development tools; bytecode interpreter software;
+    software frameworks; application programming interfaces (APIs);
+    software development kits (SDKs); downloadable software
+    libraries; computer hardware; semiconductor chips.
+
+  International Class 42:
+    Software as a service (SaaS); platform as a service (PaaS);
+    infrastructure as a service (IaaS); computer programming
+    services; software development and design services; cloud
+    computing services; providing temporary use of online
+    non-downloadable software; technical support services;
+    software testing and quality assurance services; hosting
+    of software applications; API services.
+
+  International Class 41:
+    Education and training services related to computer
+    programming; online courses; tutorials; technical
+    workshops; developer conferences.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART III — BRAND ARCHITECTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 3.1 — THREE-TIER BRAND STRUCTURE
+
+The NYX™ ecosystem follows a three-tier brand architecture:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  TIER 1 — MASTER BRAND                                         │
+  │                                                                 │
+  │  NYX™                                                          │
+  │                                                                 │
+  │  The primary, overarching brand identity. Used when referring  │
+  │  to the ecosystem as a whole. Owned exclusively by             │
+  │  Surya Sekhar Roy. No third party may use NYX™ as a           │
+  │  standalone brand for competing products.                       │
+  └─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  TIER 2 — OFFICIAL SUB-BRANDS                                  │
+  │                                                                 │
+  │  NYX + [descriptor] = Official sub-brand                       │
+  │                                                                 │
+  │  Examples:                                                      │
+  │    NyxVM™     NyxUI™     NyxWeb™    NyxCLI™                   │
+  │    NyxBIOS™   NyxJIT™    NyxCloud™  NyxSDK™                   │
+  │                                                                 │
+  │  These are official components of the NYX ecosystem.           │
+  │  Only Surya Sekhar Roy may create official sub-brands.         │
+  │  Sub-brands derive protection from the NYX™ master mark        │
+  │  without requiring individual registration.                     │
+  └─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  TIER 3 — COMMUNITY ECOSYSTEM IDENTIFIERS                      │
+  │                                                                 │
+  │  nyx-[descriptor] = Community project naming convention        │
+  │                                                                 │
+  │  Examples:                                                      │
+  │    nyx-redis-driver      nyx-postgres-client                   │
+  │    nyx-vscode-extension  nyx-docker-plugin                     │
+  │    awesome-nyx           learn-nyx                             │
+  │                                                                 │
+  │  These are third-party community projects. They may use        │
+  │  "nyx-" as a prefix to indicate compatibility with NYX™,       │
+  │  provided they follow the community naming rules in            │
+  │  Section 6.3 and are clearly identified as unofficial.         │
+  └─────────────────────────────────────────────────────────────────┘
+
+SECTION 3.2 — SUB-BRAND RULES
+
+  (a) OFFICIAL SUB-BRANDS are created exclusively by Surya Sekhar
+      Roy and are automatically protected under the NYX™ master mark.
+
+  (b) THIRD-PARTY PRODUCTS may not adopt the "Nyx [Descriptor]"
+      naming format (e.g., "Nyx Pro", "Nyx Enterprise", "Nyx Studio")
+      as it creates a false appearance of being an official sub-brand.
+
+  (c) COMMUNITY TOOLS must use the lowercase "nyx-" prefix format
+      (e.g., "nyx-formatter-custom") and must include a clear
+      disclaimer that they are community projects, not official NYX
+      products.
+
+  (d) COMMERCIAL THIRD-PARTY TOOLS wishing to use a "Nyx [Descriptor]"
+      brand format that could be mistaken for an official sub-brand
+      must obtain written trademark permission from Surya Sekhar Roy.
+
+SECTION 3.3 — WHAT MAKES SOMETHING LOOK "OFFICIAL"
+
+The following signals may create false official appearance and
+are therefore prohibited without written permission:
+
+  ✗  Using the NYX™ logo or any logo designed to look similar
+  ✗  Using "Official Nyx [X]" in any name or description
+  ✗  Using the same visual identity, color scheme, or typography
+     as official NYX materials in a way likely to cause confusion
+  ✗  Creating websites at domains that could be confused with
+     the official NYX website
+  ✗  Issuing "releases" or "updates" that mimic official NYX
+     release communications
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART IV — LEGAL GROUNDING & PROTECTION FRAMEWORK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 4.1 — COMMON LAW TRADEMARK RIGHTS
+
+The NYX™ master trademark and all NYX sub-brands are protected as
+common law trademarks through continuous use in commerce. Common law
+trademark rights:
+
+  (a) Arise automatically upon first use in commerce — no
+      registration is required for protection to exist.
+
+  (b) Are enforceable against third parties who use confusingly
+      similar marks in connection with similar goods or services,
+      regardless of whether those third parties had actual knowledge
+      of the NYX Marks.
+
+  (c) Protect against passing off — the act of misrepresenting a
+      product or service as that of the trademark owner — under
+      Indian law and common law jurisdictions worldwide.
+
+  (d) Are not limited to the jurisdiction of the owner's residence.
+      Common law rights exist wherever the marks are used in commerce
+      and where the reputation of the marks is established.
+
+SECTION 4.2 — PASSING OFF DOCTRINE
+
+Under the passing off doctrine recognized in India (Reckitt &
+Colman v. Borden, 1990; Cadila Health Care v. Cadila
+Pharmaceuticals, 2001) and in common law jurisdictions globally,
+the following elements are established for NYX™:
+
+  (a) GOODWILL — NYX™ has acquired goodwill and reputation in
+      the developer community through public release, active use,
+      and community adoption since 2026.
+
+  (b) MISREPRESENTATION — Any third party using a confusingly
+      similar name (NyxLang, NyxOS, NyxCloud, NyxVM, etc.) for
+      competing software products would constitute a
+      misrepresentation to the relevant consuming public.
+
+  (c) DAMAGE — Such misrepresentation would cause damage to the
+      goodwill and commercial interests of Surya Sekhar Roy as
+      the owner of the NYX™ marks.
+
+SECTION 4.3 — INTERNATIONAL PROTECTION FRAMEWORK
+
+The NYX™ master trademark and all NYX sub-brands are protected
+under the following international frameworks and treaties:
+
+  PARIS CONVENTION FOR THE PROTECTION OF INDUSTRIAL PROPERTY
+    Member countries: 179
+    Relevance: Establishes the right of priority — any trademark
+    application filed in one member country within 6 months of
+    first filing receives priority in all other member countries.
+    Protects well-known marks in member states.
+
+  AGREEMENT ON TRADE-RELATED ASPECTS OF INTELLECTUAL PROPERTY
+  (TRIPS) — WTO
+    Member countries: 164
+    Relevance: Article 16 protects well-known trademarks against
+    confusingly similar uses. Article 22-24 protects geographical
+    indications. Members must provide effective legal means against
+    trademark infringement.
+
+  MADRID PROTOCOL — WIPO
+    Relevance: Provides a mechanism for seeking trademark
+    registration in multiple countries through a single
+    international application once a national base application
+    or registration exists.
+
+  NATIONAL PROTECTIONS:
+    India:          Trade Marks Act, 1999
+                    Passing off under common law
+    United States:  Lanham Act §43(a) — unregistered marks
+    European Union: EU Trade Mark Regulation 2017/1001
+    United Kingdom: Trade Marks Act 1994
+    All others:     National trademark and unfair competition law
+                    in jurisdictions where NYX is used or known
+
+  HONEST LIMITATION:
+    The Owner acknowledges that the strength of trademark protection
+    varies by jurisdiction and depends on the degree to which the
+    NYX Marks are known in each territory. This policy represents
+    a good faith claim of rights based on actual use. The Owner will
+    pursue formal registration to strengthen protections over time.
+
+SECTION 4.4 — CONFUSINGLY SIMILAR MARKS — SCOPE OF PROTECTION
+
+The NYX™ master trademark protects against the use of marks that
+are identical or confusingly similar to NYX™ in connection with
+similar goods or services. The following marks are explicitly
+identified as confusingly similar to NYX™ and their use by third
+parties in connection with software, programming tools, or
+technology platforms is prohibited:
+
+  IDENTICAL MARKS:
+    NYX, Nyx, nyx, N.Y.X., N-Y-X
+
+  CONFUSINGLY SIMILAR WORD MARKS (non-exhaustive):
+    NyxLang         NyxLanguage      NyxOS
+    NyxCloud        NyxRuntime       NyxCompiler
+    NyxEngine       NyxFramework     NyxPlatform
+    NyxDev          NyxCode          NyxScript
+    NyxBase         NyxCore          NyxSystem
+    OpenNyx         NyxOpen          NyxPlus
+    NyxPro          NyxMax           NyxLite
+    NyxStudio       NyxIDE           NyxHub
+    NyxNet          NyxDB            NyxAI
+
+  This list is illustrative, not exhaustive. Any mark that is
+  likely to cause confusion with NYX™ in connection with software
+  or technology is within the scope of this protection.
+
+  Phonetically similar marks (e.g., "Nicks", "Nixe") used for
+  competing software platforms may also be challenged where
+  there is evidence of intent to trade on NYX's reputation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART V — PERMITTED USES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 5.1 — NOMINATIVE FAIR USE
+
+You may use the NYX Marks without written permission to accurately
+refer to the NYX ecosystem and its components, provided all three
+of the following conditions are met:
+
+  (a) The use is necessary to identify NYX (there is no practical
+      alternative way to refer to the product being discussed).
+
+  (b) Only so much of the mark is used as is reasonably necessary
+      for identification.
+
+  (c) The use does not suggest sponsorship, endorsement, or
+      official affiliation with Surya Sekhar Roy beyond what is
+      factually true.
+
+  Permitted examples:
+    ✓  "Built with Nyx™"
+    ✓  "Powered by Nyx™"
+    ✓  "Our application runs on NyxVM™"
+    ✓  "Compatible with the Nyx™ Programming Language"
+    ✓  "A plugin for Nyx™"
+    ✓  "This tutorial covers Nyx™ v2.0"
+
+SECTION 5.2 — EDITORIAL, EDUCATIONAL & INFORMATIONAL USE
+
+The following uses are permitted without written permission:
+
+  ✓  News articles, blog posts, and technical writing about NYX™
+  ✓  Academic papers and research publications referencing NYX™
+  ✓  Tutorials, online courses, and educational content about NYX™
+  ✓  Books about the Nyx™ Programming Language (with attribution)
+  ✓  Conference talks and meetup presentations about NYX™
+  ✓  Podcast episodes and videos discussing NYX™
+  ✓  Honest comparison articles (e.g., "Nyx™ vs Python")
+  ✓  Social media posts and community discussions about NYX™
+  ✓  Open source projects that use or support NYX™
+
+SECTION 5.3 — COMMUNITY PLUGIN, LIBRARY & TOOL NAMING
+
+Third-party developers may name their NYX-compatible tools using
+the following convention without written permission:
+
+  Permitted format:   nyx-[descriptor]
+  Examples:
+    ✓  nyx-redis-driver
+    ✓  nyx-postgres-client
+    ✓  nyx-docker-integration
+    ✓  nyx-vscode-extension
+    ✓  nyx-formatter
+    ✓  nyx-test-runner
+    ✓  awesome-nyx  (curated resource list)
+    ✓  learn-nyx    (educational project)
+
+  All such community projects must:
+    (a) Include a clear disclaimer: "This is an unofficial community
+        project and is not affiliated with or endorsed by Surya
+        Sekhar Roy or the official NYX project."
+    (b) Not use the official NYX logo
+    (c) Not use branding that could reasonably be mistaken for
+        an official NYX product
+
+SECTION 5.4 — COMMERCIAL ECOSYSTEM SERVICES
+
+The following commercial activities are permitted without a
+trademark license (though they may require a software license
+under the NYX Dual License):
+
+  ✓  Selling plugins, libraries, and packages for NYX™
+  ✓  Offering paid training and consulting services for NYX™
+  ✓  Creating and selling books and courses about NYX™
+  ✓  Building and selling IDE integrations for NYX™
+  ✓  Offering paid support services related to NYX™
+  ✓  Creating NYX™-compatible developer tools and selling them
+
+SECTION 5.5 — ATTRIBUTION STATEMENT
+
+When using the NYX Marks under any permitted use, the following
+attribution statement should be included where practical:
+
+  Standard form:
+    "Nyx™ is a trademark of Surya Sekhar Roy.
+     https://nyxprogramminglanguage.wuaze.com"
+
+  Short form (for space-limited contexts):
+    "Nyx™ — Surya Sekhar Roy"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART VI — PROHIBITED USES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 6.1 — ABSOLUTELY PROHIBITED (No Permission Can Be Granted)
+
+The following uses of the NYX Marks are absolutely prohibited under
+any circumstances:
+
+  ✗  COMPETING PLATFORMS
+     Using "Nyx", "NYX", or any confusingly similar name (see
+     Section 4.4) as the name of a competing programming language,
+     compiler, runtime, virtual machine, operating system, BIOS,
+     hypervisor, web framework, or developer platform.
+
+  ✗  COMPETING SERVICES
+     Using "Nyx", "NYX", or any confusingly similar name as the
+     brand of a competing cloud service, SaaS platform, or
+     developer tooling service.
+
+  ✗  MISLEADING OFFICIAL APPEARANCE
+     Creating, operating, or distributing materials, websites, or
+     software releases that falsely appear to be official NYX
+     products or to originate from Surya Sekhar Roy.
+
+  ✗  IMPERSONATION
+     Claiming to be Surya Sekhar Roy, claiming to represent the
+     official NYX project, or creating accounts, profiles, or
+     communications that impersonate official NYX channels.
+
+  ✗  MERCHANDISE WITHOUT PERMISSION
+     Manufacturing, selling, or distributing merchandise (clothing,
+     accessories, stickers, printed materials, etc.) bearing the
+     NYX Marks or the NYX logo without explicit written permission.
+
+  ✗  TRADEMARK REGISTRATION
+     Attempting to register any trademark, trade name, or business
+     name that is identical or confusingly similar to the NYX Marks
+     in connection with software, technology, or related services,
+     in any jurisdiction worldwide.
+
+  ✗  DOMAIN SQUATTING
+     Registering or acquiring domain names that incorporate the NYX
+     Marks in a manner likely to cause confusion with the official
+     NYX platform, including but not limited to:
+       nyxlang.com / .net / .io / .dev / .app
+       nyxlanguage.com
+       nyxprogramming.com
+       nyxvm.com / nyxbios.com / nyxhypervisor.com
+       any domain combining "nyx" with "lang", "code", "dev",
+       "vm", "os", "cloud", or similar technology descriptors
+     without explicit written permission from Surya Sekhar Roy.
+
+SECTION 6.2 — PROHIBITED WITHOUT WRITTEN PERMISSION
+
+The following require explicit written permission from Surya Sekhar
+Roy before proceeding:
+
+  •  Using "Nyx [Descriptor]" as a commercial product name where
+     it could be mistaken for an official NYX sub-brand
+
+  •  Using the NYX logo or any confusingly similar logo in any
+     commercial context
+
+  •  Publishing a book, course, or media product with "Nyx" or
+     "NYX" as the primary brand identifier of that product
+
+  •  Creating or operating social media accounts, YouTube channels,
+     Discord servers, or online communities using names or handles
+     that could be mistaken for official NYX channels
+
+  •  Organizing commercial conferences, events, or hackathons
+     using the NYX Marks as the primary event brand
+
+  •  Using the NYX Marks in paid advertising or marketing campaigns
+
+  To request permission:
+    Email:   nyxprogramminglanguage@gmail.com
+    Subject: [TRADEMARK PERMISSION REQUEST — NYX]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART VII — TRADEMARK USAGE RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 7.1 — CORRECT WRITTEN FORM
+
+When using the NYX Marks in any written or digital publication,
+the following rules apply:
+
+  MASTER MARK:
+    Correct:    Nyx™   or   NYX™
+    correct:    nyx™ (lowercase, no symbol)
+    Incorrect:  NYX (all caps without ™, outside logo context)
+
+  SUB-BRANDS:
+    Correct:    NyxVM™   NyxUI™   NyxWeb™   NyxCLI™
+    Incorrect:  Nyxvm    nyxui    nyx web   nyx-cli (for official marks)
+
+  SYMBOL PLACEMENT:
+    The ™ symbol must appear:
+      • On the first prominent occurrence of the mark in any
+        document, webpage, publication, or advertisement
+      • In a superscript or immediately following the mark
+      • Subsequent uses in the same document do not require
+        the symbol
+
+SECTION 7.2 — MARKS ARE ADJECTIVES, NOT NOUNS OR VERBS
+
+Trademarks function grammatically as adjectives that modify a
+product or service noun. Correct usage:
+
+  CORRECT (adjective use):
+    "the Nyx™ programming language"
+    "a program written in Nyx™"
+    "the NyxVM™ runtime"
+    "using the Nyx™ web framework"
+
+  INCORRECT (noun use — avoid where possible):
+    "download Nyx and run it" — "Nyx" used as a bare noun
+
+  ALWAYS INCORRECT (verb use):
+    "we Nyxed our backend"
+    "Nyxing the application"
+
+SECTION 7.3 — DO NOT MODIFY THE MARKS
+
+The NYX Marks must be used exactly as established. Third parties
+must not:
+
+  ✗  Abbreviate the marks (e.g., "N." for Nyx)
+  ✗  Combine the marks with other words to create new compound
+     marks without written permission (e.g., "SuperNyx", "NyxMax")
+  ✗  Translate the marks into other languages
+  ✗  Alter the capitalization in a way not consistent with the
+     established mark forms
+  ✗  Pluralize the marks ("Nyxes") or make them possessive in
+     a way that obscures their trademark status
+
+SECTION 7.4 — LOGO USAGE RESTRICTIONS
+
+  (a) The official NYX™ logo is proprietary visual identity.
+      Third parties may NOT use the official NYX logo without
+      explicit written permission.
+
+  (b) Third parties may NOT create logos that are designed to
+      look similar to or be confused with the official NYX logo.
+
+  (c) If permission is granted to use the NYX logo, the logo
+      must be used:
+        • Without modification, distortion, or recoloring
+        • With minimum clear space as specified in official
+          brand guidelines when published
+        • At sufficient resolution to be clearly legible
+        • Never on a background that reduces legibility
+
+  (d) For visual reference to the NYX project in editorial
+      contexts (e.g., articles, presentations), using a simple
+      text reference "Nyx™" is always acceptable as an
+      alternative to the logo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART VIII — DOMAIN NAME POLICY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 8.1 — OFFICIAL DOMAINS
+
+Only the following domains are official NYX domains authorized
+by Surya Sekhar Roy:
+
+  Primary:
+    https://nyxprogramminglanguage.wuaze.com
+
+  GitHub:
+    https://github.com/NyxProgrammingLanguage/Nyx-Programming-Language
+
+  Any other domain purporting to be an official NYX domain is
+  unauthorized unless explicitly confirmed by Surya Sekhar Roy at
+  nyxprogramminglanguage@gmail.com.
+
+SECTION 8.2 — PROHIBITED DOMAIN REGISTRATIONS
+
+Third parties may not register domain names that:
+
+  (a) Incorporate "nyx" combined with any technology descriptor
+      (lang, language, vm, os, cloud, web, ui, dev, code, run,
+      compile, script, framework, platform, bios, hypervisor,
+      runtime, sdk, api, etc.) in a top-level or second-level
+      domain, without written permission.
+
+  (b) Are designed to intercept traffic intended for the official
+      NYX website or GitHub repository.
+
+  (c) Are registered with the intent to sell to the Owner at a
+      premium (cybersquatting).
+
+  (d) Host content that competes with, impersonates, or disparages
+      the official NYX platform.
+
+SECTION 8.3 — PERMITTED COMMUNITY DOMAINS
+
+Community members may register domains using the following
+patterns without permission, provided the site clearly identifies
+itself as an unofficial community resource:
+
+  Permitted patterns:
+    learn-nyx.[tld]           — tutorial or educational site
+    awesome-nyx.[tld]         — resource list
+    nyx-community.[tld]       — community forum or resource
+    nyx-[tool-name].[tld]     — specific community tool
+
+  All community sites must display prominently:
+    "This is an unofficial community resource. It is not affiliated
+     with Surya Sekhar Roy or the official NYX project."
+
+SECTION 8.4 — DISPUTE RESOLUTION FOR DOMAIN NAMES
+
+Infringing domain names may be subject to proceedings under:
+
+  • UDRP — Uniform Domain-Name Dispute-Resolution Policy (ICANN)
+    Applies to: .com, .net, .org, and most generic TLDs
+
+  • INDRP — .IN Domain Name Dispute Resolution Policy
+    Applies to: .in domains
+
+  • National domain dispute procedures where available
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART IX — COMMERCIAL BRANDING RULES FOR PARTNERS & LICENSEES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 9.1 — COMPATIBILITY & INTEGRATION CLAIMS
+
+Third-party products may claim compatibility with NYX™ using the
+following approved phrasing, without requiring a trademark license:
+
+  Approved phrases:
+    "[Product] is compatible with Nyx™"
+    "[Product] supports the Nyx™ Programming Language"
+    "[Product] integrates with NyxVM™"
+    "[Product] works with Nyx™"
+
+  The following phrases require written permission:
+    "[Product] — Official Nyx™ Partner"
+    "[Product] — Certified for Nyx™"
+    "[Product] — Endorsed by Nyx™"
+    "Official Nyx™ [anything]"
+
+SECTION 9.2 — COMMERCIAL LICENSE BRANDING
+
+Organizations that have obtained a Commercial License under the
+NYX Dual License may display the following notice on their
+products:
+
+  "Licensed under the NYX™ Commercial License.
+   NYX™ is a trademark of Surya Sekhar Roy."
+
+This notice does not constitute an endorsement and must not be
+displayed in a manner that implies official partnership beyond
+the commercial license relationship.
+
+SECTION 9.3 — RESELLERS & DISTRIBUTORS
+
+Any entity authorized in writing to distribute the Software
+commercially must:
+
+  (a) Use only the exact NYX Marks as specified in this Policy
+  (b) Not modify the marks or create sub-brands without permission
+  (c) Clearly identify themselves as an authorized distributor,
+      not as the Owner or creator of NYX
+  (d) Include the standard attribution notice in all materials
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART X — ENFORCEMENT STRATEGY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 10.1 — GRADUATED ENFORCEMENT APPROACH
+
+The Owner follows a graduated and proportionate enforcement
+approach. The goal is to stop infringement and protect the NYX
+brand — not to punish the community. In most cases, good-faith
+resolution is preferred over immediate legal action.
+
+  LEVEL 1 — INFORMAL NOTICE
+    For minor, likely unintentional, or community-context
+    violations, the Owner will first attempt to resolve the
+    matter through an informal, friendly notification explaining
+    the concern and requesting correction.
+
+  LEVEL 2 — FORMAL CEASE AND DESIST
+    If informal notice is ignored or the violation is commercial
+    in nature, a formal written cease and desist notice will be
+    issued, specifying the infringing conduct and the required
+    corrective action within a reasonable timeframe (typically
+    14-30 days).
+
+  LEVEL 3 — PLATFORM TAKEDOWN
+    For infringement on hosting platforms, app stores, domain
+    registrars, and similar services, the Owner may file
+    takedown or dispute notices under applicable platform
+    policies, UDRP, INDRP, or DMCA procedures.
+
+  LEVEL 4 — FORMAL LEGAL ACTION
+    For persistent, willful, or commercial-scale infringement,
+    the Owner reserves the right to initiate formal legal
+    proceedings including:
+      • Trademark infringement claims
+      • Passing off actions
+      • Injunctive relief applications
+      • Claims for damages and account of profits
+      • Domain name dispute proceedings
+
+SECTION 10.2 — REPORTING INFRINGEMENT
+
+Members of the community are encouraged to report suspected
+infringement of the NYX Marks to:
+
+  Email:   nyxprogramminglanguage@gmail.com
+  Subject: [NYX TRADEMARK INFRINGEMENT REPORT]
+
+  Please include:
+    (a) Description of the infringing use
+    (b) URL, link, or location of the infringement
+    (c) Screenshots or evidence if available
+    (d) Your contact information (optional but helpful)
+
+All reports will be reviewed by Surya Sekhar Roy. The Owner
+appreciates the community's help in protecting the NYX brand.
+
+SECTION 10.3 — GOOD FAITH RESOLUTION
+
+The Owner is committed to resolving trademark disputes through
+good faith communication wherever possible. If you have received
+a trademark notice or believe you may be in violation of this
+Policy, please reach out proactively:
+
+  Email:   nyxprogramminglanguage@gmail.com
+  Subject: [NYX TRADEMARK — GOOD FAITH RESOLUTION]
+
+The Owner will make reasonable efforts to:
+  • Respond within 14 business days
+  • Explain the specific concern clearly
+  • Offer a reasonable path to resolution
+  • Grant permission where use is genuinely non-harmful
+
+SECTION 10.4 — DISPUTE RESOLUTION PROCEDURE
+
+For formal disputes that cannot be resolved through good faith
+negotiation:
+
+  (a) GOVERNING LAW
+      This Policy and any disputes arising from it are governed
+      by the Trade Marks Act, 1999 of India.
+
+  (b) ARBITRATION
+      Formal disputes shall be submitted to binding arbitration
+      under the Arbitration and Conciliation Act, 1996 of India.
+        Seat:     Kolkata, West Bengal, India
+        Language: English
+
+  (c) INJUNCTIVE RELIEF
+      The Owner reserves the right to seek emergency injunctive
+      relief in any court of competent jurisdiction worldwide
+      without the requirement of prior arbitration, where
+      necessary to prevent ongoing and irreparable harm.
+
+  (d) DOMAIN DISPUTES
+      Domain name disputes will be pursued through UDRP (ICANN),
+      INDRP (.in domains), or national procedures as appropriate.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART XI — COMMUNITY GUIDELINES & ECOSYSTEM GROWTH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 11.1 — THE OWNER'S COMMITMENT TO THE COMMUNITY
+
+Surya Sekhar Roy is committed to building NYX™ as a thriving,
+open, and growing developer ecosystem. This trademark policy
+is a protection framework — not a barrier. The Owner commits to:
+
+  (a) Keeping this Policy publicly available and clearly written.
+
+  (b) Responding to community trademark queries promptly and in
+      good faith.
+
+  (c) Granting permissions liberally to community members acting
+      in good faith.
+
+  (d) Not using trademark rights to stifle legitimate criticism,
+      commentary, or competition based on independent development.
+
+  (e) Updating this Policy to reflect the growing ecosystem and
+      community needs.
+
+SECTION 11.2 — COMMUNITY-FRIENDLY QUICK REFERENCE
+
+  ┌────────────────────────────────────────────────────────────────┐
+  │  ALWAYS OK — no need to ask:                                   │
+  │                                                                │
+  │  ✓  "Built with Nyx™" on your project                          │
+  │  ✓  Tutorial or blog post about Nyx™                           │
+  │  ✓  Community tool named "nyx-[something]"                     │
+  │  ✓  Talking about Nyx™ on social media                         │
+  │  ✓  Teaching Nyx™ in a course or bootcamp                      │
+  │  ✓  Comparing Nyx™ to other languages                          │
+  ├────────────────────────────────────────────────────────────────┤
+  │  ASK FIRST — email nyxprogramminglanguage@gmail.com:           │
+  │                                                                │
+  │  ?  Using Nyx™ logo in your project                            │
+  │  ?  Naming a commercial product "Nyx [Something]"              │
+  │  ?  Organizing a Nyx™ conference or event                      │
+  │  ?  Printing merchandise with Nyx™ branding                    │
+  ├────────────────────────────────────────────────────────────────┤
+  │  NEVER OK — these will be enforced:                            │
+  │                                                                │
+  │  ✗  Competing language or platform called "Nyx anything"       │
+  │  ✗  Fake official Nyx™ websites or releases                    │
+  │  ✗  Domain squatting on Nyx-related domains                    │
+  │  ✗  Registering "NYX" as your own trademark                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART XII — GENERAL PROVISIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTION 12.1 — UPDATES TO THIS POLICY
+
+This Policy may be updated by Surya Sekhar Roy at any time.
+Updates will be published at the official website and GitHub
+repository. Continued use of the NYX Marks after publication
+of an updated Policy constitutes acceptance of the revised terms.
+Significant changes will be announced in the official repository.
+
+SECTION 12.2 — SEVERABILITY
+
+If any provision of this Policy is found invalid or unenforceable
+by a court of competent jurisdiction, it shall be modified to the
+minimum extent necessary to make it enforceable. All remaining
+provisions continue in full effect.
+
+SECTION 12.3 — NO TRADEMARK LICENSE BY IMPLICATION
+
+Nothing in the NYX Dual License Agreement, the NYX Contributor
+Agreement, or any other agreement relating to NYX shall be construed
+as granting any trademark rights or license to use the NYX Marks,
+except as expressly stated in this Trademark Policy or in a
+separate written trademark license agreement signed by Surya Sekhar
+Roy.
+
+SECTION 12.4 — CONTACT FOR ALL TRADEMARK MATTERS
+
+  Trademark permissions:      nyxprogramminglanguage@gmail.com
+  Subject:                    [TRADEMARK PERMISSION REQUEST — NYX]
+
+  Infringement reports:       nyxprogramminglanguage@gmail.com
+  Subject:                    [NYX TRADEMARK INFRINGEMENT REPORT]
+
+  Good faith resolution:      nyxprogramminglanguage@gmail.com
+  Subject:                    [NYX TRADEMARK — GOOD FAITH RESOLUTION]
+
+  General trademark queries:  nyxprogramminglanguage@gmail.com
+  Subject:                    [NYX TRADEMARK QUERY]
+
+  Official Website:
+    https://nyxprogramminglanguage.wuaze.com
+
+  Official GitHub:
+    https://github.com/NyxProgrammingLanguage/Nyx-Programming-Language
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NYX™ MASTER TRADEMARK & BRAND PROTECTION POLICY v1.0
+  March 2026
+
+  Nyx™ is a trademark of Surya Sekhar Roy.
+  Copyright (c) 2026 Surya Sekhar Roy. All Rights Reserved.
+
+  NYX™ · NyxVM™ · Nyx BIOS™ · Nyx Hypervisor™ · Nyx Web™ · Nyx UI™
+  Nyx JIT™ · Nyx CLI™ · Nyx SDK™ · Nyx Cloud™ · Nyx OS™ · Nyx Runtime™
+
+  All marks listed above are trademarks of Surya Sekhar Roy.
+  Protected under the Trade Marks Act 1999 (India), the Paris
+  Convention, TRIPS Agreement, and applicable national trademark
+  law in all jurisdictions where the NYX Marks are used in commerce.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

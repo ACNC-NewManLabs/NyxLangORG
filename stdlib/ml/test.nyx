@@ -1,0 +1,85 @@
+# Nyx ML Test Utilities
+# Gradient checkers, numerical verifiers, and benchmark helpers
+
+# Gradient Checker: verifies analytical gradients are close to numerical finite differences
+fn grad_check(tensor, eps) {
+    if eps == null { eps = 1e-5 }
+    if tensor.grad == null {
+        println("[grad_check] ERROR: No gradient computed. Run backward() first.")
+        return null
+    }
+    let err = std::ml::grad_check(tensor.data, tensor.grad, eps)
+    if err < 0.01 {
+        println("[grad_check] PASS: Max relative error = {} (threshold 0.01)", err)
+    } else {
+        println("[grad_check] WARN: Max relative error = {} (may be > threshold 0.01)", err)
+    }
+    return err
+}
+
+# Benchmark: measure forward pass speed
+fn benchmark_forward(model, x, n_warmup, n_runs) {
+    if n_warmup == null { n_warmup = 5 }
+    if n_runs == null { n_runs = 20 }
+    
+    let i = 0
+    # Warmup runs (no timing)
+    while i < n_warmup {
+        model.forward(x)
+        i = i + 1
+    }
+    
+    i = 0
+    let start = get_time()
+    while i < n_runs {
+        model.forward(x)
+        i = i + 1
+    }
+    let end = get_time()
+    let avg_ms = (end - start) / n_runs
+    println("[benchmark] {} forward passes: avg {}ms/iter", n_runs, avg_ms)
+    return avg_ms
+}
+
+# Check for NaN/Inf in a tensor
+fn check_finite(tensor) {
+    let data = tensor.data
+    let i = 0
+    let n_nan = 0
+    let n_inf = 0
+    while i < data.len() {
+        let v = data[i]
+        # Simple checks: detect suspiciously large values as proxy for inf/nan
+        if v != v { n_nan = n_nan + 1 }   # NaN check
+        if v > 1e30 || v < -1e30 { n_inf = n_inf + 1 }  # Inf check
+        i = i + 1
+    }
+    if n_nan > 0 || n_inf > 0 {
+        println("[check_finite] WARNING: {} NaN values, {} Inf values detected!", n_nan, n_inf)
+        return false
+    }
+    return true
+}
+
+# Summary of model parameters for debugging
+fn model_summary(model) {
+    println("Model Summary:")
+    println("==============")
+    if model.layers == null {
+        println("  No layers registered.")
+        return
+    }
+    let total = 0
+    let i = 0
+    while i < model.layers.len() {
+        let layer = model.layers[i]
+        let p = 0
+        if layer.weight != null { p = p + layer.weight.data.len() }
+        if layer.bias != null { p = p + layer.bias.data.len() }
+        total = total + p
+        println("  [{}] {} | params: {}", i, layer.type, p)
+        i = i + 1
+    }
+    println("==============")
+    println("Total params: {}", total)
+}

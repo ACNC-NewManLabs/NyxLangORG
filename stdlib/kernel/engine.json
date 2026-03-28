@@ -1,0 +1,13 @@
+{
+  "name": "kernel",
+  "modules": [
+    "./dma.nyx",
+    "./interrupts.nyx",
+    "./keyboard.nyx",
+    "./malloc.nyx",
+    "./pmm.nyx",
+    "./scheduler.nyx",
+    "./vga.nyx",
+    "./mod.nyx"
+  ]
+}

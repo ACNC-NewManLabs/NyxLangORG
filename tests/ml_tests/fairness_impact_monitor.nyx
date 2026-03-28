@@ -1,0 +1,38 @@
+import ml;
+
+# --- Nyx Fairness Impact Monitor (Side-Effect Audit) ---
+
+fn audit_safety_impact(stats) {
+    println("--- Nyx Fairness Audit: Monitoring Safety Side-Effects ---")
+    
+    let groups = stats.keys()
+    let i = 0
+    while i < groups.len() {
+        let gid = groups[i]
+        let ginfo = stats[gid]
+        println("Subgroup: ", gid)
+        println("  Rejection Rate:   ", ginfo.rej * 100, "%")
+        println("  Fallback Accuracy: ", ginfo.fback_acc * 100, "%")
+        
+        # 1. Parity Check: Rejection Rate (Avoiding Service Denial Bias)
+        if ginfo.rej > 0.20 {
+            println("  WARNING: High service denial risk for group ", gid, " (check over-blocking)")
+        }
+        
+        # 2. Parity Check: Fallback Quality (Avoiding Lower Quality of Service)
+        if ginfo.fback_acc < 0.90 {
+            println("  CRITICAL: Low QoS fallback for group ", gid, " (improve rule engine)")
+        }
+        i = i + 1
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    let mock_stats = {
+        Group_A: { rej: 0.05, fback_acc: 0.98 },
+        Group_B: { rej: 0.25, fback_acc: 0.85 } # High rejection & low fallback acc
+    }
+    audit_safety_impact(mock_stats)
+}

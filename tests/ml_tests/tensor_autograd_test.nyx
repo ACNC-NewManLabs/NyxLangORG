@@ -1,0 +1,116 @@
+import ml;
+import std;
+
+fn test_tensor_ops() {
+    println("[TensorOps] Testing shape and broadcasting...");
+    let a = ml::tensor::Tensor([1.0, 2.0, 3.0, 4.0], [2, 2], false, null);
+    let b = ml::tensor::Tensor([1.0, 1.0], [1, 2], false, null);
+    
+    let c = a.add(b);
+    println("Shape 2x2 + 1x2 = {}", c.shape);
+    if c.shape[0] == 2 && c.shape[1] == 2 {
+        println("[TensorOps] Broadcasting PASSED");
+    } else {
+        println("[TensorOps] Broadcasting FAILED");
+    }
+    
+    println("[TensorOps] Testing slicing...");
+    let d = a.slice(0, 0, 1);
+    println("Slice [2, 2] dim 0 [0:1] -> {}", d.shape);
+    if d.shape[0] == 1 && d.shape[1] == 2 {
+        println("[TensorOps] Slicing PASSED");
+    } else {
+        println("[TensorOps] Slicing FAILED");
+    }
+}
+
+fn gradient_check() {
+    println("[GradCheck] Running Finite Difference vs Autograd...");
+    
+    # f(x, w) = sum((x * w)^2)
+    let x_data = [1.0, 2.0, 3.0, 4.0];
+    let w_data = [0.5, 0.5, 0.5, 0.5];
+    
+    let x = ml::tensor::Tensor(x_data, [2, 2], false, null);
+    let w = ml::tensor::Tensor(w_data, [2, 2], true, null);
+    
+    # 1. Forward pass
+    let xw = x.mul(w);
+    let out = xw.mul(xw).sum();
+    
+    # 2. Backward pass
+    out.backward();
+    let grad_auto = w.grad;
+    println("Auto Grad: {}", grad_auto);
+    
+    # 3. Finite Difference
+    let eps = 1e-4;
+    let grad_fd = [];
+    let i = 0;
+    while i < w_data.len() {
+        # w + eps
+        let w_plus_data = [];
+        let j = 0;
+        while j < w_data.len() {
+            if i == j { w_plus_data.push(w_data[j] + eps); }
+            else { w_plus_data.push(w_data[j]); }
+            j = j + 1;
+        }
+        let w_plus = ml::tensor::Tensor(w_plus_data, [2, 2], false, null);
+        let out_plus = x.mul(w_plus).mul(x.mul(w_plus)).sum();
+        
+        # w - eps
+        let w_minus_data = [];
+        let j = 0;
+        while j < w_data.len() {
+            if i == j { w_minus_data.push(w_data[j] - eps); }
+            else { w_minus_data.push(w_data[j]); }
+            j = j + 1;
+        }
+        let w_minus = ml::tensor::Tensor(w_minus_data, [2, 2], false, null);
+        let out_minus = x.mul(w_minus).mul(x.mul(w_minus)).sum();
+        
+        let fd = (out_plus.item() - out_minus.item()) / (2.0 * eps);
+        grad_fd.push(fd);
+        i = i + 1;
+    }
+    println("FD Grad:   {}", grad_fd);
+    
+    # 4. Compare
+    let diff = 0.0;
+    let k = 0;
+    while k < grad_auto.len() {
+        let d = grad_auto[k] - grad_fd[k];
+        if d < 0 { d = -d; }
+        diff = diff + d;
+        k = k + 1;
+    }
+    
+    if diff < 1e-3 {
+        println("[GradCheck] PASSED (diff: {})", diff);
+    } else {
+        println("[GradCheck] FAILED (diff: {})", diff);
+    }
+}
+
+fn test_self_mul_deadlock() {
+    println("[DeadlockCheck] Testing x.mul(x) backward...");
+    let x = ml::tensor::Tensor([1.0, 2.0], [2], true, null);
+    let out = x.mul(x).sum();
+    out.backward();
+    println("X grad (x*x): {}", x.grad);
+    # d(x^2)/dx = 2x. For [1, 2] should be [2, 4].
+    if x.grad[0] == 2.0 && x.grad[1] == 4.0 {
+        println("[DeadlockCheck] PASSED");
+    } else {
+        println("[DeadlockCheck] FAILED");
+    }
+}
+
+fn main() {
+    println("=== Phase 1: Tensor + Autograd ===");
+    test_tensor_ops();
+    gradient_check();
+    test_self_mul_deadlock();
+    println("==================================");
+}

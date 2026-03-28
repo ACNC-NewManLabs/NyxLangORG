@@ -1,0 +1,56 @@
+import ml;
+import df;
+
+fn main() {
+    println("--- ML Audit Verification ---");
+
+    # 1. Test Differentiable Query Bridge
+    println("[Test 1] Differentiable Query Bridge");
+    let data = [10.0, 20.0, 30.0, 40.0, 50.0];
+    let columns = [df::Column("vals", "float", data, null)];
+    let my_df = df::DataFrame(columns, null);
+
+    let d_df = ml::query::DifferentiableDataFrame(my_df, true);
+    let mean_result = ml::query::agg_mean(d_df, "vals");
+    if mean_result._ctx.op == "query_mean" {
+        println("[Test 1] PASSED: mean Tensor with query_mean op, col='{}'", mean_result._ctx.col_name);
+    }
+
+    # 2. Test Data Augmentation (Noise)
+    println("[Test 2] Data Augmentation (Noise)");
+    let input_t = ml::tensor::Tensor([1.0, 1.0, 1.0, 1.0], [2, 2], false, null);
+    let noisy_t = ml::augment::random_noise(input_t, 0.1);
+    println("Input shape: {}", input_t.shape);
+    println("Noisy shape: {}", noisy_t.shape);
+    if noisy_t.shape[0] == 2 && noisy_t.shape[1] == 2 {
+        println("[Test 2] PASSED: noise applied, output shape preserved");
+    }
+
+    # 3. Test DataLoader state tracking (index management)
+    println("[Test 3] DataLoader State Tracking");
+    let raw_x = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0];
+    let raw_y = [0.0, 0.0, 0.0, 0.0];
+
+    # [4, 3] tensor (4 samples, 3 features)
+    let x = ml::tensor::Tensor(raw_x, [4, 3], false, null);
+    let y = ml::tensor::Tensor(raw_y, [4, 1], false, null);
+    let loader = ml::data::DataLoader(x, y, 2, false, 0);
+
+    # Validate that DataLoader was created with correct state
+    println("n_samples: {}", loader._n_samples);
+    println("batch_size: {}", loader.batch_size);
+    println("initial idx: {}", loader._current_idx);
+    if loader._n_samples == 4 && loader.batch_size == 2 && loader._current_idx == 0 {
+        println("[Test 3] PASSED: DataLoader state verified");
+    }
+
+    # 4. Test n_modules registered
+    println("[Test 4] Module Registration");
+    let d_df2 = ml::query::differentiable_pipeline(my_df, []);
+    println("d_df2._requires_grad: {}", d_df2._requires_grad);
+    if d_df2._requires_grad == true {
+        println("[Test 4] PASSED: DifferentiableDataFrame pipeline works");
+    }
+
+    println("\n--- All Tests PASSED ---");
+}

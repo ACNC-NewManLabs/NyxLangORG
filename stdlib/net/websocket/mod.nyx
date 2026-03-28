@@ -1,0 +1,52 @@
+/**
+ * WebSocket Module
+ * 
+ * Provides WebSocket server functionality for full-duplex communication.
+ * Supports handshake upgrade, message broadcasting, and connection groups.
+ * 
+ * @module websocket
+ * @version 1.0.0
+ */
+
+mod server;
+
+/**
+ * WebSocket Server type
+ */
+type WebSocketServer = server::WebSocketServer;
+
+/**
+ * WebSocket Connection type
+ */
+type WebSocketConnection = server::WebSocketConnection;
+
+/**
+ * WebSocket Message type
+ */
+type WebSocketMessage = server::WebSocketMessage;
+
+/**
+ * Create a new WebSocket server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns A new WebSocket server instance
+ * 
+ * @example
+ * let ws = WebSocketServer(port=8081);
+ * ws.on_connect(handle_client);
+ * ws.start();
+ */
+fn WebSocketServer(host: string = "0.0.0.0", port: i64 = 8081) -> WebSocketServer {
+    return server::create(host, port);
+}
+
+/**
+ * Create WebSocket server from HTTP server
+ * 
+ * @param http_server - Existing HTTP server
+ * @returns WebSocket server
+ */
+fn from_http(http_server: any) -> WebSocketServer {
+    return server::from_http(http_server);
+}

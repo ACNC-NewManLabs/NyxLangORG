@@ -1,0 +1,52 @@
+/**
+ * Security Module
+ * 
+ * Provides security-related functionality including TLS/SSL support.
+ * 
+ * @module security
+ * @version 1.0.0
+ */
+
+mod tls;
+
+/**
+ * TLS Server type
+ */
+type TlsServer = tls::TlsServer;
+
+/**
+ * TLS Configuration type
+ */
+type TlsConfig = tls::TlsConfig;
+
+/**
+ * Create a TLS server configuration
+ * 
+ * @param cert_path - Path to certificate file
+ * @param key_path - Path to private key file
+ * @returns TLS configuration
+ * 
+ * @example
+ * let config = TlsConfig(
+ *     cert_path="./cert.pem",
+ *     key_path="./key.pem"
+ * );
+ */
+fn TlsConfig(cert_path: string, key_path: string) -> TlsConfig {
+    return tls::create_config(cert_path, key_path);
+}
+
+/**
+ * Create TLS server
+ * 
+ * @param config - TLS configuration
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @returns TLS server
+ * 
+ * @example
+ * let server = TlsServer(config, host="0.0.0.0", port=443);
+ */
+fn TlsServer(config: TlsConfig, host: string, port: i64) -> TlsServer {
+    return tls::create(config, host, port);
+}

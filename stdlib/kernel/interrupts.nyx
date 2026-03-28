@@ -1,0 +1,93 @@
+# Interrupt Management for Nyx Bare-Metal
+# This module configures the IDT and remaps the legacy PIC.
+
+# [Memory Layout]
+let _IDT_PTR_ADDR = 0x300000
+let _IDT_START    = 0x300010 # 256 entries * 16 bytes = 4096 bytes
+
+# [Constants]
+let ATTR_PRESENT  = 0x80
+let ATTR_INT_GATE = 0x0E
+let KERNEL_CS     = 0x08 # Selector for Kernel Code Segment
+
+# Initialize Interrupts: Remap PIC and setup empty IDT.
+fn init() {
+    # 1. Remap the PIC (Programmable Interrupt Controller)
+    # ICW1: Start initialization
+    std::kernel::ports::outb(0x20, 0x11)
+    std::kernel::ports::outb(0xA0, 0x11)
+    
+    # ICW2: Vector Offset (Master: 0x20-0x27, Slave: 0x28-0x2F)
+    std::kernel::ports::outb(0x21, 0x20)
+    std::kernel::ports::outb(0xA1, 0x28)
+    
+    # ICW3: Tell Master PIC there is a Slave PIC at IRQ2 (0000 0100)
+    std::kernel::ports::outb(0x21, 0x04)
+    # Tell Slave PIC its cascade identity (0000 0010)
+    std::kernel::ports::outb(0xA1, 0x02)
+    
+    # ICW4: Set 8086 mode
+    std::kernel::ports::outb(0x21, 0x01)
+    std::kernel::ports::outb(0xA1, 0x01)
+    
+    # Mask all interrupts (initially disabled)
+    std::kernel::ports::outb(0x21, 0xFF)
+    std::kernel::ports::outb(0xA1, 0xFF)
+    
+    # 2. Setup IDT Pointer (10 bytes for LIDT instruction)
+    # [Limit (2), Base (8)]
+    # Write limit (4095) and partial base
+    std::kernel::memory::write_u64(_IDT_PTR_ADDR, 4095 | (_IDT_START << 16))
+    # Write remaining base bits
+    std::kernel::memory::write_u64(_IDT_PTR_ADDR + 8, _IDT_START >> 48)
+    
+    # 3. Load IDT into CPU
+    std::kernel::cpu::lidt(_IDT_PTR_ADDR)
+}
+
+# Register an Interrupt Service Routine (ISR)
+# vector: 0-255
+# handler_addr: Pointer to the assembly wrapper for the ISR
+fn set_gate(vector, handler_addr) {
+    if vector > 255 { return }
+    let entry = _IDT_START + (vector * 16)
+    
+    let low  = handler_addr & 0xFFFF
+    let mid  = (handler_addr >> 16) & 0xFFFF
+    let high = (handler_addr >> 32) & 0xFFFFFFFF
+    
+    # Byte 0-3: [Offset 0:15, Selector]
+    std::kernel::memory::write_u64(entry, low | (KERNEL_CS << 16))
+    
+    # Byte 4-7: [IST (3 bits), Attributes (8 bits), Offset 16:31]
+    # Attr 0x8E = Present | Ring 0 | 64-bit Interrupt Gate
+    let attr_ist = 0x8E00 | ((mid) << 16)
+    # We update the memory carefully. 
+    # Actually, we can write 8-byte chunks.
+    let dword0 = low | (KERNEL_CS << 16) | (attr_ist << 32)
+    std::kernel::memory::write_u64(entry, dword0)
+    std::kernel::memory::write_u64(entry + 8, high)
+}
+
+# Unmask a specific IRQ on the PIC
+fn enable_irq(irq) {
+    if irq < 8 {
+        let mask = std::kernel::ports::inb(0x21)
+        std::kernel::ports::outb(0x21, mask & ~(1 << irq))
+    } else {
+        let mask = std::kernel::ports::inb(0xA1)
+        std::kernel::ports::outb(0xA1, mask & ~(1 << (irq - 8)))
+    }
+}
+
+# Send End-Of-Interrupt to PIC
+fn send_eoi(irq) {
+    if irq >= 8 {
+        std::kernel::ports::outb(0xA0, 0x20)
+    }
+    std::kernel::ports::outb(0x20, 0x20)
+}
+
+# Global Interrupt Enable/Disable
+fn enable()  { std::kernel::cpu::sti() }
+fn disable() { std::kernel::cpu::cli() }

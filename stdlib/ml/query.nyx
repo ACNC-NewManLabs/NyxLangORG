@@ -1,0 +1,106 @@
+fn agg_mean(d_df, col_name) {
+    # println("DEBUG: agg_mean col_name=", col_name)
+    let col = d_df._df.col(col_name)
+    if col == null { 
+        println("ERROR: Column ", col_name, " not found in DF")
+        return null 
+    }
+    
+    let n = col.len()
+    # println("DEBUG: col len=", n)
+    let sum_val = 0.0
+    let count = 0.0
+    let i = 0
+    let mask = d_df._mask
+    
+    while i < n {
+        let m = 1.0
+        if mask != null { m = mask[i] }
+        
+        if m > 0.5 {
+            sum_val = sum_val + col.get(i)
+            count = count + 1.0
+        }
+        i = i + 1
+    }
+    
+    if count == 0 { return Tensor([0.0], [1], d_df._requires_grad, null) }
+    let mean_val = sum_val / count
+    
+    let ctx = null
+    if d_df._requires_grad {
+        ctx = { 
+            op: "query_mean", 
+            col_name: col_name,
+            n: count,
+            mask: mask,
+            df: d_df
+        }
+    }
+    
+    return Tensor([mean_val], [1], d_df._requires_grad, ctx)
+}
+
+fn DifferentiableDataFrame(df, requires_grad, mask) {
+    if requires_grad == null { requires_grad = true }
+    
+    return {
+        _df: df,
+        _requires_grad: requires_grad,
+        _mask: mask,
+        
+        select: fn(self, names) {
+            let new_df = self._df.select(names)
+            return DifferentiableDataFrame(new_df, self._requires_grad, self._mask)
+        },
+        
+        filter: fn(self, col_name, op, value) {
+            let col = self._df.col(col_name)
+            if col == null { return self }
+            
+            let new_mask = []
+            let i = 0
+            while i < col.len() {
+                let v = col.get(i)
+                let ok = false
+                if op == ">" { ok = v > value }
+                else if op == "<" { ok = v < value }
+                else if op == "==" { ok = v == value }
+                
+                let m = 0.0
+                if ok { m = 1.0 }
+                
+                if self._mask != null {
+                    if self._mask[i] < 0.5 { m = 0.0 }
+                }
+                new_mask.push(m)
+                i = i + 1
+            }
+            return DifferentiableDataFrame(self._df, self._requires_grad, new_mask)
+        },
+        
+        agg_mean: fn(self, col_name) {
+            return agg_mean(self, col_name)
+        },
+
+        to_tensor: fn(self) {
+            let t = std::df::ml_bridge::to_tensor(self._df)
+            t.requires_grad = self._requires_grad
+            if t.requires_grad {
+                t._ctx = { 
+                    op: "df_to_tensor", 
+                    df: self, 
+                    col_names: self._df.col_names(),
+                    mask: self._mask
+                }
+            }
+            return t
+        }
+    }
+}
+
+fn differentiable_pipeline(df, ops) {
+    let d_df = DifferentiableDataFrame(df, true, null)
+    # Apply chain of ops... (e.g., ops is a list of [op_name, args])
+    return d_df
+}

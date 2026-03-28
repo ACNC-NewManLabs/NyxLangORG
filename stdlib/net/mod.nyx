@@ -1,0 +1,241 @@
+/**
+ * Net Module
+ * 
+ * Provides networking utilities including:
+ * - HTTP client and server
+ * - WebSocket client and server
+ * - TCP utilities
+ * - UDP utilities
+ * 
+ * @module net
+ * @version 1.0.0
+ */
+
+mod http;
+mod websocket;
+mod tcp;
+mod udp;
+
+/**
+ * HTTP Server type
+ */
+type HttpServer = http::HttpServer;
+
+/**
+ * HTTP Request type
+ */
+type HttpRequest = http::HttpRequest;
+
+/**
+ * HTTP Response type
+ */
+type HttpResponse = http::HttpResponse;
+
+/**
+ * HTTP Router type
+ */
+type Router = http::Router;
+
+/**
+ * WebSocket connection type
+ */
+type WebSocket = websocket::WebSocket;
+
+/**
+ * WebSocket message type
+ */
+type WebSocketMessage = websocket::Message;
+
+/**
+ * TCP server type
+ */
+type TcpServer = tcp::TcpServer;
+
+/**
+ * TCP client type
+ */
+type TcpClient = tcp::TcpClient;
+
+/**
+ * UDP socket type
+ */
+type UdpSocket = udp::UdpSocket;
+
+/**
+ * Create a new HTTP server
+ * 
+ * @param host - Host to bind to (default: "0.0.0.0")
+ * @param port - Port to listen on (default: 8080)
+ * @returns A new HTTP server instance
+ * 
+ * @example
+ * let server = net.HttpServer(port: 8080);
+ * server.get("/", fn(req, res) {
+ *     res.html("<h1>Hello</h1>");
+ * });
+ * server.start();
+ */
+fn HttpServer(host: string = "0.0.0.0", port: i64 = 8080) -> HttpServer {
+    return http::HttpServer(host, port);
+}
+
+/**
+ * Create a new HTTP router
+ * 
+ * @returns A new router instance
+ * 
+ * @example
+ * let router = net.Router();
+ * router.get("/", handler);
+ */
+fn Router() -> Router {
+    return http::Router();
+}
+
+/**
+ * Create a WebSocket server
+ * 
+ * @param path - WebSocket path
+ * @param handler - Connection handler
+ * @returns A new WebSocket server
+ * 
+ * @example
+ * websocket.on_connection(fn(ws) {
+ *     ws.on_message(fn(msg) {
+ *         print("Received: " + msg);
+ *     });
+ * });
+ */
+fn WebSocket(path: string, handler: fn(WebSocket) -> void) {
+    websocket::on_connection(path, handler);
+}
+
+/**
+ * Create a TCP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to listen on
+ * @param handler - Connection handler
+ * @returns A new TCP server
+ * 
+ * @example
+ * tcp.listen("0.0.0.0", 9000, fn(client) {
+ *     let data = client.read();
+ *     client.write("Echo: " + data);
+ * });
+ */
+fn TcpServer(host: string, port: i64, handler: fn(tcp::TcpClient) -> void) -> TcpServer {
+    return tcp::listen(host, port, handler);
+}
+
+/**
+ * Create a UDP socket
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to bind to
+ * @returns A new UDP socket
+ * 
+ * @example
+ * let socket = net.UdpSocket("0.0.0.0", 9000);
+ * let data = socket.receive();
+ */
+fn UdpSocket(host: string, port: i64) -> UdpSocket {
+    return udp::create(host, port);
+}
+
+// HTTP methods
+let GET = http::GET;
+let POST = http::POST;
+let PUT = http::PUT;
+let DELETE = http::DELETE;
+let PATCH = http::PATCH;
+let HEAD = http::HEAD;
+let OPTIONS = http::OPTIONS;
+
+// Status codes
+let STATUS_OK = http::STATUS_OK;
+let STATUS_CREATED = http::STATUS_CREATED;
+let STATUS_NO_CONTENT = http::STATUS_NO_CONTENT;
+let STATUS_BAD_REQUEST = http::STATUS_BAD_REQUEST;
+let STATUS_UNAUTHORIZED = http::STATUS_UNAUTHORIZED;
+let STATUS_FORBIDDEN = http::STATUS_FORBIDDEN;
+let STATUS_NOT_FOUND = http::STATUS_NOT_FOUND;
+let STATUS_INTERNAL_ERROR = http::STATUS_INTERNAL_ERROR;
+
+// Re-export static file handler
+type StaticHandler = http::static::StaticHandler;
+
+/**
+ * Create a static file handler
+ * 
+ * @param root - Root directory
+ * @param options - Handler options
+ * @returns A new StaticHandler
+ * 
+ * @example
+ * server.mount("/static", net.StaticHandler("./public"));
+ */
+fn StaticHandler(root: string, options: Map<string, any> = {}) -> StaticHandler {
+    return http::static::StaticHandler(root, options);
+}
+
+// Re-export development server
+type DevServer = http::dev_server::DevServer;
+
+/**
+ * Create a development server
+ * 
+ * @param port - Port to listen on
+ * @param host - Host to bind to
+ * @param root - Root directory
+ * @param watch - Directories to watch
+ * @param verbose - Enable verbose logging
+ * @returns A new DevServer
+ * 
+ * @example
+ * let dev = net.DevServer(port: 3000, root: "./src");
+ * dev.on_change(fn(file) { print("Changed: " + file); });
+ * dev.start();
+ */
+fn DevServer(
+    port: i64 = 3000,
+    host: string = "0.0.0.0",
+    root: string = "./public",
+    watch: List<string> = [],
+    verbose: bool = false
+) -> DevServer {
+    return http::dev_server::DevServer(port, host, root, watch, verbose);
+}
+
+export {
+    http,
+    websocket,
+    tcp,
+    udp,
+    HttpServer,
+    HttpRequest,
+    HttpResponse,
+    Router,
+    WebSocket,
+    WebSocketMessage,
+    TcpServer,
+    TcpClient,
+    UdpSocket,
+    StaticHandler,
+    DevServer,
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+    STATUS_OK,
+    STATUS_CREATED,
+    STATUS_NO_CONTENT,
+    STATUS_BAD_REQUEST,
+    STATUS_UNAUTHORIZED,
+    STATUS_FORBIDDEN,
+    STATUS_NOT_FOUND,
+    STATUS_INTERNAL_ERROR
+};

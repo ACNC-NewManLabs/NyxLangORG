@@ -1,0 +1,160 @@
+# Nyx ML Probabilistic Programming Engine
+# Random variables as first-class objects + Bayesian inference
+
+# Internal LCG for robust random sampling (bypasses stdlib visibility issues in VM)
+let _PROB_SEED = 12345
+fn _prob_rand() {
+    _PROB_SEED = (1103515245 * _PROB_SEED + 12345) % 2147483647
+    return (_PROB_SEED * 1.0) / 2147483647.0
+}
+
+# Internal log approximation for numerical stability
+fn _prob_log(x) {
+    if x <= 0.0 { return -100.0 }
+    let y = (x - 1.0) / (x + 1.0)
+    let y2 = y * y
+    return 2.0 * (y + y2*y/3.0 + y2*y2*y/5.0)
+}
+
+# Internal exp approximation (Taylor series) for production reliability
+fn _prob_exp(x) {
+    if x < -20.0 { return 0.0 }
+    if x > 20.0 { return 1e10 } # upper bound for stability
+    # exp(x) = 1 + x + x^2/2! + x^3/3! + x^4/4!
+    let res = 1.0 + x + (x*x)/2.0 + (x*x*x)/6.0 + (x*x*x*x)/24.0
+    return res
+}
+
+# ─────────────────────────────────────────────────────────────
+# Distributions
+# ─────────────────────────────────────────────────────────────
+
+fn Normal(mu, sigma) {
+    return {
+        type: "Normal",
+        mu: mu,
+        sigma: sigma,
+
+        sample: fn(self) {
+            let u1 = _prob_rand()
+            let u2 = _prob_rand()
+            if u1 < 1e-10 { u1 = 1e-10 }
+            let r = (0.0 - 2.0 * _prob_log(u1)) ^ 0.5
+            let theta = 6.283185307 * u2
+            let x = theta % 6.283185307
+            let x2 = x * x
+            let cos_t = 1.0 - x2/2.0 + (x2*x2)/24.0 - (x2*x2*x2)/720.0
+            return self.mu + self.sigma * r * cos_t
+        },
+
+        sample_n: fn(self, n) {
+            let data = []
+            let i = 0
+            while i < n {
+                data.push(self.sample())
+                i = i + 1
+            }
+            return ml::tensor::Tensor(data, [n], false, null, "cpu")
+        },
+
+        log_prob: fn(self, x) {
+            let z = (x - self.mu) / self.sigma
+            return -0.5 * z * z - _prob_log(self.sigma) - 0.9189385332
+        },
+
+        prob: fn(self, x) {
+            return _prob_exp(self.log_prob(x))
+        }
+    }
+}
+
+fn Bernoulli(p) {
+    return {
+        type: "Bernoulli",
+        p: p,
+        sample: fn(self) {
+            if _prob_rand() < self.p { return 1.0 }
+            return 0.0
+        },
+        log_prob: fn(self, x) {
+            if x > 0.5 { return _prob_log(self.p) }
+            return _prob_log(1.0 - self.p)
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Inference Engines
+# ─────────────────────────────────────────────────────────────
+
+fn mcmc(log_prob_fn, n_samples, step_size, initial_val) {
+    if step_size == null { step_size = 0.1 }
+    if initial_val == null { initial_val = 0.0 }
+    let samples = []
+    let current = initial_val
+    let current_lp = log_prob_fn(current)
+    let accepted = 0
+    let i = 0
+    while i < n_samples {
+        let noise = _prob_rand() * 2.0 - 1.0
+        let proposed = current + step_size * noise
+        let proposed_lp = log_prob_fn(proposed)
+        let log_alpha = proposed_lp - current_lp
+        let log_u = _prob_log(_prob_rand())
+        if log_u < log_alpha {
+            current = proposed
+            current_lp = proposed_lp
+            accepted = accepted + 1
+        }
+        samples.push(current)
+        i = i + 1
+    }
+    return { samples: samples, accept_rate: (accepted * 1.0 / n_samples) }
+}
+
+fn expect(dist, f, n_samples) {
+    if n_samples == null { n_samples = 1000 }
+    let total = 0.0
+    let i = 0
+    while i < n_samples {
+        total = total + f(dist.sample())
+        i = i + 1
+    }
+    return total / n_samples
+}
+
+# Top-level functional helpers for production script compatibility
+fn prob_sample(dist) {
+    if dist.type == "Normal" {
+        let u1 = _prob_rand()
+        let r = (0.0 - 2.0 * _prob_log(u1)) ^ 0.5
+        let theta = 6.283185307 * _prob_rand()
+        let x = theta % 6.283185307
+        let x2 = x * x
+        let cos_t = 1.0 - x2/2.0 + (x2*x2)/24.0
+        return dist.mu + dist.sigma * r * cos_t
+    }
+    if dist.type == "Bernoulli" {
+        if _prob_rand() < dist.p { return 1.0 }
+        return 0.0
+    }
+    return null
+}
+
+fn prob_log_prob(dist, x) {
+    if dist.type == "Normal" {
+        let z = (x - dist.mu) / dist.sigma
+        return -0.5 * z * z - _prob_log(dist.sigma) - 0.9189385332
+    }
+    if dist.type == "Bernoulli" {
+        if x > 0.5 { return _prob_log(dist.p) }
+        return _prob_log(1.0 - dist.p)
+    }
+    return null
+}
+
+fn prob_prob(dist, x) {
+    let lp = prob_log_prob(dist, x)
+    if lp == null { return null }
+    return _prob_exp(lp)
+}

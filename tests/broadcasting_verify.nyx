@@ -1,0 +1,45 @@
+# Universal Broadcasting Verification
+# Tests NumPy-style broadcasting rules and their autograd correctness
+
+fn main() {
+    println("--- Nyx Universal Broadcasting Verification ---")
+
+    # 1. Basic Broadcasting: [2, 3] + [3]
+    let a = ml::tensor::randn([2, 3], true)
+    let b = ml::tensor::randn([3], true)
+    
+    println("Shapes: a={} b={}", a.shape, b.shape)
+    
+    let c = a.add(b)
+    println("Result Shape (expected [2, 3]): {}", c.shape)
+    
+    # 2. Gradient Verification (Broadcasting Backward)
+    # loss = sum(a + b)
+    # dL/da = 1, dL/db = sum(1) = batch_size = 2
+    let loss = c.sum()
+    loss.backward()
+    
+    if b.grad != null {
+        println("b.grad[0] (expected 2.0): {}", b.grad[0])
+        if b.grad[0] == 2.0 {
+            println("SUCCESS: Gradient summation for broadcasting verified.")
+        } else {
+            println("FAILURE: Incorrect gradient for broadcasted dimension.")
+        }
+    } else {
+        println("FAILURE: No gradient for b!")
+    }
+
+    # 3. Complex Broadcasting: [2, 1, 3] * [1, 4, 1]
+    let x = ml::tensor::randn([2, 1, 3], true)
+    let y = ml::tensor::randn([1, 4, 1], true)
+    let z = x.mul(y)
+    println("Complex Result Shape (expected [2, 4, 3]): {}", z.shape)
+    
+    z.sum().backward()
+    if x.grad != null && y.grad != null {
+        println("SUCCESS: Ranks and broadcasting rules verified for complex shapes.")
+    }
+
+    println("\n--- Phase 10: Broadcasting Hardening Verified ---")
+}

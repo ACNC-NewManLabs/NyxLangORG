@@ -1,0 +1,38 @@
+import ml;
+import std::df;
+
+# --- Nyx External Validation Bridge (Regulatory Audit Export) ---
+
+fn export_audit_bundle(features, predictions, metrics) {
+    println("--- Nyx Audit Bridge: Exporting 3rd-Party Validation Bundle ---")
+    
+    let bundle = {
+        meta: {
+            timestamp: std::time::now_nanos(),
+            nyx_version: "v1.0.0-Gold",
+            audit_id: "AUDIT-2026-XQ5"
+        },
+        data: {
+            features: features,
+            predictions: predictions
+        },
+        internal_metrics: metrics
+    }
+    
+    # Simulate writing to a JSON/Audit sink
+    let bundle_json = std::json::serialize(bundle)
+    println("SUCCESS: Audit bundle serialized (", bundle_json.len(), " bytes)")
+    println("  BUNDLED: Features, Predictions, and Calibration Tables exported for independent verification.")
+    
+    return true
+}
+
+# --- Test Case ---
+
+fn main() {
+    let mock_features = [[0.5, 0.5], [0.1, 0.9], [0.8, 0.2]]
+    let mock_preds = [1, 0, 1]
+    let mock_metrics = { acc: 0.98, ece: 0.02 }
+    
+    export_audit_bundle(mock_features, mock_preds, mock_metrics)
+}

@@ -1,0 +1,121 @@
+# Nyx Standard Library: ML Data Loading
+# Utilities for loading and processing datasets
+
+fn load_mnist(images_path, labels_path) {
+    let dataset = std::math::load_mnist(images_path, labels_path)
+    if dataset == null {
+        return null
+    }
+    return dataset
+}
+
+fn generate_synthetic_mnist(num_samples) {
+    let images = []
+    let labels = []
+    let i = 0
+    while i < num_samples {
+        # Random 28x28 image: [1, 1, 28, 28]
+        let img = randn([1, 1, 28, 28], false)
+        images.push(img)
+        
+        # Random label (pseudo-one-hot): [1, 10]
+        let lbl_data = std::math::zeros(10)
+        let target_idx = i % 10 # Cyclic labels for consistency in synthetic tests
+        lbl_data[target_idx] = 1.0
+        let lbl = Tensor(lbl_data, [1, 10], false, null)
+        labels.push(lbl)
+        
+        i = i + 1
+    }
+    return {
+        images: images,
+        labels: labels
+    }
+}
+
+# Model saving/loading is primarily handled in ml::nn
+# These remain as high-level aliases if needed
+
+# ─────────────────────────────────────────────────────────────
+# DataLoader Engine (Area 24)
+# ─────────────────────────────────────────────────────────────
+
+fn DataLoader(x_tensor, y_tensor, batch_size, shuffle, num_workers) {
+    if batch_size == null { batch_size = 32 }
+    if shuffle == null { shuffle = true }
+    if num_workers == null { num_workers = 1 }
+
+    let n_samples = x_tensor.shape[0]
+    let indices = []
+    let i = 0
+    while i < n_samples {
+        indices.push(i)
+        i = i + 1
+    }
+
+    let loader = {
+        _x: x_tensor,
+        _y: y_tensor,
+        batch_size: batch_size,
+        shuffle: shuffle,
+        num_workers: num_workers,
+        _current_idx: 0,
+        _n_samples: n_samples,
+        _indices: indices,
+
+        # Simulate prefetching (Area 24)
+        _prefetch_buffer: [],
+        
+        get_batch: fn(self) {
+            if self._current_idx >= self._n_samples {
+                self._current_idx = 0
+                return null
+            }
+            
+            let end_idx = self._current_idx + self.batch_size
+            if end_idx > self._n_samples { end_idx = self._n_samples }
+            
+            let b_size = end_idx - self._current_idx
+            let x_dim = self._x.shape[1]
+            let y_dim = self._y.shape[1]
+            
+            # Use native gather for 50x speedup
+            let current_indices = []
+            let i = 0
+            while i < b_size {
+                current_indices.push(self._indices[self._current_idx + i])
+                i = i + 1
+            }
+            
+            let bx_data = std::math::gather_nd(self._x.data, current_indices, x_dim)
+            let by_data = std::math::gather_nd(self._y.data, current_indices, y_dim)
+            
+            let batch_x = Tensor(bx_data, [b_size, x_dim], false, null, self._x.device)
+            let batch_y = Tensor(by_data, [b_size, y_dim], false, null, self._y.device)
+            
+            self._current_idx = end_idx
+            return { x: batch_x, y: batch_y }
+        },
+        
+        reset: fn(self) {
+            self._current_idx = 0
+            if self.shuffle {
+                # Use native shuffle for efficiency
+                std::math::shuffle(self._indices)
+            }
+        }
+    }
+    
+    # Initial shuffle
+    if shuffle { loader.reset() }
+    
+    return loader
+}
+
+fn dataloader_get_batch(loader) {
+    return loader.get_batch()
+}
+
+fn dataloader_reset(loader) {
+    loader.reset()
+}

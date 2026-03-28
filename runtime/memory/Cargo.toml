@@ -1,0 +1,9 @@
+[package]
+name = "nyx-memory"
+version = "0.1.0"
+edition = "2021"
+authors = ["SURYA SEKHAR ROY"]
+description = "Secure memory allocation and cleanup helpers for the Nyx Runtime™"
+
+[dependencies]
+# Uses standard library Arc/Sync

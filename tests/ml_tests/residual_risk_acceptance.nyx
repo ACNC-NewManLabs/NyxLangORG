@@ -1,0 +1,41 @@
+import ml;
+
+# --- Nyx Residual Risk Acceptance (Executive Sign-Off) ---
+
+fn main() {
+    println("--- Nyx Auditor: High-Risk Acceptance Workflow ---")
+    println("")
+
+    # 1. Identity & Authority Level
+    let authority = {
+        name: "CISO_ELENA",
+        role: "Supreme_Authority",
+        cert_id: "SIGNER_EXECUTIVE_001"
+    }
+
+    # 2. Residual Risk to be Accepted
+    let residual_risk = {
+        id: "ADV_OOD_BLIND",
+        score: 0.12 # Above standard 0.05 threshold
+    }
+
+    println("RISK ACCEPTANCE EVALUATION:")
+    println("  Risk ID:      ", residual_risk.id)
+    println("  Risk Score:   ", residual_risk.score, " (Threshold: 0.05)")
+    
+    # 3. Acceptance Logic
+    if residual_risk.score > 0.05 {
+        println("  GOVERNANCE: Risk exceeds autonomous threshold.")
+        println("  PENDING:    Requiring Executive / Regulator Sign-off...")
+        
+        # Simulated Sign-off event
+        println("  ACTION:     Sign-off RECEIVED from ", authority.name, " [", authority.role, "]")
+        println("  SIGNATURE:  ✅ RSA-4096:supreme_sig_a1b2...")
+        println("  DECISION:   EXEMPTION_GRANTED for BUNDLE-2026-Q1.")
+    } else {
+        println("  STATUS:     Risk within autonomous bounds. Sign-off not required.")
+    }
+
+    println("")
+    println("SUCCESS: Residual risk acceptance workflow verified. Accountability is supreme.")
+}

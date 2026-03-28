@@ -1,0 +1,110 @@
+# Nyx "God-Tier" Kernel Shell
+# A fully functional bare-metal CLI implemented in pure Nyx.
+# Compile with: nyx build-os examples/kernel_shell.nyx
+
+import stdlib::kernel::vga as vga;
+import stdlib::kernel::pmm as pmm;
+import stdlib::kernel::malloc as malloc;
+import stdlib::kernel::interrupts as interrupts;
+import stdlib::kernel::keyboard as keyboard;
+
+fn main() {
+    # 1. Initialize Hardware Subsystems
+    vga::clear()
+    vga::println("======================================")
+    vga::println("        Nyx Bare-Metal OS Kernel      ")
+    vga::println("======================================")
+    
+    vga::print_str("[1/4] PMM (Physical Memory)... ")
+    pmm::init()
+    vga::println("OK")
+    
+    vga::print_str("[2/4] Malloc (Heap Allocation)... ")
+    malloc::init(64) # Reserve 256KB for dynamic state
+    vga::println("OK")
+    
+    vga::print_str("[3/4] Interrupts (IDT/PIC)... ")
+    interrupts::init()
+    vga::println("OK")
+    
+    vga::println("[4/4] Shell Environment... READY.")
+    vga::println("\nAvailable Commands: help, mem, clear, reboot")
+    vga::print_str("\nnyx_os:> ")
+    
+    # 5. Interactive Input Loop
+    let buffer_addr = malloc::malloc(128)
+    let buffer_len  = 0
+    
+    interrupts::enable()
+    
+    while true {
+        let ch = keyboard::get_char()
+        if ch != 0 {
+            if ch == 10 { # Enter (\n)
+                vga::print_char(10)
+                handle_command(buffer_addr, buffer_len)
+                buffer_len = 0
+                vga::print_str("nyx_os:> ")
+            } else if ch == 8 { # Backspace
+                if buffer_len > 0 {
+                    buffer_len = buffer_len - 1
+                    let new_x = vga::get_cursor_x() - 1
+                    vga::set_cursor_x(new_x)
+                    vga::print_char(32)
+                    vga::set_cursor_x(new_x)
+                    vga::update_cursor()
+                }
+            } else {
+                if buffer_len < 127 {
+                    std::kernel::memory::write_byte(buffer_addr + buffer_len, ch)
+                    buffer_len = buffer_len + 1
+                    vga::print_char(ch)
+                }
+            }
+        }
+    }
+}
+
+fn handle_command(buf, len) {
+    if len <= 0 { return }
+    
+    if streq(buf, len, "help") {
+        vga::println("Help Menu:")
+        vga::println("  help   - Display this command list")
+        vga::println("  mem    - Print kernel heap and RAM information")
+        vga::println("  clear  - Flush the VGA text buffer")
+        vga::println("  reboot - Trigger a warm reboot via PS/2")
+    } else if streq(buf, len, "mem") {
+        vga::println("--- Physical Memory Map ---")
+        vga::println("  Lower Memory: 0x000000 -> 0x0A0000")
+        vga::println("  VGA Buffer  : 0x0B8000")
+        vga::println("  Kernel Start: 0x100000")
+        vga::println("  Kernel Heap : 0x1000000 (256KB Dynamic)")
+    } else if streq(buf, len, "clear") {
+        vga::clear()
+    } else if streq(buf, len, "reboot") {
+        vga::println("Rebooting...")
+        std::kernel::ports::outb(0x64, 0xFE)
+    } else {
+        vga::print_str("Error: '")
+        let i = 0
+        while i < len {
+            vga::print_char(std::kernel::memory::read_byte(buf + i))
+            i = i + 1
+        }
+        vga::println("' is not a recognized system command.")
+    }
+}
+
+fn streq(ptr, blen, target) {
+    let tlen = len(target)
+    if blen != tlen { return false }
+    let i = 0
+    while i < blen {
+        let bch = std::kernel::memory::read_byte(ptr + i)
+        let tch = char_at(target, i)
+        if bch != tch { return false }
+        i = i + 1
+    }
+    return true
+}

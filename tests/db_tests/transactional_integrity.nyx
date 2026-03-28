@@ -1,0 +1,43 @@
+// Transactional Integrity & Native Storage Verification (Phase 42)
+
+fn main() {
+    println("--- Nyx Database Phase 42: Transactional Integrity Verification ---");
+
+    // 1. Create initial data
+    let df = {
+        "_columns": [
+            { "_name": "id",   "_data": [1, 2, 3] },
+            { "_name": "val",  "_data": [10.5, 20.0, 30.2] }
+        ]
+    };
+
+    // 2. Transactional Table Creation
+    println("[Test] Starting transaction...");
+    let tx = db::begin_transaction();
+    println("Transaction ID: " + tx);
+
+    println("[Test] Adding pending table 'users'...");
+    db::add_pending_table(tx, "users", df);
+
+    // 3. Commit
+    println("[Test] Committing transaction...");
+    let success = db::commit_transaction(tx);
+    println("Commit Success: " + success);
+    
+    // 4. Verify in Catalog via Native Save/Load path
+    println("[Test] Saving 'users' to native format...");
+    let saved = db::save_table("users", "users.nyxt");
+    println("Save Success: " + saved);
+
+    println("[Test] Loading 'users_restored' from native format...");
+    let loaded = db::load_table("users_restored", "users.nyxt");
+    println("Load Success: " + loaded);
+
+    println("[Test] Final Verification: Querying users_restored success code...");
+    if (success && saved && loaded) {
+        println("--- PHASE 42 VERIFIED: Transactional Integrity Confirmed ---");
+    } else {
+        println("--- PHASE 42 FAILED: Integrity Breach Detected ---");
+        std::os::exit(1);
+    }
+}

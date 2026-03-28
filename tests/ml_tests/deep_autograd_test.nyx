@@ -1,0 +1,83 @@
+import ml;
+
+fn test_deep_autograd_chain() {
+    println("--- Deep Autograd Chain Test (15 operations) ---")
+    
+    # x (2x2)
+    let x = ml::tensor::Tensor([1.0, 2.0, 3.0, 4.0], [2, 2], true)
+    let w1 = ml::tensor::Tensor([0.5, -0.1, 0.2, 0.8], [2, 2], true)
+    let b1 = ml::tensor::Tensor([0.1, 0.2], [1, 2], true)
+    
+    # 1. matmul
+    let h1 = x.matmul(w1)
+    # 2. add bias
+    let h2 = h1.add(b1)
+    # 3. relu
+    let h3 = h2.relu()
+    # 4. mul by x (skip connection-ish)
+    let h4 = h3.mul(x)
+    # 5. sub
+    let h5 = h4.sub(h2)
+    # 6. tanh
+    let h6 = h5.tanh()
+    # 7. matmul 2
+    let w2 = ml::tensor::Tensor([0.1, 0.5, -0.3, 0.2], [2, 2], true)
+    let h7 = h6.matmul(w2)
+    # 8. sigmoid (if implemented) or just add
+    let h8 = h7.add(h1)
+    # 9. mul constant
+    let c = ml::tensor::Tensor([2.0], [1], false)
+    let h9 = h8.mul(c)
+    # 10. relu again
+    let h10 = h9.relu()
+    # 11. add constant
+    let h11 = h10.add(c)
+    # 12. matmul 3
+    let w3 = ml::tensor::Tensor([1.0, 0.0, 0.0, 1.0], [2, 2], true)
+    let h12 = h11.matmul(w3)
+    # 13. sum all
+    # 14. mean
+    let loss = h12.mean()
+    
+    println("Graph built. Final loss: ", loss.item())
+    
+    # Backward
+    println("Running backward...")
+    loss.backward()
+    
+    # Verify gradients exist
+    if x.grad == null {
+        println("FAIL: x.grad is null")
+        return
+    }
+    println("x.grad: ", x.grad)
+    println("w1.grad: ", w1.grad)
+    
+    # Optional: Numerical check for the first element of x
+    let epsilon = 1e-4
+    let original_val = x.data[0]
+    
+    x.data[0] = original_val + epsilon
+    # Re-run FULL chain for numerical check
+    let loss_plus = x.matmul(w1).add(b1).relu().mul(x).sub(x.matmul(w1).add(b1)).tanh().matmul(w2).add(x.matmul(w1)).mul(c).relu().add(c).matmul(w3).mean().item()
+    
+    x.data[0] = original_val - epsilon
+    let loss_minus = x.matmul(w1).add(b1).relu().mul(x).sub(x.matmul(w1).add(b1)).tanh().matmul(w2).add(x.matmul(w1)).mul(c).relu().add(c).matmul(w3).mean().item()
+    
+    let num_grad = (loss_plus - loss_minus) / (2.0 * epsilon)
+    println("Numerical gradient (x[0]): ", num_grad)
+    println("Autograd gradient (x[0]): ", x.grad[0])
+    
+    let diff = num_grad - x.grad[0]
+    if diff < 0 { diff = 0.0 - diff }
+    
+    if diff < 1e-2 {
+        println("SUCCESS: Deep autograd chain verified")
+    } else {
+        println("FAIL: Gradient mismatch too high: ", diff)
+    }
+}
+
+fn main() {
+    test_deep_autograd_chain()
+}

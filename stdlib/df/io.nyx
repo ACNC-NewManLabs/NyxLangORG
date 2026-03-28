@@ -1,0 +1,125 @@
+# Nyx Dataframe Engine: I/O Layer
+# CSV / JSON read+write, plus Arrow/Parquet stubs.
+
+fn read_csv(path, options) {
+    if options == null { options = {} }
+    let plan = std::df::scan_csv(path, options)
+    # Return a LazyFrame that wraps the native plan
+    let lf = LazyFrame(null, plan)
+    # Default behavior: materialize (greedy) for compatibility
+    return lf.collect()
+}
+
+fn scan_csv(path, options) {
+    if options == null { options = {} }
+    let plan = std::df::scan_csv(path, options)
+    return LazyFrame(null, plan)
+}
+
+fn write_csv(df, path) {
+    let names = df.col_names()
+    let col_data = []
+    let i = 0
+    while i < df._columns.len() {
+        col_data.push(df._columns[i]._data)
+        i = i + 1
+    }
+    let ok = std::df::write_csv(names, col_data, path)
+    return ok
+}
+
+# ── JSON ──────────────────────────────────────────────────────────────────────
+
+fn read_json(path) {
+    let plan = std::df::scan_json(path)
+    # Materialize (greedy)
+    return LazyFrame(null, plan).collect()
+}
+
+fn from_records(records) {
+    if records.len() == 0 { return null }
+    let keys = records[0].keys()
+    let cols = []
+    let k = 0
+    while k < keys.len() {
+        let name = keys[k]
+        let data = []
+        let dtype = "float"
+        let r = 0
+        while r < records.len() {
+            let val = records[r][name]
+            if r == 0 && val != null {
+                let t = std::meta::typeof(val)
+                if t == "String" { dtype = "str" }
+                if t == "Bool"   { dtype = "bool" }
+                if t == "Int"    { dtype = "int" }
+                if t == "Float"  { dtype = "float" }
+            }
+            data.push(val)
+            r = r + 1
+        }
+        cols.push(Column(name, dtype, data, null))
+        k = k + 1
+    }
+    return DataFrame(cols, null)
+}
+
+fn scan_json(path) {
+    let plan = std::df::scan_json(path)
+    return LazyFrame(null, plan)
+}
+
+fn write_json(df, path) {
+    return std::df::write_json(df, path)
+}
+
+# ── Parquet / Arrow stubs ─────────────────────────────────────────────────────
+
+fn read_parquet(path) {
+    let plan = std::df::scan_parquet(path)
+    return LazyFrame(null, plan).collect()
+}
+
+fn scan_parquet(path) {
+    return LazyFrame(null, std::df::scan_parquet(path))
+}
+
+fn write_parquet(df, path) {
+    # Stub for now, would use a native to_parquet
+    return write_csv(df, path)
+}
+
+fn check_health(df) {
+    return std::df::check_health(df)
+}
+
+# ── DataFrame equality check (for testing) ───────────────────────────────────
+
+fn df_equals(a, b, tol) {
+    if tol == null { tol = 1e-6 }
+    let a_names = a.col_names()
+    let b_names = b.col_names()
+    if a_names.len() != b_names.len() { return false }
+    if a.nrows() != b.nrows() { return false }
+    let c = 0
+    while c < a_names.len() {
+        let ac = a.col(a_names[c])
+        let bc = b.col(a_names[c])
+        if ac == null || bc == null { return false }
+        let i = 0
+        while i < ac._data.len() {
+            let av = ac._data[i]
+            let bv = bc._data[i]
+            if av == null && bv == null { i = i + 1 }
+            else if av == null || bv == null { return false }
+            else {
+                let diff = av - bv
+                if diff < 0 { diff = 0 - diff }
+                if diff > tol { return false }
+                i = i + 1
+            }
+        }
+        c = c + 1
+    }
+    return true
+}

@@ -1,0 +1,115 @@
+# Nyx Model Compression System
+# Pruning, Knowledge Distillation, and Quantization
+
+# ─────────────────────────────────────────────────────────────
+# Pruning: Remove insignificant weights
+# ─────────────────────────────────────────────────────────────
+fn prune_weights(model, threshold) {
+    if threshold == null { threshold = 0.01 }
+    println("[Compress] Pruning model with threshold {}...", threshold)
+    let count = 0
+    if model.layers != null {
+        let i = 0
+        while i < model.layers.len() {
+            let l = model.layers[i]
+            if l.weight != null {
+                let j = 0
+                while j < l.weight.data.len() {
+                    let val = l.weight.data[j]
+                    let abs_val = val
+                    if val < 0 { abs_val = -val }
+                    if abs_val < threshold {
+                        l.weight.data[j] = 0.0
+                        count = count + 1
+                    }
+                    j = j + 1
+                }
+            }
+            i = i + 1
+        }
+    }
+    println("[Compress] Pruned {} weights (set to zero).", count)
+    return model
+}
+
+# ─────────────────────────────────────────────────────────────
+# Knowledge Distillation: Train a student to mimic a teacher
+# ─────────────────────────────────────────────────────────────
+fn knowledge_distill(teacher, student, optimizer, x, alpha, temperature) {
+    if alpha == null { alpha = 0.5 }
+    if temperature == null { temperature = 2.0 }
+    
+    optimizer.zero_grad()
+    
+    # 1. Get soft labels from teacher: softmax(logits / T)
+    let teacher_logits = teacher.forward(x)
+    let soft_targets = []
+    let i = 0
+    while i < teacher_logits.data.len() {
+        soft_targets.push(teacher_logits.data[i] / temperature)
+        i = i + 1
+    }
+    # Softmax on scaled teacher logits
+    let soft_teacher = std::math::softmax(soft_targets)
+
+    # 2. Get student predictions
+    let student_logits = student.forward(x)
+    let soft_student_data = []
+    let i = 0
+    while i < student_logits.data.len() {
+        soft_student_data.push(student_logits.data[i] / temperature)
+        i = i + 1
+    }
+    let soft_student = ml::tensor::Tensor(std::math::softmax(soft_student_data), student_logits.shape, true, null, student_logits.device)
+
+    # 3. Compute distillation loss (KL-Divergence like)
+    # For simplicity, we'll use MSE between soft probabilities in this stub
+    let distill_loss = ml::nn::mse_loss(soft_student, ml::tensor::Tensor(soft_teacher, student_logits.shape, false, null, "cpu"))
+    
+    println("[Compress] Distilling knowledge... Distill Loss: {}", distill_loss.item())
+    distill_loss.backward()
+    optimizer.step()
+    
+    return distill_loss
+}
+
+# ─────────────────────────────────────────────────────────────
+# Quantization: Uniform N-bit quantization (Mid-rise)
+# ─────────────────────────────────────────────────────────────
+fn quantize_weights(model, bits) {
+    if bits == null { bits = 8 }
+    # 2^bits levels. For 8-bit, 256 levels.
+    let levels = 256.0 
+    if bits == 4 { levels = 16.0 }
+    
+    println("[Compress] Quantizing weights to {} bits ({} levels)...", bits, levels)
+    
+    if model.layers != null {
+        let i = 0
+        while i < model.layers.len() {
+            let l = model.layers[i]
+            if l.weight != null {
+                let d = l.weight.data
+                let j = 0
+                # Find range for this layer
+                let max_abs = l.weight.abs_max()
+                if max_abs < 1e-7 { max_abs = 1.0 } # Avoid div by zero
+                
+                let step = (2.0 * max_abs) / levels
+                while j < d.len() {
+                    let v = d[j]
+                    # Quantize v to nearest level
+                    let q = v / step
+                    # Round to nearest int: (q + 0.5) - ((q + 0.5) % 1.0)
+                    let rounded = (q + 0.5)
+                    rounded = rounded - (rounded % 1.0)
+                    d[j] = rounded * step
+                    j = j + 1
+                }
+            }
+            i = i + 1
+        }
+    }
+    println("[Compress] Model weight quantization complete.")
+    return model
+}

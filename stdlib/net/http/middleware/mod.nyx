@@ -1,0 +1,227 @@
+/**
+ * HTTP Middleware Module
+ * 
+ * Provides middleware components for HTTP servers including logging, CORS, and rate limiting.
+ * 
+ * @module http::middleware
+ * @version 1.0.0
+ */
+
+mod logger;
+mod cors;
+mod rate_limit;
+
+/**
+ * Middleware function type
+ */
+type Middleware = fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse?;
+
+/**
+ * Create a new middleware
+ * 
+ * @param handler - The middleware handler
+ * @returns A middleware function
+ */
+fn create(handler: fn(HttpRequest, fn(HttpRequest) -> HttpResponse) -> HttpResponse?) -> Middleware {
+    return handler;
+}
+
+/**
+ * Create middleware that runs before the handler
+ * 
+ * @param before - Function to run before handler
+ * @returns Middleware function
+ */
+fn before(before: fn(HttpRequest)) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        before(req);
+        return none;  // Continue to next
+    };
+}
+
+/**
+ * Create middleware that runs after the handler
+ * 
+ * @param after - Function to run after handler
+ * @returns Middleware function
+ */
+fn after(after: fn(HttpRequest, HttpResponse)) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        let resp = next(req);
+        after(req, resp);
+        return some(resp);
+    };
+}
+
+/**
+ * Create a middleware that can short-circuit the request
+ * 
+ * @param handler - Function that may return early response
+ * @returns Middleware function
+ */
+fn when(handler: fn(HttpRequest) -> HttpResponse?) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        let result = handler(req);
+        
+        if result != none {
+            return result;
+        }
+        
+        return none;  // Continue to next
+    };
+}
+
+/**
+ * Create logging middleware
+ * 
+ * @param options - Logger options
+ * @returns Logging middleware
+ * 
+ * @example
+ * server.use(middleware.logger());
+ */
+fn logger(options: logger::LoggerOptions?) -> Middleware {
+    return logger::create(options);
+}
+
+/**
+ * Create CORS middleware
+ * 
+ * @param options - CORS options
+ * @returns CORS middleware
+ * 
+ * @example
+ * server.use(middleware.cors(options));
+ */
+fn cors(options: cors::CorsOptions) -> Middleware {
+    return cors::create(options);
+}
+
+/**
+ * Create rate limiting middleware
+ * 
+ * @param options - Rate limit options
+ * @returns Rate limiting middleware
+ * 
+ * @example
+ * server.use(middleware.rate_limit(options));
+ */
+fn rate_limit(options: rate_limit::RateLimitOptions) -> Middleware {
+    return rate_limit::create(options);
+}
+
+/**
+ * Chain multiple middlewares together
+ * 
+ * @param middlewares - List of middleware functions
+ * @returns Combined middleware
+ */
+fn chain(middlewares: List<Middleware>) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        let mut current_next = next;
+        
+        // Build chain in reverse
+        let mut chain_funcs: List<fn(HttpRequest) -> HttpResponse> = [];
+        
+        for i in range(len(middlewares) - 1, -1, -1) {
+            let mw = middlewares[i];
+            let prev_next = current_next;
+            
+            current_next = fn(req: HttpRequest) -> HttpResponse {
+                let result = mw(req, prev_next);
+                
+                if result != none {
+                    return result as HttpResponse;
+                }
+                
+                return prev_next(req);
+            };
+        }
+        
+        return current_next(req);
+    };
+}
+
+/**
+ * Create timeout middleware
+ * 
+ * @param timeout_ms - Timeout in milliseconds
+ * @returns Timeout middleware
+ */
+fn timeout(timeout_ms: i64) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        // Would implement timeout logic
+        return none;
+    };
+}
+
+/**
+ * Create body parsing middleware
+ * 
+ * @returns Body parsing middleware
+ */
+fn body_parser() -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        // Would parse request body
+        return none;
+    };
+}
+
+/**
+ * Create authentication middleware
+ * 
+ * @param validator - Auth validation function
+ * @returns Auth middleware
+ */
+fn auth(validator: fn(HttpRequest) -> bool) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        if !validator(req) {
+            return some(response::unauthorized("Authentication required"));
+        }
+        
+        return none;
+    };
+}
+
+/**
+ * Create compression middleware
+ * 
+ * @returns Compression middleware
+ */
+fn compress() -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        let resp = next(req);
+        
+        // Check if client accepts compression
+        let accept_encoding = request::get_header(req, "Accept-Encoding");
+        
+        if contains(accept_encoding, "gzip") {
+            // Would compress response
+        }
+        
+        return some(resp);
+    };
+}
+
+/**
+ * Create static file serving middleware
+ * 
+ * @param directory - Static files directory
+ * @returns Static file middleware
+ */
+fn static_files(directory: string) -> Middleware {
+    return fn(req: HttpRequest, next: fn(HttpRequest) -> HttpResponse) -> HttpResponse? {
+        // Would serve static files
+        return none;
+    };
+}
+
+// Type re-exports
+type HttpRequest = any;
+type HttpResponse = any;
+type LoggerOptions = logger::LoggerOptions;
+type CorsOptions = cors::CorsOptions;
+type RateLimitOptions = rate_limit::RateLimitOptions;
+type Logger = logger::Logger;
+type Cors = cors::Cors;
+type RateLimit = rate_limit::RateLimit;

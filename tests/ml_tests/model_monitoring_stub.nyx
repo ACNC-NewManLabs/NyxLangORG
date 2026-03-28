@@ -1,0 +1,47 @@
+import ml;
+import std::df;
+
+# --- Helper: Monitoring Simulation ---
+
+fn simulate_monitoring_cycle(day) {
+    # simulated KPI drift over "days"
+    let base_acc = 0.90
+    let decay_rate = 0.02
+    let current_acc = base_acc - (day * decay_rate)
+    
+    # simulated drift (KS stat)
+    let drift = day * 0.05
+    
+    return { accuracy: current_acc, drift_ks: drift }
+}
+
+# --- Test Case ---
+
+fn test_monitoring_stub() {
+    println("--- Testing Continuous Model Monitoring Stub ---")
+    
+    let days = [0, 1, 2, 3, 4, 5]
+    let d = 0
+    while d < days.len() {
+        let metrics = simulate_monitoring_cycle(d)
+        
+        let status = "PERFORMANT"
+        if metrics.accuracy < 0.85 { status = "DEGRADED" }
+        if metrics.drift_ks > 0.15 { status = "DRIFT_DETECTED" }
+        if metrics.accuracy < 0.82 { status = "CRITICAL_FAILURE" }
+        
+        println("Day ", d, ":")
+        println("  Accuracy: ", metrics.accuracy * 100, "%")
+        println("  Drift KS: ", metrics.drift_ks)
+        println("  Status:   ", status)
+        
+        if status == "CRITICAL_FAILURE" {
+            println("ALERT: Triggering Model Retraining Workflow!")
+        }
+        d = d + 1
+    }
+}
+
+fn main() {
+    test_monitoring_stub()
+}

@@ -1,0 +1,78 @@
+# Nyx ML Experiment Tracker
+# Provides scientific reproducibility: run logs, metric history, comparison
+
+fn Tracker(run_name, log_dir) {
+    if log_dir == null { log_dir = "/tmp/nyx_experiments" }
+    let log_path = log_dir + "/" + run_name + ".jsonl"
+
+    return {
+        run_name: run_name,
+        log_path: log_path,
+        history: [],
+        config: {},
+        step: 0,
+
+        # Log config/hyperparameters at start of run
+        log_config: fn(self, cfg) {
+            self.config = cfg
+            let record = "{\"type\": \"config\", \"run\": \"" + self.run_name + "\", \"data\": " + std::json::serialize(cfg) + "}\n"
+            std::io::write_file(self.log_path, record)
+            println("[Tracker] Config logged for run '{}'", self.run_name)
+        },
+
+        # Log metrics for a given epoch/step
+        log: fn(self, metrics) {
+            self.step = self.step + 1
+            let entry = { step: self.step, loss: metrics.loss, acc: metrics.acc }
+            self.history.push(entry)
+            let record = "{\"step\": " + self.step + ", \"run\": \"" + self.run_name + "\", \"loss\": " + metrics.loss + ", \"acc\": " + metrics.acc + "}\n"
+            std::io::write_file(self.log_path, record)
+        },
+
+        # Print summary of recorded metrics
+        summary: fn(self) {
+            println("=== Experiment: {} ===", self.run_name)
+            let i = 0
+            while i < self.history.len() {
+                let h = self.history[i]
+                println("  Step {}: loss={}, acc={}", h.step, h.loss, h.acc)
+                i = i + 1
+            }
+        },
+
+        # Return best metric value across all logged steps
+        best: fn(self, metric_key) {
+            let best_val = null
+            let best_step = -1
+            let i = 0
+            while i < self.history.len() {
+                let v = null
+                if metric_key == "loss" { v = self.history[i].loss }
+                if metric_key == "acc" { v = self.history[i].acc }
+                if v != null {
+                    if best_val == null || v < best_val {
+                        best_val = v
+                        best_step = self.history[i].step
+                    }
+                }
+                i = i + 1
+            }
+            println("[Tracker] Best '{}' = {} at step {}", metric_key, best_val, best_step)
+            return best_val
+        }
+    }
+}
+
+# Compare two tracked runs by loading their logs
+fn compare_runs(run_a_name, run_b_name, log_dir) {
+    if log_dir == null { log_dir = "/tmp/nyx_experiments" }
+    println("Comparing runs: '{}' vs '{}'", run_a_name, run_b_name)
+    let path_a = log_dir + "/" + run_a_name + ".jsonl"
+    let path_b = log_dir + "/" + run_b_name + ".jsonl"
+    let data_a = std::io::read_file(path_a)
+    let data_b = std::io::read_file(path_b)
+    if data_a == null { println("  WARNING: run '{}' not found.", run_a_name) }
+    if data_b == null { println("  WARNING: run '{}' not found.", run_b_name) }
+    println("  Run A lines: {}", data_a)
+    println("  Run B lines: {}", data_b)
+}

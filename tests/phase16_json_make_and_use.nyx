@@ -1,0 +1,47 @@
+import df.io;
+import df.lazy;
+
+fn main() {
+    println("=== PHASE 16: JSON MAKE AND USE ===");
+    
+    # 1. MAKE: Create data from records
+    let records = [
+        {"id": 0, "name": "user_0", "val": 0.0},
+        {"id": 1, "name": "user_1", "val": 1.5},
+        {"id": 2, "name": "user_2", "val": 3.0},
+        {"id": 3, "name": "user_3", "val": 4.5},
+        {"id": 4, "name": "user_4", "val": 6.0},
+        {"id": 5, "name": "user_5", "val": 7.5},
+        {"id": 6, "name": "user_6", "val": 9.0},
+        {"id": 7, "name": "user_7", "val": 10.5},
+        {"id": 8, "name": "user_8", "val": 12.0},
+        {"id": 9, "name": "user_9", "val": 13.5},
+        {"id": 10, "name": "user_10", "val": 15.0}
+    ]
+    
+    println("Creating DataFrame from records...");
+    let df = df::io::from_records(records);
+    
+    let path = "tests/user_dataset.json";
+    println("Saving to NDJSON:", path);
+    df.to_json(path);
+    
+    # 2. USE: Scan and use the dataset
+    println("Scanning and filtering dataset...");
+    # We use scan_json which uses the high-performance native loader
+    let result = df::io::scan_json(path)
+        .filter({ "_kind": "binop", "_value": ">", "_args": [
+            { "_kind": "col", "_value": "val" },
+            { "_kind": "lit", "_value": 8.0 }
+        ]})
+        .collect();
+    
+    println("Filtered Results (val > 8.0):");
+    result.print(10);
+    
+    if result.nrows() == 5 {
+        println("✅ Capability Verified: Nyx can MAKE and USE JSON datasets!");
+    } else {
+        println("❌ Verification Failed: Result count mismatch (expected 5, got " + result.nrows() + ")");
+    }
+}

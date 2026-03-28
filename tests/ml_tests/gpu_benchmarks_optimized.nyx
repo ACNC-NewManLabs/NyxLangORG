@@ -1,0 +1,85 @@
+# tests/ml_tests/gpu_benchmarks_optimized.nyx
+
+import ml;
+import std;
+
+# 1. HELPER: BENCHMARK UTILITY
+fn benchmark(name, n_iters, warmup_iters, func) {
+    println("Benchmarking: " + name)
+    
+    # Warmup
+    let i = 0
+    while (i < warmup_iters) {
+        func()
+        i = i + 1
+    }
+    
+    # Measure
+    let start = std::time::now()
+    i = 0
+    while (i < n_iters) {
+        func()
+        i = i + 1
+    }
+    let end = std::time::now()
+    let total_ms = end - start
+    let avg_ms = total_ms / n_iters
+    
+    println("  Total: " + total_ms + "ms for " + n_iters + " iterations")
+    println("  Avg:   " + avg_ms + "ms/iter")
+    println("")
+    return avg_ms
+}
+
+fn main() {
+    # 2. SETUP
+    let size = 1000000 # 1M elements
+    println("Generating data: " + size + " elements...")
+
+    # Use ones instead of seeded_randn for speed and reliability
+    let a_cpu = ml::tensor::ones([size], false)
+    let b_cpu = ml::tensor::ones([size], false)
+    let c_cpu = ml::tensor::ones([size], false)
+
+    let a_gpu = a_cpu.move_to("gpu")
+    let b_gpu = b_cpu.move_to("gpu")
+    let c_gpu = c_cpu.move_to("gpu")
+
+    # 3. ELEMENT-WISE BENCHMARKS
+    benchmark("Element-wise Add (CPU)", 10, 2, fn() {
+        a_cpu.add(b_cpu)
+    })
+
+    benchmark("Element-wise Add (GPU - OPTIMIZED)", 10, 2, fn() {
+        a_gpu.add(b_gpu)
+    })
+
+    benchmark("Element-wise Mul (CPU)", 10, 2, fn() {
+        a_cpu.mul(b_cpu)
+    })
+
+    benchmark("Element-wise Mul (GPU - OPTIMIZED)", 10, 2, fn() {
+        a_gpu.mul(b_gpu)
+    })
+
+    # 4. FUSION BENCHMARKS
+    benchmark("Fused Add-Mul (CPU: a + b * c)", 10, 2, fn() {
+        a_cpu.add(b_cpu.mul(c_cpu))
+    })
+
+    benchmark("Fused Add-Mul (GPU: fma(a, b, c) - TRUE FUSION)", 10, 2, fn() {
+        a_gpu.fma(b_gpu, c_gpu)
+    })
+
+    # 5. FILTER ENGINE BENCHMARK (FUSED FILTER+AGG)
+    println("Benchmarking Optimized Filter Engine...")
+    let df_size = 1000000
+    # range(start, end) is a top-level native function
+    let dframe = range(0, df_size)
+
+    benchmark("Filter + Sum (Fused Engine)", 10, 2, fn() {
+        dframe.filter("id > 500000").sum("id")
+    })
+
+    println("Optimized benchmarks complete.")
+}

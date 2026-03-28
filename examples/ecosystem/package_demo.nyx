@@ -1,0 +1,6 @@
+fn main() {
+  # pseudo-nyx package usage
+  # nyxpkg install nyx-http
+  # nyxpkg install nyx-crypto
+  # print("packages installed")
+}

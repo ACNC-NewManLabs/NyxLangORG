@@ -1,0 +1,9 @@
+import ml;
+
+fn main() {
+    println("Marker 1");
+    let t = ml::tensor::ones([10], false, "cpu");
+    println("Marker 2");
+    t.move_to("gpu");
+    println("Marker 3 - Device: " + t.device);
+}

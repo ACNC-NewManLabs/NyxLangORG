@@ -1,0 +1,58 @@
+import ml;
+
+# --- Nyx Fairness Enforcement (Active Mitigation) ---
+
+fn enforce_fairness_policy(audit_stats) {
+    println("--- Nyx Fairness Engine: Policy Enforcement Gate ---")
+    
+    let violation_count = 0
+    let groups = audit_stats.keys()
+    let i = 0
+    
+    while i < groups.len() {
+        let gid = groups[i]
+        let ginfo = audit_stats[gid]
+        
+        # Policy: Rejection Parity (Max 20%)
+        if ginfo.rej > 0.20 {
+            println("  POLICY_VIOLATION: Group ", gid, " Rejection Rate ", ginfo.rej * 100, "% exceeds 20% limit.")
+            violation_count = violation_count + 1
+        }
+        
+        # Policy: Fallback QoS (Min 95%)
+        if ginfo.fback_acc < 0.95 {
+             println("  POLICY_VIOLATION: Group ", gid, " Fallback ACC ", ginfo.fback_acc * 100, "% below 95% limit.")
+             violation_count = violation_count + 1
+        }
+        i = i + 1
+    }
+    
+    if violation_count > 0 {
+        println("  ACTION: Fairness Policy Breached. Triggering Rebalance/Degrade Mitigation.")
+        println("  STATUS: SYSTEM_ALERT (Bias detected in safety layer)")
+        return false
+    } else {
+        println("  STATUS: Fairness Policy Satisfied. No mitigation required.")
+        return true
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Balanced Safety Impact")
+    let s1 = { 
+        Group_X: { rej: 0.05, fback_acc: 0.98 },
+        Group_Y: { rej: 0.06, fback_acc: 0.97 }
+    }
+    enforce_fairness_policy(s1)
+    
+    println("")
+    
+    println("Scenario 2: Inequitable Safety Impact")
+    let s2 = { 
+        Group_X: { rej: 0.05, fback_acc: 0.98 },
+        Group_Y: { rej: 0.35, fback_acc: 0.82 } # High rejection & low QoS
+    }
+    enforce_fairness_policy(s2)
+}

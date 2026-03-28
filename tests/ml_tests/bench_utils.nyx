@@ -1,0 +1,32 @@
+# tests/ml_tests/bench_utils.nyx
+
+fn benchmark(name, n_iters, warmup_iters, func) {
+    println("Benchmarking: " + name)
+    
+    # Warmup
+    let i = 0
+    while (i < warmup_iters) {
+        func()
+        i = i + 1
+    }
+    
+    # Measure
+    let start = std::time::now()
+    i = 0
+    while (i < n_iters) {
+        func()
+        i = i + 1
+    }
+    let end = std::time::now()
+    let total_ms = end - start
+    let avg_ms = total_ms / n_iters
+    
+    println("  Total: " + total_ms + "ms for " + n_iters + " iterations")
+    println("  Avg:   " + avg_ms + "ms/iter")
+    println("")
+    return avg_ms
+}
+
+return {
+    benchmark: benchmark
+}

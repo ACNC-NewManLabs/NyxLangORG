@@ -1,0 +1,52 @@
+# Nyx Dataframe Engine: DataFrame Server (Phase 8)
+# In-process query server that exposes DataFrames over an HTTP REST API.
+# The actual HTTP binding is provided by the std::df::start_df_server native.
+
+fn DfServer(port) {
+    if port == null { port = 8080 }
+    return {
+        _port: port,
+        _catalog: {},  # name -> DataFrame
+
+        # Register a DataFrame under a name
+        register_table: fn(self, name, df) {
+            self._catalog[name] = df
+            std::df::register_table(name, df)
+            println("[df.server] Registered table '" + name + "' (" + df.nrows() + " rows)")
+            return self
+        },
+
+        # Query a registered table with a SQL string
+        query: fn(self, sql_str) {
+            let result = sql(sql_str, self._catalog)
+            return result
+        },
+
+        # Start the HTTP server (blocking).
+        # POST /query body: {sql: "SELECT ..."}  → returns JSON rows.
+        # GET  /tables → returns table names.
+        start: fn(self) {
+            println("[df.server] Starting DataFrame HTTP server on port " + self._port)
+            println("[df.server] Registered tables: " + self._catalog.keys())
+            println("[df.server] Use POST /query with {\"sql\": \"SELECT ...\"}  to query.")
+            let ok = std::df::start_df_server(self._port)
+            return ok
+        },
+
+        # Explain a SQL query without executing it
+        explain: fn(self, sql_str) {
+            println("[df.server] EXPLAIN: " + sql_str)
+            return null
+        }
+    }
+}
+
+# Convenience: start a quick server with a single DataFrame
+fn serve_df(df, table_name, port) {
+    if table_name == null { table_name = "data" }
+    if port == null { port = 8080 }
+    let s = DfServer(port)
+    s = s.register_table(table_name, df)
+    s.start()
+    return s
+}

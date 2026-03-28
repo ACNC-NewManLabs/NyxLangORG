@@ -1,0 +1,106 @@
+import ml;
+import std::df;
+
+# --- Helper: Extended KPIs ---
+
+fn calculate_auc(y_true, y_probs) {
+    # 1. Simple trapezoidal AUC helper
+    let n = y_true.len()
+    if n == 0 { return 0.0 }
+    
+    # Sort by probability
+    let indices = std::df::col_sort(y_probs, true) # descending
+    
+    let tp = 0
+    let fp = 0
+    let total_pos = 0
+    let total_neg = 0
+    let i = 0
+    while i < n {
+        if y_true[i] == 1 { total_pos = total_pos + 1 } else { total_neg = total_neg + 1 }
+        i = i + 1
+    }
+    
+    if total_pos == 0 || total_neg == 0 { return 1.0 }
+    
+    let area = 0.0
+    let prev_fp = 0
+    let j = 0
+    while j < n {
+        let idx = indices[j]
+        if y_true[idx] == 1 { tp = tp + 1 } else { fp = fp + 1 }
+        
+        # Trapezoid area: (fp_new - fp_old) * tp / total_pos
+        if fp > prev_fp {
+            area = area + (tp * 1.0 / total_pos)
+            prev_fp = fp
+        }
+        j = j + 1
+    }
+    
+    return area * 1.0 / total_neg
+}
+
+fn class_wise_kpis(y_true, y_pred) {
+    let classes = [0, 1]
+    let res = {}
+    
+    let c = 0
+    while c < classes.len() {
+        let cls = classes[c]
+        let tp = 0 let fp = 0 let fn_ = 0 let tn = 0
+        let i = 0
+        while i < y_true.len() {
+            let t = y_true[i]
+            let p = y_pred[i]
+            if t == cls && p == cls { tp = tp + 1 }
+            else if t == cls && p != cls { fn_ = fn_ + 1 }
+            else if t != cls && p == cls { fp = fp + 1 }
+            else { tn = tn + 1 }
+            i = i + 1
+        }
+        
+        let prec = 0.0 let rec = 0.0
+        if tp + fp > 0 { prec = tp * 1.0 / (tp + fp) }
+        if tp + fn_ > 0 { rec = tp * 1.0 / (tp + fn_) }
+        let f1 = 0.0
+        if prec + rec > 0 { f1 = 2 * prec * rec / (prec + rec) }
+        
+        res[cls] = { precision: prec, recall: rec, f1: f1 }
+        c = c + 1
+    }
+    return res
+}
+
+# --- Test Case ---
+
+fn test_kpi_extended() {
+    println("--- Testing Extended KPI Framework (AUC, Precision, Recall) ---")
+    
+    let y_true = [1, 1, 0, 0, 1, 0, 1, 0]
+    let y_prob = [0.9, 0.8, 0.4, 0.1, 0.7, 0.2, 0.6, 0.3]
+    let y_pred = [1, 1, 1, 0, 1, 0, 0, 0] # Threshold 0.5; note FP at 0.4, FN at 0.6
+    
+    let auc = calculate_auc(y_true, y_prob)
+    println("Model AUC: ", auc)
+    
+    let cw = class_wise_kpis(y_true, y_pred)
+    
+    let cls_list = [0, 1]
+    let i = 0
+    while i < cls_list.len() {
+        let cls = cls_list[i]
+        let r = cw[cls]
+        println("Class ", cls, ":")
+        println("  Precision: ", r.precision)
+        println("  Recall:    ", r.recall)
+        println("  F1 Score:  ", r.f1)
+        
+        if r.f1 < 0.65 { println("  WARN: Weak performance in Class ", cls) }
+        i = i + 1
+    }
+}
+
+fn main() {
+    test_kpi_extended()
+}

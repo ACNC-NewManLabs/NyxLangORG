@@ -1,0 +1,64 @@
+import ml;
+import std::df;
+
+# --- Nyx Safety Gatekeeper (CI/CD Enforcement) ---
+
+fn check_deployment_safety(metrics) {
+    println("--- Nyx Safety Gate: Auditing Deployment Readiness ---")
+    
+    let is_safe = true
+    
+    # 1. Subgroup Accuracy Gate (Pillar: Ethics/Fairness)
+    if metrics.min_subgroup_acc < 0.7 {
+        println("BLOCK: Intersectional fairness violation (min_acc=", metrics.min_subgroup_acc, " < 0.7)")
+        is_safe = false
+    } else {
+        println("PASS: Intersectional fairness within bounds")
+    }
+    
+    # 2. Calibration Gate (Pillar: Reliability)
+    if metrics.ece > 0.1 {
+        println("BLOCK: Calibration error too high (ECE=", metrics.ece, " > 0.1)")
+        is_safe = false
+    } else {
+        println("PASS: Model calibration certified")
+    }
+    
+    # 3. Drift Gate (Pillar: Performance)
+    if metrics.drift_ks > 0.2 {
+        println("BLOCK: Critical distribution drift detected (KS=", metrics.drift_ks, " > 0.2)")
+        is_safe = false
+    } else {
+        println("PASS: Data distribution stable")
+    }
+    
+    if is_safe {
+        println("RESULT: DEPLOYMENT APPROVED")
+        return true
+    } else {
+        println("RESULT: DEPLOYMENT REJECTED - Manual Review Required")
+        return false
+    }
+}
+
+# --- Demo Case ---
+
+fn main() {
+    # Scenario: High drift and low subgroup accuracy
+    let bad_metrics = {
+        min_subgroup_acc: 0.5,
+        ece: 0.05,
+        drift_ks: 0.25
+    }
+    check_deployment_safety(bad_metrics)
+    
+    println("")
+    
+    # Scenario: Clean metrics
+    let good_metrics = {
+        min_subgroup_acc: 0.85,
+        ece: 0.04,
+        drift_ks: 0.02
+    }
+    check_deployment_safety(good_metrics)
+}

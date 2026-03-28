@@ -1,0 +1,6 @@
+fn main() {
+  # pseudo-nyx ecosystem usage
+  # use network.http
+  # let response = http.get("example.com", "/")
+  # print(response)
+}

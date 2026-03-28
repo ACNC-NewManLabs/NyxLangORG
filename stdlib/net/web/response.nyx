@@ -1,0 +1,438 @@
+/**
+ * Web Response Module
+ * 
+ * Provides Response type for the web framework with chainable methods.
+ * 
+ * @module web::response
+ */
+
+/**
+ * Response type - chainable HTTP response builder
+ */
+type Response = {
+    status_code: i64,
+    status_text: string,
+    headers: Map<string, string>,
+    body: string,
+    cookies: Map<string, Cookie>,
+    redirected: bool,
+    redirected_to: string,
+    original: any
+};
+
+/**
+ * Cookie type
+ */
+type Cookie = {
+    value: string,
+    path: string,
+    domain: string?,
+    expires: i64?,
+    secure: bool,
+    http_only: bool,
+    same_site: string
+};
+
+/**
+ * Create a new Response
+ * 
+ * @returns A new Response
+ */
+fn Response() -> Response {
+    return Response {
+        status_code: 200,
+        status_text: "OK",
+        headers: {
+            "Content-Type": "text/html; charset=utf-8"
+        },
+        body: "",
+        cookies: {},
+        redirected: false,
+        redirected_to: "",
+        original: none
+    };
+}
+
+/**
+ * Set response status code
+ * 
+ * @param res - The response
+ * @param code - Status code
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.status(404).html("<h1>Not Found</h1>");
+ */
+fn status(res: Response, code: i64) -> Response {
+    res.status_code = code;
+    res.status_text = get_status_text(code);
+    return res;
+}
+
+/**
+ * Set response body as HTML
+ * 
+ * @param res - The response
+ * @param html - HTML content
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.html("<h1>Hello World</h1>");
+ */
+fn html(res: Response, html_content: string) -> Response {
+    res.body = html_content;
+    res.headers["Content-Type"] = "text/html; charset=utf-8";
+    return res;
+}
+
+/**
+ * Set response body as JSON
+ * 
+ * @param res - The response
+ * @param data - Data to serialize as JSON
+ * @param status_code - Optional status code (default 200)
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.json({"status": "ok"});
+ * res.json({"error": "not found"}, status: 404);
+ */
+fn json(res: Response, data: any, status_code?: i64) -> Response {
+    // Would use json::encode in real implementation
+    res.body = "{\"status\": \"ok\"}";  // Placeholder
+    res.headers["Content-Type"] = "application/json";
+    
+    if status_code != none {
+        res.status_code = status_code as i64;
+        res.status_text = get_status_text(status_code as i64);
+    }
+    return res;
+}
+
+/**
+ * Set response body as plain text
+ * 
+ * @param res - The response
+ * @param text - Text content
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.text("Hello World");
+ */
+fn text(res: Response, text_content: string) -> Response {
+    res.body = text_content;
+    res.headers["Content-Type"] = "text/plain; charset=utf-8";
+    return res;
+}
+
+/**
+ * Set response body as XML
+ * 
+ * @param res - The response
+ * @param xml - XML content
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.xml("<root><item>value</item></root>");
+ */
+fn xml(res: Response, xml_content: string) -> Response {
+    res.body = xml_content;
+    res.headers["Content-Type"] = "application/xml";
+    return res;
+}
+
+/**
+ * Send a file
+ * 
+ * @param res - The response
+ * @param file_path - Path to file
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.file("./images/logo.png");
+ */
+fn file(res: Response, file_path: string) -> Response {
+    // Would read file and set appropriate content type
+    res.body = "";  // Placeholder
+    res.headers["Content-Type"] = "application/octet-stream";
+    return res;
+}
+
+/**
+ * Set response to redirect
+ * 
+ * @param res - The response
+ * @param url - URL to redirect to
+ * @param status - Optional redirect status (default 302)
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.redirect("/new-page");
+ * res.redirect("/moved", status: 301);
+ */
+fn redirect(res: Response, url: string, status?: i64) -> Response {
+    res.redirected = true;
+    res.redirected_to = url;
+    
+    let redirect_status = 302;
+    if status != none {
+        redirect_status = status as i64;
+    }
+    res.status_code = redirect_status;
+    res.status_text = get_status_text(redirect_status);
+    res.headers["Location"] = url;
+    
+    return res;
+}
+
+/**
+ * Set a response header
+ * 
+ * @param res - The response
+ * @param name - Header name
+ * @param value - Header value
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.set("X-Custom-Header", "value");
+ */
+fn set(res: Response, name: string, value: string) -> Response {
+    res.headers[name] = value;
+    return res;
+}
+
+/**
+ * Set a cookie
+ * 
+ * @param res - The response
+ * @param name - Cookie name
+ * @param value - Cookie value
+ * @param options - Cookie options
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.cookie("session_id", "abc123", {"path": "/"});
+ */
+fn cookie(res: Response, name: string, value: string, options?: Map<string, any>) -> Response {
+    let cookie = Cookie {
+        value: value,
+        path: "/",
+        domain: none,
+        expires: none,
+        secure: false,
+        http_only: true,
+        same_site: "Lax"
+    };
+    
+    if options != none {
+        let opts = options as Map<string, any>;
+        if "path" in opts {
+            cookie.path = opts["path"] as string;
+        }
+        if "domain" in opts {
+            cookie.domain = some(opts["domain"] as string);
+        }
+        if "expires" in opts {
+            cookie.expires = some(opts["expires"] as i64);
+        }
+        if "secure" in opts {
+            cookie.secure = opts["secure"] as bool;
+        }
+        if "http_only" in opts {
+            cookie.http_only = opts["http_only"] as bool;
+        }
+        if "same_site" in opts {
+            cookie.same_site = opts["same_site"] as string;
+        }
+    }
+    
+    res.cookies[name] = cookie;
+    return res;
+}
+
+/**
+ * Delete a cookie
+ * 
+ * @param res - The response
+ * @param name - Cookie name
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.delete_cookie("session_id");
+ */
+fn delete_cookie(res: Response, name: string) -> Response {
+    // Set cookie with expired time to delete it
+    let cookie = Cookie {
+        value: "",
+        path: "/",
+        domain: none,
+        expires: some(0),  // Expired
+        secure: false,
+        http_only: true,
+        same_site: "Lax"
+    };
+    res.cookies[name] = cookie;
+    return res;
+}
+
+/**
+ * Set Content-Type header
+ * 
+ * @param res - The response
+ * @param content_type - Content type
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.type("application/json");
+ */
+fn type(res: Response, content_type: string) -> Response {
+    res.headers["Content-Type"] = content_type;
+    return res;
+}
+
+/**
+ * Set Cache-Control header
+ * 
+ * @param res - The response
+ * @param value - Cache-Control value
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.cache("public, max-age=3600");
+ */
+fn cache(res: Response, value: string) -> Response {
+    res.headers["Cache-Control"] = value;
+    return res;
+}
+
+/**
+ * Disable caching
+ * 
+ * @param res - The response
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.no_cache();
+ */
+fn no_cache(res: Response) -> Response {
+    res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+    res.headers["Pragma"] = "no-cache";
+    res.headers["Expires"] = "0";
+    return res;
+}
+
+/**
+ * Send response with no content
+ * 
+ * @param res - The response
+ * @returns The same response for chaining
+ * 
+ * @example
+ * res.status(204).send();
+ */
+fn send(res: Response) -> Response {
+    // Body already set, this is for chainability
+    return res;
+}
+
+// Pre-configured responses
+
+/**
+ * Create a 200 OK response
+ */
+fn ok() -> Response {
+    return status(Response(), 200);
+}
+
+/**
+ * Create a 201 Created response
+ */
+fn created(data?: any) -> Response {
+    let res = status(Response(), 201);
+    if data != none {
+        return json(res, data);
+    }
+    return res;
+}
+
+/**
+ * Create a 204 No Content response
+ */
+fn no_content() -> Response {
+    return status(Response(), 204);
+}
+
+/**
+ * Create a 400 Bad Request response
+ */
+fn bad_request(message?: string) -> Response {
+    let msg = message ?? "Bad Request";
+    let res = status(Response(), 400);
+    res.headers["Content-Type"] = "application/json";
+    res.body = "{\"error\": \"" + msg + "\"}";
+    return res;
+}
+
+/**
+ * Create a 401 Unauthorized response
+ */
+fn unauthorized(message?: string) -> Response {
+    let msg = message ?? "Unauthorized";
+    let res = status(Response(), 401);
+    res.headers["Content-Type"] = "application/json";
+    res.body = "{\"error\": \"" + msg + "\"}";
+    return res;
+}
+
+/**
+ * Create a 403 Forbidden response
+ */
+fn forbidden(message?: string) -> Response {
+    let msg = message ?? "Forbidden";
+    let res = status(Response(), 403);
+    res.headers["Content-Type"] = "application/json";
+    res.body = "{\"error\": \"" + msg + "\"}";
+    return res;
+}
+
+/**
+ * Create a 404 Not Found response
+ */
+fn not_found(message?: string) -> Response {
+    let msg = message ?? "Not Found";
+    let res = status(Response(), 404);
+    res.headers["Content-Type"] = "application/json";
+    res.body = "{\"error\": \"" + msg + "\"}";
+    return res;
+}
+
+/**
+ * Create a 500 Internal Server Error response
+ */
+fn internal_server_error(message?: string) -> Response {
+    let msg = message ?? "Internal Server Error";
+    let res = status(Response(), 500);
+    res.headers["Content-Type"] = "application/json";
+    res.body = "{\"error\": \"" + msg + "\"}";
+    return res;
+}
+
+// Helper functions
+
+fn get_status_text(code: i64) -> string {
+    if code == 200 { return "OK"; }
+    if code == 201 { return "Created"; }
+    if code == 204 { return "No Content"; }
+    if code == 301 { return "Moved Permanently"; }
+    if code == 302 { return "Found"; }
+    if code == 304 { return "Not Modified"; }
+    if code == 400 { return "Bad Request"; }
+    if code == 401 { return "Unauthorized"; }
+    if code == 403 { return "Forbidden"; }
+    if code == 404 { return "Not Found"; }
+    if code == 405 { return "Method Not Allowed"; }
+    if code == 500 { return "Internal Server Error"; }
+    if code == 502 { return "Bad Gateway"; }
+    if code == 503 { return "Service Unavailable"; }
+    return "Unknown";
+}

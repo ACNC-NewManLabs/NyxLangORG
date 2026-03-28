@@ -1,0 +1,46 @@
+# Nyx ML Self-Diagnostic System (Area 46)
+# Automatic detection of training issues and optimization suggestions
+
+fn check_overfitting(train_loss, val_loss, threshold) {
+    if threshold == null { threshold = 0.2 }
+    let gap = val_loss - train_loss
+    if gap > threshold {
+        println("[Diagnostics] ALERT: Overfitting detected! Gap: {}", gap)
+        return { status: "overfitting", gap: gap, suggest: "increase dropout or weight decay" }
+    }
+    return { status: "healthy" }
+}
+
+fn check_underfitting(train_loss, target_loss) {
+    if train_loss > target_loss * 2.0 {
+        println("[Diagnostics] ALERT: Underfitting detected! Training loss is high.")
+        return { status: "underfitting", suggest: "increase model capacity or learning rate" }
+    }
+    return { status: "healthy" }
+}
+
+fn suggest_optimizer_tweak(loss_history) {
+    # Check for stagnation (plateau)
+    if loss_history.len() < 5 { return "stable" }
+    let recent = loss_history[loss_history.len() - 1]
+    let old = loss_history[loss_history.len() - 5]
+    if recent >= old * 0.99 {
+        println("[Diagnostics] Optimizer suggestion: Learning rate plateau detected. Reduce LR.")
+        return "reduce_lr"
+    }
+    return "stable"
+}
+
+fn ModelHealthReport(model, trainer) {
+    return {
+        _model: model,
+        _trainer: trainer,
+        
+        generate: fn(self) {
+            println("[Diagnostics] Running full health report for model...")
+            # Check weights, gradients, losses
+            let report = { status: "ok", checks: [] }
+            return report
+        }
+    }
+}

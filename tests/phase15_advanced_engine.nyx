@@ -1,0 +1,66 @@
+fn main() {
+    let sales = {
+        "_columns": [
+            { "_name": "product_id", "_data": [1.0, 2.0, 1.0, 3.0, 2.0] },
+            { "_name": "amount", "_data": [100.0, 200.0, 150.0, 300.0, 50.0] }
+        ]
+    };
+    
+    let products = {
+        "_columns": [
+            { "_name": "id", "_data": [1.0, 2.0, 3.0] },
+            { "_name": "name", "_data": ["Apple", "Banana", "Cherry"] }
+        ]
+    };
+
+    println("=== ADVANCED ENGINE V2 TEST: JOIN -> AGG -> SORT ===");
+
+    # Plan:
+    # 1. Scan 'sales'
+    # 2. Join 'products' on product_id = id
+    # 3. Aggregate sum(amount) by name
+    # 4. Sort by agg_0 desc
+
+    let plan = {
+        "_op": "p_sort",
+        "column": "agg_0",
+        "ascending": false,
+        "input": {
+            "_op": "p_aggregate",
+            "keys": [{ "_kind": "col", "_value": "name", "_args": [] }],
+            "aggs": [{ "_kind": "col", "_value": "amount", "_args": [] }],
+            "input": {
+                "_op": "p_join",
+                "left": { "_op": "p_scan", "source_id": "sales" },
+                "right": { "_op": "p_scan", "source_id": "products" },
+                "on_left": "product_id",
+                "on_right": "id"
+            }
+        }
+    };
+
+    let sources = { "sales": sales, "products": products };
+    
+    println("Executing Advanced Plan...");
+    let res = std::df::execute_plan(plan, sources);
+
+    println("Result columns count:", res._columns.len());
+    let names = res._columns[0]._data;
+    let totals = res._columns[1]._data;
+
+    println("Top Products by Sales:");
+    for i in 0..names.len() {
+        println(i + 1, ".", names[i], ":", totals[i]);
+    }
+
+    # Expected: 
+    # Cherry: 300.0
+    # Apple: 250.0 (100 + 150)
+    # Banana: 250.0 (200 + 50)
+    
+    if names.len() == 3 {
+        println("✅ Advanced Engine V2 Test Passed (Row count correct)!");
+    } else {
+        println("❌ Advanced Engine V2 Test Failed: Wrong row count", names.len());
+    }
+}

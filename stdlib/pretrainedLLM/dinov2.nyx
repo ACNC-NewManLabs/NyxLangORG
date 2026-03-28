@@ -1,0 +1,5 @@
+use ml::transformer;
+
+fn create(config) {
+    return ml::transformer::Transformer(1000, 1536, 40, 24, null, null, "dinov2", "cpu");
+}

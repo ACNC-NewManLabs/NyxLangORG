@@ -1,0 +1,112 @@
+/**
+ * Nyx Network Engine - Async Runtime Module
+ * 
+ * This module provides the foundation for asynchronous operations in Nyx,
+ * including the event loop, task scheduling, futures, and timer management.
+ * 
+ * @module runtime
+ * @version 1.0.0
+ */
+
+mod event_loop;
+mod task;
+mod future;
+mod timer;
+
+/**
+ * Initialize the async runtime system
+ * This sets up the global event loop and task scheduler
+ */
+fn init_runtime() {
+    event_loop::init()
+}
+
+/**
+ * Start the event loop and run forever
+ * This blocks the current thread and processes async events
+ */
+fn run() {
+    event_loop::run()
+}
+
+/**
+ * Stop the event loop gracefully
+ */
+fn stop() {
+    event_loop::stop()
+}
+
+/**
+ * Spawn a new async task
+ * 
+ * @param task_fn - The function to execute asynchronously
+ * @returns Task handle for tracking and awaiting
+ */
+fn spawn(task_fn: fn()) -> task::Task {
+    task::spawn(task_fn)
+}
+
+/**
+ * Await a task completion
+ * 
+ * @param task_handle - The task to wait for
+ * @returns The result of the task execution
+ */
+fn await(task_handle: task::Task) -> any {
+    task::await(task_handle)
+}
+
+/**
+ * Sleep for a specified duration
+ * 
+ * @param ms - Duration in milliseconds
+ */
+fn sleep(ms: i64) {
+    timer::sleep(ms)
+}
+
+/**
+ * Create a future that resolves after a delay
+ * 
+ * @param ms - Delay in milliseconds
+ * @returns A future that completes after the delay
+ */
+fn delayed(ms: i64) -> future::Future {
+    future::delayed(ms)
+}
+
+/**
+ * Run a callback after a delay
+ * 
+ * @param ms - Delay in milliseconds
+ * @param callback - Function to run after delay
+ */
+fn set_timeout(ms: i64, callback: fn()) {
+    timer::set_timeout(ms, callback)
+}
+
+/**
+ * Run a callback at regular intervals
+ * 
+ * @param ms - Interval in milliseconds
+ * @param callback - Function to run on each interval
+ * @returns Timer handle for cancellation
+ */
+fn set_interval(ms: i64, callback: fn()) -> timer::Timer {
+    timer::set_interval(ms, callback)
+}
+
+/**
+ * Cancel a timer
+ * 
+ * @param timer_handle - The timer to cancel
+ */
+fn clear_timer(timer_handle: timer::Timer) {
+    timer::clear(timer_handle)
+}
+
+// Re-export commonly used types
+type EventLoop = event_loop::EventLoop;
+type Task = task::Task;
+type Future = future::Future;
+type Timer = timer::Timer;

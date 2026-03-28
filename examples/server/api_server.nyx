@@ -1,0 +1,269 @@
+/**
+ * REST API Server Example
+ * 
+ * A RESTful API server demonstrating:
+ * - CRUD operations (GET, POST, PUT, DELETE)
+ * - Route parameters
+ * - Query parameters
+ * - Request body parsing
+ * - JSON responses
+ * - Error handling
+ * 
+ * Run with: nyx run api_server.nyx
+ * 
+ * @example
+ * import examples.server.api_server;
+ * api_server.main([]);
+ */
+
+import net.http;
+
+// In-memory data store (would be a database in production)
+let users: List<Map<string, any>> = [
+    {"id": 1, "name": "Alice", "email": "alice@example.com"},
+    {"id": 2, "name": "Bob", "email": "bob@example.com"},
+    {"id": 3, "name": "Charlie", "email": "charlie@example.com"}
+];
+
+let next_id = 4;
+
+/**
+ * Main function
+ */
+fn main(args: List<string>) {
+    print("Starting REST API Server...");
+    print("");
+    
+    let server = net.HttpServer(port: 8080);
+    
+    // Apply middleware
+    server.use(json_middleware());
+    server.use(cors_middleware());
+    
+    // GET /users - List all users
+    server.get("/api/users", fn(req, res) {
+        // Get query parameters
+        let limit = 10;
+        let offset = 0;
+        
+        if "limit" in req.query_params {
+            limit = parse_int(req.query_params["limit"]);
+        }
+        if "offset" in req.query_params {
+            offset = parse_int(req.query_params["offset"]);
+        }
+        
+        // Paginate results
+        let result: List<Map<string, any>> = [];
+        let i = offset;
+        while i < users.length() and i < offset + limit {
+            result.push(users[i]);
+            i = i + 1;
+        }
+        
+        res.json({
+            "data": result,
+            "total": users.length(),
+            "limit":offset": offset
+ limit,
+            "        });
+    });
+    
+    // GET /users/:id - Get user by ID
+    server.get("/api/users/:id", fn(req, res) {
+        let id = parse_int(req.params["id"]);
+        let user = find_user(id);
+        
+        if user != none {
+            res.json(user);
+        } else {
+            res.status(404).json({
+                "error": "User not found",
+                "code": "USER_NOT_FOUND"
+            });
+        }
+    });
+    
+    // POST /users - Create new user
+    server.post("/api/users", fn(req, res) {
+        // Parse request body
+        let body = req.body;
+        
+        // Validate required fields
+        if not ("name" in body) or not ("email" in body) {
+            res.status(400).json({
+                "error": "Missing required fields: name, email",
+                "code": "VALIDATION_ERROR"
+            });
+            return;
+        }
+        
+        // Create new user
+        let new_user = {
+            "id": next_id,
+            "name": body["name"],
+            "email": body["email"]
+        };
+        
+        users.push(new_user);
+        next_id = next_id + 1;
+        
+        res.status(201).json(new_user);
+    });
+    
+    // PUT /users/:id - Update user
+    server.put("/api/users/:id", fn(req, res) {
+        let id = parse_int(req.params["id"]);
+        let user_index = find_user_index(id);
+        
+        if user_index < 0 {
+            res.status(404).json({
+                "error": "User not found",
+                "code": "USER_NOT_FOUND"
+            });
+            return;
+        }
+        
+        // Parse request body
+        let body = req.body;
+        
+        // Update user
+        if "name" in body {
+            users[user_index]["name"] = body["name"];
+        }
+        if "email" in body {
+            users[user_index]["email"] = body["email"];
+        }
+        
+        res.json(users[user_index]);
+    });
+    
+    // DELETE /users/:id - Delete user
+    server.delete("/api/users/:id", fn(req, res) {
+        let id = parse_int(req.params["id"]);
+        let user_index = find_user_index(id);
+        
+        if user_index < 0 {
+            res.status(404).json({
+                "error": "User not found",
+                "code": "USER_NOT_FOUND"
+            });
+            return;
+        }
+        
+        // Remove user
+        let removed = users[user_index];
+        let new_users: List<Map<string, any>> = [];
+        
+        let i = 0;
+        while i < users.length() {
+            if i != user_index {
+                new_users.push(users[i]);
+            }
+            i = i + 1;
+        }
+        
+        users = new_users;
+        
+        res.json({
+            "message": "User deleted",
+            "user": removed
+        });
+    });
+    
+    // GET /api/posts - Blog posts endpoint (example)
+    server.get("/api/posts", fn(req, res) {
+        let posts = [
+            {"id": 1, "title": "Getting Started with Nyx", "excerpt": "Learn how to build web apps..."},
+            {"id": 2, "title": "REST API Best Practices", "excerpt": "Building APIs that scale..."},
+            {"id": 3, "title": "WebSocket Real-time Apps", "excerpt": "Adding real-time features..."}
+        ];
+        
+        res.json({"data": posts});
+    });
+    
+    // 404 handler
+    server.not_found(fn(req, res) {
+        res.status(404).json({
+            "error": "Endpoint not found",
+            "path": req.path,
+            "method": req.method
+        });
+    });
+    
+    // Start server
+    server.start();
+    
+    print("API Server running at http://localhost:8080");
+    print("");
+    print("Available endpoints:");
+    print("  GET    /api/users          - List all users (supports ?limit, ?offset)");
+    print("  GET    /api/users/:id      - Get user by ID");
+    print("  POST   /api/users          - Create new user");
+    print("  PUT    /api/users/:id      - Update user");
+    print("  DELETE /api/users/:id      - Delete user");
+    print("  GET    /api/posts          - List blog posts");
+    print("");
+    print("Press Ctrl+C to stop");
+}
+
+/**
+ * Find user by ID
+ */
+fn find_user(id: i64) -> Map<string, any> {
+    let i = 0;
+    while i < users.length() {
+        if users[i]["id"] == id {
+            return users[i];
+        }
+        i = i + 1;
+    }
+    return none;
+}
+
+/**
+ * Find user index by ID
+ */
+fn find_user_index(id: i64) -> i64 {
+    let i = 0;
+    while i < users.length() {
+        if users[i]["id"] == id {
+            return i;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+/**
+ * JSON middleware - Parse JSON body
+ */
+fn json_middleware() -> fn(any, any, fn()) -> void {
+    return fn(req, res, next) {
+        // In a full implementation, parse JSON body
+        next();
+    };
+}
+
+/**
+ * CORS middleware - Add CORS headers
+ */
+fn cors_middleware() -> fn(any, any, fn()) -> void {
+    return fn(req, res, next) {
+        res.headers["Access-Control-Allow-Origin"] = "*";
+        res.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
+        res.headers["Access-Control-Allow-Headers"] = "Content-Type";
+        
+        // Handle preflight
+        if req.method == "OPTIONS" {
+            res.status(204).text("");
+            return;
+        }
+        
+        next();
+    };
+}
+
+export {
+    main
+};

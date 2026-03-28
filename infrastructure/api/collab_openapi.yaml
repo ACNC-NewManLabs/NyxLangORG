@@ -1,0 +1,80 @@
+openapi: 3.0.3
+info:
+  title: Nyx Collaboration Intelligence API
+  version: 1.0.0
+servers:
+  - url: https://collab.nyxlang.org
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /api/v1/ecosystem/insights:
+    get:
+      summary: Get global optimization insights
+      responses:
+        '200': { description: Insights list }
+  /api/v1/insights/submit:
+    post:
+      summary: Submit anonymized optimization insight
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [insight_type, pattern, recommendation, impact_score, anonymous_id]
+      responses:
+        '200': { description: Accepted }
+  /api/v1/help/solve:
+    get:
+      summary: Query known issues and recommended solutions
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Solution list }
+  /api/v1/discover/projects:
+    get:
+      summary: Discover projects and contributors by skill/tag
+      parameters:
+        - in: query
+          name: skill
+          schema: { type: string }
+        - in: query
+          name: tag
+          schema: { type: string }
+      responses:
+        '200': { description: Discovery results }
+  /api/v1/contribute:
+    post:
+      summary: Register contributor profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alias, skills, contact_hint]
+      responses:
+        '200': { description: Registered }
+  /api/v1/knowledge/publish:
+    post:
+      summary: Publish tutorial/pattern/guide resource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, title, body, tags, author_alias]
+      responses:
+        '200': { description: Published }
+  /api/v1/analytics/summary:
+    get:
+      summary: Ecosystem analytics summary
+      responses:
+        '200': { description: Analytics response }

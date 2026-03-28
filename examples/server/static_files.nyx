@@ -1,0 +1,131 @@
+/**
+ * Static Files Server Example
+ * 
+ * A server that serves static files from a directory.
+ * Demonstrates:
+ * - Static file serving
+ * - MIME type detection
+ * - Directory listing
+ * - Caching
+ * - Custom error pages
+ * 
+ * Run with: nyx run static_files.nyx
+ * 
+ * Place files in the ./public directory to serve them.
+ * 
+ * @example
+ * import examples.server.static_files;
+ * static_files.main([]);
+ */
+
+import net.http;
+
+/**
+ * Main function
+ */
+fn main(args: List<string>) {
+    print("Starting Static Files Server...");
+    print("");
+    
+    // Determine root directory
+    let root = "./public";
+    if args.length() > 0 {
+        root = args[0];
+    }
+    
+    let port = 8080;
+    if args.length() > 1 {
+        port = parse_int(args[1]);
+    }
+    
+    print("Serving files from: " + root);
+    print("Port: " + to_string(port));
+    print("");
+    
+    let server = net.HttpServer(port: port);
+    
+    // Create static handler with options
+    let static_handler = net.StaticHandler(root, {
+        "index_file": "index.html",
+        "show_listing": true,
+        "cache_max_age": 3600
+    });
+    
+    // Mount static files at /static
+    server.get("/static/*", fn(req, res) {
+        // Extract path from URL
+        let path = req.path;
+        if starts_with(path, "/static/") {
+            path = substring(path, 8, path.length());
+        }
+        
+        // Handle using static handler
+        let handler_res = net.http.static.handle(static_handler, req);
+        
+        // Copy response
+        res.status(handler_res.status_code);
+        res.headers = handler_res.headers;
+        res.body = handler_res.body;
+    });
+    
+    // Serve from root
+    server.get("/*", fn(req, res) {
+        if req.path == "/" {
+            req.path = "/index.html";
+        }
+        
+        // Remove leading slash
+        let path = req.path;
+        if path.length() > 0 and path[0] == "/" {
+            path = substring(path, 1, path.length());
+        }
+        
+        // Handle using static handler
+        let handler_res = net.http.static.handle(static_handler, req);
+        
+        // Copy response
+        res.status(handler_res.status_code);
+        res.headers = handler_res.headers;
+        res.body = handler_res.body;
+    });
+    
+    // Start server
+    server.start();
+    
+    print("Static File Server running at http://localhost:" + to_string(port));
+    print("");
+    print("Endpoints:");
+    print("  /           - Serve files from root (index.html by default)");
+    print("  /static/*   - Serve files from /static path");
+    print("");
+    print("Features:");
+    print("  - MIME type detection");
+    print("  - Directory listing (enabled)");
+    print("  - Cache-Control headers (1 hour)");
+    print("  - Range request support");
+    print("");
+    print("Press Ctrl+C to stop");
+}
+
+/**
+ * Check if string starts with prefix
+ */
+fn starts_with(s: string, prefix: string) -> bool {
+    if s.length() < prefix.length() {
+        return false;
+    }
+    
+    let i = 0;
+    while i < prefix.length() {
+        if s[i] != prefix[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    
+    return true;
+}
+
+export {
+    main
+};

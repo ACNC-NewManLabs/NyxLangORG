@@ -1,0 +1,547 @@
+// Huge Native UI Experience for Nyx Web Engine
+// Built natively, without raw HTML strings mapped manually.
+
+mod server
+mod router
+mod middleware
+mod api
+mod realtime
+mod security
+
+// --- NATIVE UI VIRTUAL DOM PRIMITIVES ---
+
+struct VNode {
+    tag: string
+    styles: Map<string, string>
+    attrs: Map<string, string>
+    children: List<VNode>
+    text: string
+}
+
+fn el(tag: string, styles: Map<string, string>, children: List<VNode>) -> VNode {
+    return VNode {
+        tag: tag
+        styles: styles
+        attrs: Map::new()
+        children: children
+        text: ""
+    }
+}
+
+fn text_node(t: string) -> VNode {
+    return VNode {
+        tag: ""
+        styles: Map::new()
+        attrs: Map::new()
+        children: List::new()
+        text: t
+    }
+}
+
+// Layout Primitives (Flex & CSS Grid)
+fn VStack(styles: Map<string, string>, children: List<VNode>) -> VNode {
+    styles.insert("display", "flex")
+    styles.insert("flex-direction", "column")
+    return el("div", styles, children)
+}
+
+fn HStack(styles: Map<string, string>, children: List<VNode>) -> VNode {
+    styles.insert("display", "flex")
+    styles.insert("flex-direction", "row")
+    return el("div", styles, children)
+}
+
+fn Grid(styles: Map<string, string>, children: List<VNode>) -> VNode {
+    styles.insert("display", "grid")
+    return el("div", styles, children)
+}
+
+// Interactive & Media Primitives
+fn Link(url: string, styles: Map<string, string>, children: List<VNode>) -> VNode {
+    let node = el("a", styles, children)
+    node.attrs.insert("href", url)
+    return node
+}
+
+fn Image(url: string, styles: Map<string, string>) -> VNode {
+    let node = el("img", styles, List::new())
+    node.attrs.insert("src", url)
+    return node
+}
+
+// Universal DOM Compiler (Nyx UI -> HTML string chunks)
+fn render_node(node: VNode) -> string {
+    if node.text != "" { return node.text }
+    
+    let style_str = ""
+    for k in node.styles.keys() { 
+        style_str = style_str + k + ":" + node.styles.get(k) + ";" 
+    }
+    
+    let attr_str = ""
+    for k in node.attrs.keys() { 
+        attr_str = attr_str + " " + k + "='" + node.attrs.get(k) + "'" 
+    }
+    
+    let html = "<" + node.tag + attr_str
+    if style_str != "" { html = html + " style='" + style_str + "'" }
+    html = html + ">"
+    
+    for child in node.children { 
+        html = html + render_node(child) 
+    }
+    
+    return html + "</" + node.tag + ">"
+}
+
+// --- MEGA COMPONENT TREE ---
+
+fn NavBar() -> VNode {
+    let nav_style = css`
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 1rem 3rem;
+        background: rgba(10, 10, 15, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        z-index: 100;
+        justify-content: space-between;
+        align-items: center;
+    `
+
+    let logo_style = css`
+        color: white;
+        font-size: 1.8rem;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        text-decoration: none;
+    `
+
+    let links_style = css`
+        gap: 2.5rem;
+        align-items: center;
+    `
+
+    let link_style = css`
+        color: rgba(255, 255, 255, 0.7);
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: color 0.2s;
+    `
+
+    let btn_style = css`
+        padding: 0.8rem 1.8rem;
+        background: white;
+        color: black;
+        border-radius: 99px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        text-decoration: none;
+        box-shadow: 0 10px 20px rgba(255,255,255,0.1);
+    `
+
+    return HStack(nav_style, [
+        Link("/", logo_style, [text_node("Nyx.")]),
+        HStack(links_style, [
+            Link("#capabilities", link_style, [text_node("Capabilities")]),
+            Link("#ecosystem", link_style, [text_node("Ecosystem")]),
+            Link("#docs", link_style, [text_node("Documentation")]),
+            Link("#download", btn_style, [text_node("Get Engine")])
+        ])
+    ])
+}
+
+fn HeroSection() -> VNode {
+    let hero_style = Map::new()
+    hero_style.insert("padding", "14rem 2rem 8rem 2rem")
+    hero_style.insert("align-items", "center")
+    hero_style.insert("text-align", "center")
+    hero_style.insert("position", "relative")
+
+    let badge_style = Map::new()
+    badge_style.insert("background", "rgba(0, 242, 255, 0.1)")
+    badge_style.insert("color", "#00f2ff")
+    badge_style.insert("padding", "0.5rem 1.2rem")
+    badge_style.insert("border-radius", "99px")
+    badge_style.insert("font-size", "0.9rem")
+    badge_style.insert("font-weight", "700")
+    badge_style.insert("margin-bottom", "2.5rem")
+    badge_style.insert("border", "1px solid rgba(0, 242, 255, 0.2)")
+
+    let h1_style = Map::new()
+    h1_style.insert("color", "white")
+    h1_style.insert("font-size", "6rem")
+    h1_style.insert("font-weight", "900")
+    h1_style.insert("line-height", "1.05")
+    h1_style.insert("letter-spacing", "-0.04em")
+    h1_style.insert("max-width", "900px")
+    h1_style.insert("margin", "0 0 2rem 0")
+
+    let grad_style = Map::new()
+    grad_style.insert("background", "linear-gradient(135deg, #00f2ff, #0066ff)")
+    grad_style.insert("-webkit-background-clip", "text")
+    grad_style.insert("-webkit-text-fill-color", "transparent")
+    grad_style.insert("display", "inline-block")
+
+    let p_style = Map::new()
+    p_style.insert("color", "rgba(255, 255, 255, 0.65)")
+    p_style.insert("font-size", "1.4rem")
+    p_style.insert("line-height", "1.6")
+    p_style.insert("max-width", "650px")
+    p_style.insert("margin", "0 0 3.5rem 0")
+
+    let btn_group = Map::new()
+    btn_group.insert("gap", "1.5rem")
+    btn_group.insert("justify-content", "center")
+
+    let primary_btn = Map::new()
+    primary_btn.insert("background", "linear-gradient(135deg, #00f2ff, #0066ff)")
+    primary_btn.insert("color", "white")
+    primary_btn.insert("padding", "1.2rem 3rem")
+    primary_btn.insert("border-radius", "99px")
+    primary_btn.insert("font-weight", "800")
+    primary_btn.insert("text-decoration", "none")
+    primary_btn.insert("font-size", "1.15rem")
+    primary_btn.insert("box-shadow", "0 15px 30px rgba(0, 102, 255, 0.3)")
+
+    let secondary_btn = Map::new()
+    secondary_btn.insert("background", "rgba(255, 255, 255, 0.05)")
+    secondary_btn.insert("color", "white")
+    secondary_btn.insert("padding", "1.2rem 3rem")
+    secondary_btn.insert("border-radius", "99px")
+    secondary_btn.insert("font-weight", "700")
+    secondary_btn.insert("text-decoration", "none")
+    secondary_btn.insert("border", "1px solid rgba(255, 255, 255, 0.15)")
+    secondary_btn.insert("font-size", "1.15rem")
+    secondary_btn.insert("backdrop-filter", "blur(10px)")
+
+    return VStack(hero_style, [
+        el("div", badge_style, [text_node("Nyx Version 1.0 Production")]),
+        el("h1", h1_style, [
+            text_node("The Ultimate "),
+            el("span", grad_style, [text_node("Native Web")]),
+            text_node(" Architecture.")
+        ]),
+        el("p", p_style, [text_node("Orchestrate massive, ultra-responsive DOM clusters natively directly in the compiler. Zero HTML overhead. Pure syntactic supremacy.")]),
+        HStack(btn_group, [
+            Link("/docs", primary_btn, [text_node("Launch Engine")]),
+            Link("/api", secondary_btn, [text_node("Terminal")])
+        ])
+    ])
+}
+
+fn FeatureCard(title: string, desc: string, icon: string) -> VNode {
+    let card_style = Map::new()
+    card_style.insert("background", "rgba(255, 255, 255, 0.02)")
+    card_style.insert("border", "1px solid rgba(255, 255, 255, 0.05)")
+    card_style.insert("border-radius", "28px")
+    card_style.insert("padding", "3rem")
+    card_style.insert("transition", "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)")
+
+    let icon_style = Map::new()
+    icon_style.insert("font-size", "3rem")
+    icon_style.insert("margin-bottom", "1.5rem")
+
+    let title_style = Map::new()
+    title_style.insert("color", "white")
+    title_style.insert("font-size", "1.6rem")
+    title_style.insert("font-weight", "800")
+    title_style.insert("margin-bottom", "1rem")
+    title_style.insert("letter-spacing", "-0.02em")
+
+    let p_style = Map::new()
+    p_style.insert("color", "rgba(255, 255, 255, 0.55)")
+    p_style.insert("font-size", "1.15rem")
+    p_style.insert("line-height", "1.6")
+
+    let card = VStack(card_style, [
+        el("div", icon_style, [text_node(icon)]),
+        el("h3", title_style, [text_node(title)]),
+        el("p", p_style, [text_node(desc)])
+    ])
+    card.attrs.insert("class", "hover-lift") // For CSS hover effect
+    return card
+}
+
+fn FeaturesSection() -> VNode {
+    let section_style = Map::new()
+    section_style.insert("padding", "8rem 2rem")
+    section_style.insert("max-width", "1300px")
+    section_style.insert("margin", "0 auto")
+
+    let header_style = Map::new()
+    header_style.insert("text-align", "center")
+    header_style.insert("margin-bottom", "5rem")
+
+    let title_style = Map::new()
+    title_style.insert("color", "white")
+    title_style.insert("font-size", "3.5rem")
+    title_style.insert("font-weight", "900")
+    title_style.insert("letter-spacing", "-0.03em")
+    title_style.insert("margin-bottom", "1.5rem")
+
+    let sub_style = Map::new()
+    sub_style.insert("color", "rgba(255, 255, 255, 0.5)")
+    sub_style.insert("font-size", "1.3rem")
+    sub_style.insert("max-width", "600px")
+    sub_style.insert("margin", "0 auto")
+
+    let grid_style = Map::new()
+    grid_style.insert("grid-template-columns", "repeat(auto-fit, minmax(380px, 1fr))")
+    grid_style.insert("gap", "2.5rem")
+
+    return VStack(section_style, [
+        VStack(header_style, [
+            el("h2", title_style, [text_node("Architectural Supremacy")]),
+            el("p", sub_style, [text_node("Everything required for a production layout seamlessly mapped out into VNodes seamlessly within the Nyx kernel.")])
+        ]),
+        Grid(grid_style, [
+            FeatureCard("Native VNodes", "Construct DOM clusters with rigorous type checking directly in the compiler loop.", "⚡️"),
+            FeatureCard("Glassmorphism", "Out-of-the-box UI primitives equipped to render complex background filters instantly.", "🪞"),
+            FeatureCard("Zero HTML", "Bypass HTML string injection completely. A safer, vastly superior method to render pages.", "🧬"),
+            FeatureCard("Advanced TCP", "REST APIs, GraphQL bindings, and middleware run in exactly zero-latency synchronization.", "🚀"),
+            FeatureCard("WebSockets", "Push continuous streams and broadcast to unlimited clients via TCP integration.", "🌐"),
+            FeatureCard("Data Binding", "Immutable and dynamic component topologies allow for maximum speed data updates.", "📊")
+        ])
+    ])
+}
+
+fn str_col(n: string, l: string) -> VNode {
+    let v_style = Map::new()
+    v_style.insert("align-items", "center")
+    v_style.insert("gap", "0.8rem")
+    
+    let num_style = Map::new()
+    num_style.insert("color", "white")
+    num_style.insert("font-size", "4.5rem")
+    num_style.insert("font-weight", "900")
+    num_style.insert("letter-spacing", "-0.05em")
+    
+    let label_style = Map::new()
+    label_style.insert("color", "#00f2ff")
+    label_style.insert("font-size", "1.1rem")
+    label_style.insert("font-weight", "700")
+    label_style.insert("letter-spacing", "0.15em")
+    label_style.insert("text-transform", "uppercase")
+    
+    return VStack(v_style, [
+        el("div", num_style, [text_node(n)]),
+        el("div", label_style, [text_node(l)])
+    ])
+}
+
+fn MetricsBanner() -> VNode {
+    let section_style = Map::new()
+    section_style.insert("padding", "5rem 2rem")
+    section_style.insert("background", "linear-gradient(90deg, rgba(0, 242, 255, 0.08) 0%, rgba(0, 102, 255, 0.08) 100%)")
+    section_style.insert("border-top", "1px solid rgba(255, 255, 255, 0.05)")
+    section_style.insert("border-bottom", "1px solid rgba(255, 255, 255, 0.05)")
+    
+    let container_style = Map::new()
+    container_style.insert("max-width", "1300px")
+    container_style.insert("margin", "0 auto")
+    container_style.insert("flex-direction", "row")
+    container_style.insert("justify-content", "space-around")
+    container_style.insert("flex-wrap", "wrap")
+    container_style.insert("gap", "4rem")
+
+    return el("div", section_style, [
+        HStack(container_style, [
+            str_col("0ms", "JIT Overhead"),
+            str_col("X", "HTML Strings"),
+            str_col("100%", "Native Engine"),
+            str_col("∞", "Scalability")
+        ])
+    ])
+}
+
+fn FullWidthCTA() -> VNode {
+    let section_style = Map::new()
+    section_style.insert("padding", "8rem 2rem")
+    section_style.insert("text-align", "center")
+    section_style.insert("margin", "6rem 0")
+    
+    let box_style = Map::new()
+    box_style.insert("max-width", "1000px")
+    box_style.insert("margin", "0 auto")
+    box_style.insert("background", "radial-gradient(circle at top, rgba(255,255,255,0.05) 0%, transparent 70%)")
+    box_style.insert("border", "1px solid rgba(255, 255, 255, 0.1)")
+    box_style.insert("border-radius", "40px")
+    box_style.insert("padding", "6rem 2rem")
+    box_style.insert("align-items", "center")
+
+    let h2_style = Map::new()
+    h2_style.insert("color", "white")
+    h2_style.insert("font-size", "3.5rem")
+    h2_style.insert("font-weight", "900")
+    h2_style.insert("letter-spacing", "-0.02em")
+    h2_style.insert("margin-bottom", "1.5rem")
+
+    let p_style = Map::new()
+    p_style.insert("color", "rgba(255, 255, 255, 0.6)")
+    p_style.insert("font-size", "1.3rem")
+    p_style.insert("margin-bottom", "3rem")
+    p_style.insert("max-width", "600px")
+
+    let btn_style = Map::new()
+    btn_style.insert("background", "white")
+    btn_style.insert("color", "black")
+    btn_style.insert("padding", "1.3rem 4rem")
+    btn_style.insert("border-radius", "99px")
+    btn_style.insert("font-weight", "800")
+    btn_style.insert("text-decoration", "none")
+    btn_style.insert("font-size", "1.2rem")
+    btn_style.insert("box-shadow", "0 20px 40px rgba(255,255,255,0.15)")
+
+    return el("div", section_style, [
+        VStack(box_style, [
+            el("h2", h2_style, [text_node("Ready to deploy?")]),
+            el("p", p_style, [text_node("Unleash the full potential of your products using the revolutionary Nyx architectural layer. Built for those who demand total control and zero bloat.")]),
+            Link("/docs?start", btn_style, [text_node("Initialize Project")])
+        ])
+    ])
+}
+
+fn Footer() -> VNode {
+    let footer_style = Map::new()
+    footer_style.insert("padding", "5rem 2rem 3rem 2rem")
+    footer_style.insert("text-align", "center")
+    footer_style.insert("border-top", "1px solid rgba(255, 255, 255, 0.05)")
+    footer_style.insert("background", "#050508")
+    
+    let content_style = Map::new()
+    content_style.insert("max-width", "1300px")
+    content_style.insert("margin", "0 auto")
+    content_style.insert("flex-direction", "column")
+    content_style.insert("align-items", "center")
+
+    let text_style = Map::new()
+    text_style.insert("color", "rgba(255, 255, 255, 0.4)")
+    text_style.insert("font-size", "0.95rem")
+    text_style.insert("margin-top", "3rem")
+
+    let logo_style = Map::new()
+    logo_style.insert("color", "white")
+    logo_style.insert("font-size", "2.5rem")
+    logo_style.insert("font-weight", "900")
+    logo_style.insert("letter-spacing", "-0.05em")
+    logo_style.insert("margin-bottom", "1rem")
+
+    let grad_style = Map::new()
+    grad_style.insert("background", "linear-gradient(135deg, #00f2ff, #0066ff)")
+    grad_style.insert("-webkit-background-clip", "text")
+    grad_style.insert("-webkit-text-fill-color", "transparent")
+    grad_style.insert("display", "inline-block")
+
+    let link_row = Map::new()
+    link_row.insert("gap", "2.5rem")
+    link_row.insert("margin", "2rem 0")
+
+    let link_style = Map::new()
+    link_style.insert("color", "rgba(255,255,255,0.6)")
+    link_style.insert("text-decoration", "none")
+    link_style.insert("font-weight", "600")
+
+    return el("footer", footer_style, [
+        VStack(content_style, [
+            el("div", logo_style, [el("span", grad_style, [text_node("Nyx.")])]),
+            HStack(link_row, [
+                Link("#1", link_style, [text_node("Twitter")]),
+                Link("#2", link_style, [text_node("GitHub")]),
+                Link("#3", link_style, [text_node("Discord")])
+            ]),
+            el("div", text_style, [text_node("© 2026 Surya Programming Language. All algorithms optimized natively.")])
+        ])
+    ])
+}
+
+// --- GLOBAL SITE COMPOSER ---
+fn App() {
+    let global_style = Map::new()
+    global_style.insert("background", "#0a0a0f")
+    global_style.insert("min-height", "100vh")
+    global_style.insert("font-family", "system-ui, -apple-system, sans-serif")
+    global_style.insert("color", "white")
+    global_style.insert("margin", "0")
+    global_style.insert("padding", "0")
+    global_style.insert("overflow-x", "hidden")
+
+    let radial_glow = Map::new()
+    radial_glow.insert("position", "absolute")
+    radial_glow.insert("top", "-30%")
+    radial_glow.insert("left", "-10%")
+    radial_glow.insert("width", "120%")
+    radial_glow.insert("height", "150%")
+    radial_glow.insert("background", "radial-gradient(circle at center, rgba(0, 102, 255, 0.12) 0%, transparent 60%)")
+    radial_glow.insert("z-index", "0")
+    radial_glow.insert("pointer-events", "none")
+
+    let content_layer = Map::new()
+    content_layer.insert("position", "relative")
+    content_layer.insert("z-index", "1")
+
+    // Construct the massive DOM tree
+    let view = VStack(global_style, [
+        el("div", radial_glow, List::new()),
+        VStack(content_layer, [
+            NavBar(),
+            HeroSection(),
+            MetricsBanner(),
+            FeaturesSection(),
+            FullWidthCTA(),
+            Footer()
+        ])
+    ])
+
+    // Inject advanced CSS interactivity and animations that VNodes map to
+    let style = `
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        body { margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; background: #0a0a0f; color: white; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: #050508; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 6px; border: 3px solid #050508; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+        .hover-lift { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .hover-lift:hover { transform: translateY(-12px); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3); border-color: rgba(0, 242, 255, 0.2) !important; background: rgba(255, 255, 255, 0.04) !important; }
+        a:hover { opacity: 0.8; }
+    </style>
+    `
+
+    let html_head = "<!DOCTYPE html><html lang='en'><head><title>Nyx Native Experience</title><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>" + style + "</head><body>"
+    let html_body = render_node(view)
+    let html_tail = "</body></html>"
+    return html_head + html_body + html_tail
+}
+
+// --- ORIGINAL STDLIB API ENDPOINTS ---
+// Leaving the actual web integration tests for routes compilation intact
+// so the CLI still verifies the dependencies
+
+fn get_user(ctx: Context) -> Response {
+    let id = ctx.params.get("id")
+    return api::ok(ctx, { "id": id, "name": "Nyx Massive Project User" })
+}
+
+fn main() {
+    let config = server::default_config()
+    config.host = "127.0.0.1"
+    config.port = 9001
+    config.workers = 4
+    config.static_dir = "./public"
+    
+    let web_server = server::new_server(config)
+    web_server.use(middleware::logging())
+    web_server.use(middleware::cors())
+    
+    let app_router = router::new_router()
+    app_router.get("/api/users/:id", get_user)
+    web_server.use_router(app_router)
+    
+    console::log("Nyx Web Module Full Stack Backend: Listening on http://" + config.host + ":" + config.port.to_string())
+    web_server.listen(config.host, config.port)
+}

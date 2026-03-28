@@ -1,0 +1,72 @@
+# Nyx AI Ecosystem: Vision & Synthetic MNIST Test
+# Verifies Conv2D, MaxPool2D, Flatten, and Autograd for Vision
+
+fn main() {
+    println("--- Nyx Vision & Autograd Test ---")
+
+    # 1. Create synthetic 28x28 grayscale image (as a batch of 1)
+    # Shape: [1, 1, 28, 28] (batch, channels, height, width)
+    let input = ml::tensor::randn([1, 1, 28, 28], false)
+    
+    # 2. Define a simple CNN
+    # Input(1x28x28) -> Conv(4 kernels, 3x3) -> MaxPool(2x2) -> Flatten -> Linear(10)
+    # Conv output: [1, 4, 26, 26]
+    # MaxPool output: [1, 4, 13, 13]
+    # Flatten output: [1, 4*13*13] = [1, 676]
+    # Linear output: [1, 10]
+    
+    let c1 = ml::nn::Conv2D(1, 4, 3, 1, 0)
+    let p1 = ml::nn::MaxPool2D(2, 2)
+    let f1 = ml::nn::Flatten()
+    let l1 = ml::nn::Linear(676, 10, "relu")
+    
+    let model = ml::nn::Sequential([c1, p1, f1, l1])
+    
+    # 3. Forward Pass
+    println("Running forward pass...")
+    let output = model.forward(input)
+    if output == null {
+        println("ERROR: forward pass failed")
+        return
+    }
+    println("Output shape: {}", output.shape)
+    println("Output data (first 5): [{}, {}, {}, {}, {}]", 
+            output.data[0], output.data[1], output.data[2], output.data[3], output.data[4])
+
+    # 4. Backward Pass (Autograd)
+    println("Running backward pass...")
+    let target = ml::tensor::zeros([1, 10])
+    target.data[3] = 1.0 # Pseudo-target: class 3
+    
+    let loss = ml::nn::cross_entropy(output, target)
+    println("Initial Loss: {}", loss.item())
+    
+    # Check if we can compute gradients
+    # We need to ensure grad objects are created
+    loss.backward()
+    
+    let w_grad = c1.weight.grad
+    if w_grad == null {
+        println("ERROR: Conv weight gradient is null!")
+    } else {
+        println("Conv weight grad size: {}", w_grad.len())
+        # Check first few grad values
+        println("First grad value: {}", w_grad[0])
+    }
+    
+    # 5. Optimization step test
+    let optimizer = ml::optim::Adam([c1, l1], 0.01, 0.9, 0.999, 1e-8)
+    optimizer.step()
+    println("Optimizer step completed.")
+    
+    # Final check: new forward pass
+    let output2 = model.forward(input)
+    let loss2 = ml::nn::cross_entropy(output2, target)
+    println("New Loss: {}", loss2.item())
+    
+    if loss2.item() < loss.item() {
+        println("\nSUCCESS: Vision convergence verified!")
+    } else {
+        println("\nNote: Loss did not decrease in 1 step (may happen with Adam/Random init), but autograd flow works.")
+    }
+}

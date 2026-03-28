@@ -1,0 +1,81 @@
+import ml;
+import std::df;
+
+# --- Helper: Fairness Metrics ---
+
+fn accuracy(y_true, y_pred) {
+    let n = y_true.len()
+    if n == 0 { return 0.0 }
+    let correct = 0
+    let i = 0
+    while i < n {
+        if y_true[i] == y_pred[i] { correct = correct + 1 }
+        i = i + 1
+    }
+    return correct * 1.0 / n
+}
+
+fn group_fairness(df, target_col, pred_col, group_col) {
+    let groups = ["A", "B"]
+    let results = {}
+    
+    let nr = df.nrows()
+    let i = 0
+    while i < groups.len() {
+        let g = groups[i]
+        let true_subset = []
+        let pred_subset = []
+        
+        let j = 0
+        while j < nr {
+            if df.col(group_col)._data[j] == g {
+                true_subset.push(df.col(target_col)._data[j])
+                pred_subset.push(df.col(pred_col)._data[j])
+            }
+            j = j + 1
+        }
+        
+        results[g] = {
+            count: true_subset.len(),
+            accuracy: accuracy(true_subset, pred_subset)
+        }
+        i = i + 1
+    }
+    return results
+}
+
+# --- Test Case ---
+
+fn test_fairness() {
+    println("--- Testing Group Fairness & Statistical Parity ---")
+    
+    # 1. Dataset with demographic skew
+    let c_group = std::df::Column("group", "str", ["A", "A", "A", "A", "A", "B", "B", "B", "B", "B"], null)
+    let c_true  = std::df::Column("label", "int", [1, 1, 1, 1, 1, 0, 0, 0, 0, 0], null)
+    let c_pred  = std::df::Column("pred",  "int", [1, 1, 1, 0, 0, 0, 0, 1, 1, 1], null)
+    
+    let df = std::df::DataFrame([c_group, c_true, c_pred], null)
+    
+    let res = group_fairness(df, "label", "pred", "group")
+    
+    println("Group A Performance:")
+    println("  Accuracy: ", res["A"].accuracy)
+    
+    println("Group B Performance:")
+    println("  Accuracy: ", res["B"].accuracy)
+    
+    let diff = res["A"].accuracy - res["B"].accuracy
+    if diff < 0 { diff = 0.0 - diff }
+    
+    println("Fairness Gap: ", diff)
+    
+    if diff > 0.3 {
+        println("FAIL: Disparate Impact / Significant Fairness Gap detected!")
+    } else {
+        println("SUCCESS: Model performance is relatively fair across groups")
+    }
+}
+
+fn main() {
+    test_fairness()
+}

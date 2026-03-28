@@ -1,0 +1,44 @@
+# Nyx Graph Neural Network (GNN) Library (Area 76)
+# Support for Graph Convolutional Networks (GCN) and Node/Edge learning
+
+fn GCNLayer(in_features, out_features) {
+    return {
+        _linear: ml::nn::Linear(in_features, out_features),
+        
+        # A @ X @ W where A is the adjacency matrix
+        forward: fn(self, adj, x_features) {
+            println("[GNN] Running Graph Convolution: A @ X @ W...")
+            # 1. Linear projection: X @ W (via Linear layer)
+            let projected = self._linear.forward(x_features)
+            # 2. Neighborhood aggregation: A @ Projection
+            # This requires sparse matrix multiplication in production
+            return ml::math::matmul(adj, projected)
+        }
+    }
+}
+
+fn NodeEmbedder(num_nodes, embedding_dim) {
+    return {
+        _embeddings: ml::tensor::randn([num_nodes, embedding_dim], false),
+        
+        get_embeddings: fn(self) {
+            return self._embeddings
+        }
+    }
+}
+
+# --- High-level GNN Model ---
+
+fn GNN(node_dim, hidden_dim, out_dim) {
+    return {
+        gcn1: GCNLayer(node_dim, hidden_dim),
+        gcn2: GCNLayer(hidden_dim, out_dim),
+        
+        forward: fn(self, adj, x) {
+            let h = self.gcn1.forward(adj, x)
+            h = ml::nn::relu(h)
+            h = self.gcn2.forward(adj, h)
+            return h
+        }
+    }
+}

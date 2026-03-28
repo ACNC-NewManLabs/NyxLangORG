@@ -1,0 +1,19 @@
+{
+  "engines": [
+    {
+      "name": "net",
+      "path": "stdlib/net",
+      "type": "library"
+    },
+    {
+      "name": "web",
+      "path": "stdlib/web",
+      "type": "library"
+    },
+    {
+      "name": "ui_engine",
+      "path": "engines/ui_engine",
+      "type": "runtime"
+    }
+  ]
+}

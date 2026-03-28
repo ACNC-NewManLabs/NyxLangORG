@@ -1,0 +1,124 @@
+# Nyx Dataframe Engine: ML Bridge
+# Zero-copy Tensor integration and feature pipelines.
+import ml.tensor;
+
+# to_tensor is already a method on DataFrame.
+# This module provides the higher-level FeaturePipeline.
+
+fn FeaturePipeline(steps) {
+    # steps: list of transform functions fn(df) -> df
+    # The last step should be an fn(df) -> Tensor
+    if steps == null { steps = [] }
+    return {
+        _steps: steps,
+
+        add: fn(self, step_fn) {
+            let new_steps = []
+            let i = 0
+            while i < self._steps.len() { new_steps.push(self._steps[i])  i = i + 1 }
+            new_steps.push(step_fn)
+            return FeaturePipeline(new_steps)
+        },
+
+        fit_transform: fn(self, df) {
+            let current = df
+            let n = self._steps.len()
+            let i = 0
+            while i < n - 1 {
+                current = self._steps[i](current)
+                i = i + 1
+            }
+            # Last step: convert to Tensor
+            if n > 0 {
+                return self._steps[n - 1](current)
+            }
+            return current
+        }
+    }
+}
+
+# Convenience: select float columns and produce a 2D Tensor
+fn to_tensor(df, feature_cols) {
+    if feature_cols == null { feature_cols = df.col_names() }
+    let nr = df.nrows()
+    let nc = feature_cols.len()
+    # Flatten column-major -> row-major for Tensor
+    let flat = []
+    let r = 0
+    while r < nr {
+        let c = 0
+        while c < nc {
+            let col_obj = df.col(feature_cols[c])
+            if col_obj != null {
+                let v = col_obj._data[r]
+                if v == null { flat.push(0.0) } else { flat.push(v * 1.0) }
+            } else {
+                flat.push(0.0)
+            }
+            c = c + 1
+        }
+        r = r + 1
+    }
+    return ml::tensor::Tensor(flat, [nr, nc], false, null)
+}
+
+fn df_to_features(df, col_names) {
+    return to_tensor(df, col_names)
+}
+
+fn df_from_predictions(predictions, col_name) {
+    if col_name == null { col_name = "prediction" }
+    let col_obj = Column(col_name, "float", predictions, null)
+    return DataFrame([col_obj], null)
+}
+
+# Convenience: train/test split by row index
+fn train_test_split(df, test_ratio) {
+    if test_ratio == null { test_ratio = 0.2 }
+    let nr = df.nrows()
+    let split_idx = nr - (nr * test_ratio * 1)
+    let split_int = split_idx * 1
+    let train = df.slice(0, split_int)
+    let test  = df.slice(split_int, nr - split_int)
+    return { train: train, test: test }
+}
+
+# ── Phase 6: Extended ML Bridge ──────────────────────────────────────────────
+
+# from_tensor: convert a Nyx Tensor object back to a DataFrame
+fn from_tensor(tensor, col_names) {
+    return std::df::from_tensor(tensor, col_names)
+}
+
+# predict_batch: apply a model closure to each row's feature vector and return predictions
+fn predict_batch(df, feature_cols, model_fn) {
+    if feature_cols == null { feature_cols = df.col_names() }
+    let nr = df.nrows()
+    let preds = []
+    let r = 0
+    while r < nr {
+        let row_vec = []
+        let c = 0
+        while c < feature_cols.len() {
+            let col_obj = df.col(feature_cols[c])
+            if col_obj != null { row_vec.push(col_obj._data[r]) } else { row_vec.push(0.0) }
+            c = c + 1
+        }
+        let pred = model_fn(row_vec)
+        preds.push(pred)
+        r = r + 1
+    }
+    return df_from_predictions(preds, "prediction")
+}
+
+# export_arrow_ipc: serialize DataFrame to Arrow IPC bytes for Python interop
+fn export_arrow_ipc(df) {
+    return std::df::export_arrow_ipc(df)
+}
+
+# sandboxed_eval: safely evaluate a simple expression string against a column
+fn sandboxed_eval(df, col_name, expr_str) {
+    let c = df.col(col_name)
+    if c == null { return null }
+    return std::df::sandboxed_eval(expr_str, c._data, col_name)
+}

@@ -1,0 +1,5 @@
+use ml::nn;
+
+fn create(config) {
+    return ml::nn::Sequential([]);
+}

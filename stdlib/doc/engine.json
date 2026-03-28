@@ -1,0 +1,8 @@
+{
+  "name": "doc",
+  "modules": [
+    "./pdf.nyx",
+    "./docx.nyx",
+    "./md.nyx"
+  ]
+}

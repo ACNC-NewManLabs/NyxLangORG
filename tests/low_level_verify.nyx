@@ -1,0 +1,52 @@
+// Nyx Low-Level Verification Script
+// Tests bitwise operators, memory allocation, and hypercalls.
+
+fn main() {
+    println("--- Nyx Low-Level Verification ---");
+
+    // 1. Bitwise Operators
+    let a = 0b1010; // 10
+    let b = 0b1100; // 12
+    
+    println("Bitwise AND: {} & {} = {}", a, b, a & b);   // 0b1000 (8)
+    println("Bitwise OR:  {} | {} = {}", a, b, a | b);   // 0b1110 (14)
+    println("Bitwise XOR: {} ^ {} = {}", a, b, a ^ b);   // 0b0110 (6)
+    println("Bitwise NOT: ~{} = {}", a, ~a);             // -11 (2's complement of 10)
+    println("Shift Left:  {} << 1 = {}", a, a << 1);     // 20
+    println("Shift Right: {} >> 1 = {}", a, a >> 1);     // 5
+
+    // 2. Compound Assignment
+    var c = 10;
+    c &= 8;
+    println("Compound AND: c &= 8 -> {}", c); // 8
+    c |= 2;
+    println("Compound OR:  c |= 2 -> {}", c); // 10
+
+    // 3. Memory Allocation and Manipulation
+    let buf = std::mem::alloc(64);
+    println("Allocated buffer: {}", buf);
+    
+    std::mem::poke(buf, 0, 0xAA);
+    std::mem::poke(buf, 1, 0xBB);
+    std::mem::poke(buf, 2, 0xCC);
+    
+    let p0 = std::mem::peek(buf, 0);
+    let p1 = std::mem::peek(buf, 1);
+    let p2 = std::mem::peek(buf, 2);
+    println("Memory Peek: 0x{:X}, 0x{:X}, 0x{:X}", p0, p1, p2);
+
+    // 4. Memory Copy
+    let buf2 = std::mem::alloc(64);
+    std::mem::copy(buf, 0, buf2, 10, 3);
+    let cp0 = std::mem::peek(buf2, 10);
+    let cp1 = std::mem::peek(buf2, 11);
+    let cp2 = std::mem::peek(buf2, 12);
+    println("Memory Copy Verify: 0x{:X}, 0x{:X}, 0x{:X}", cp0, cp1, cp2);
+
+    // 5. Hypercalls
+    println("Triggering emulated hypercall...");
+    let res = std::hypervisor::call(3, 1, 0, 0); // GetInfo(Version)
+    println("Hypercall result: {}", res);
+
+    println("Verification complete.");
+}

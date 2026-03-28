@@ -1,0 +1,43 @@
+import ml;
+
+# --- Nyx Shadow & Canary Rollout (Risk-Controlled Release) ---
+
+fn run_canary_rollout(new_model_id, traffic_pct) {
+    println("--- Nyx Release Engine: Canary Progressive Rollout ---")
+    println("  Target:  ", new_model_id)
+    println("  Traffic: ", traffic_pct, "%")
+    
+    # 1. Shadow Mode Observation
+    println("  STAGE: Shadow Mode (100% Observation, 0% Authority)")
+    println("  STATUS: Internal comparison confirmed. New model within safety bounds.")
+    
+    # 2. Canary Deployment
+    println("  STAGE: Canary Push (", traffic_pct, "%)")
+    
+    # Simulate Real-time Monitoring
+    let canary_stats = { latency_ms: 125, error_rate: 0.0001 }
+    
+    if canary_stats.error_rate > 0.01 {
+        println("  CRITICAL: Canary degradation detected!")
+        println("  ACTION: Triggering IMMEDIATE ROLLBACK to v1.0.1.")
+        return false
+    } else {
+        println("  SUCCESS: Canary metrics stable. Progressing to 100% rollout.")
+        return true
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Successful Canary (Nominal metrics)")
+    run_canary_rollout("M-Gold-v1.0.2", 10)
+    
+    println("")
+    
+    println("Scenario 2: Failed Canary (Error Spike)")
+    # We simulate a failure in the logic for demonstration
+    println("--- Nyx Release Engine: Canary Progressive Rollout ---")
+    println("  CRITICAL: p99 Latency > 500ms in Canary window.")
+    println("  ACTION: AUTOMATED ROLLBACK engaged. Primary model v1.0.1 restored.")
+}

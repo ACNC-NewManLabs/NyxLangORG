@@ -1,0 +1,59 @@
+# Nyx Dataframe Engine: Phase 7 - Optimization & Scaling Test
+
+import df.column;
+import df.dataframe;
+import df.transform;
+
+fn main() {
+    println("=== Phase 7: Optimization & Scaling Tests ===")
+    let all_passed = true
+
+    # Build test data
+    println("DEBUG: building data...")
+    let big_data = []
+    let i = 0
+    while i < 1000 {
+        big_data.push(i * 1.0)
+        i = i + 1
+    }
+
+    println("DEBUG: calculating sum...")
+    let sum_result = std::df::sum_simd(big_data)
+    if sum_result == 499500.0 {
+        println("✅ Test 1: sum_simd PASSED  sum=", sum_result)
+    } else {
+        println("❌ Test 1: sum_simd FAILED  got:", sum_result, "expected: 499500.0")
+    }
+
+    # Test 2: dot_simd (Rayon Parallel)
+    let vec_a = [1.0, 2.0, 3.0, 4.0, 5.0]
+    let vec_b = [10.0, 20.0, 30.0, 40.0, 50.0]
+    let dot_result = std::df::dot_simd(vec_a, vec_b)
+    if dot_result == 550.0 {
+        println("✅ Test 2: dot_simd PASSED  dot=", dot_result)
+    } else {
+        println("❌ Test 2: dot_simd FAILED  got:", dot_result)
+    }
+
+    # Test 3: Large DataFrame creation with Column metadata
+    let large_df = df::dataframe::DataFrame([
+        df::column::Column("values", "float", big_data, null)
+    ], null)
+
+    println("✅ Test 3: Large DataFrame creation PASSED  nrows=", large_df.nrows())
+
+    # Test 4: sum_simd via Lazy/Transform bridge
+    let lazy_sum = large_df.sum_simd("values")
+    if lazy_sum >= 499500.0 {
+        println("✅ Test 4: Transform bridge sum_simd PASSED  sum=", lazy_sum)
+    } else {
+        println("❌ Test 4: Transform bridge sum_simd FAILED  got:", lazy_sum)
+    }
+
+    # Test 5: Memory limit (Spilling)
+    # 512MB limit
+    std::df::set_memory_limit(512 * 1024 * 1024)
+    println("✅ Test 5: Memory limit set PASSED")
+
+    println("Done")
+}

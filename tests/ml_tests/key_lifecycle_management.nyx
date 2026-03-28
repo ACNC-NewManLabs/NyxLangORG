@@ -1,0 +1,55 @@
+import ml;
+
+# --- Nyx Key Lifecycle Management (Cryptographic Maturity) ---
+
+let key_repo = {
+    release_v1: { key_id: "K-001", expiration: 1735689600, status: "ACTIVE" },
+    release_v2: { key_id: "K-002", expiration: 1743465600, status: "ACTIVE" }
+}
+
+fn rotate_keys(key_id) {
+    println("--- Nyx Security Engine: Rotating Release Keys ---")
+    let new_key_id = "K-NEW-" + std::time::now_nanos()
+    println("  ROTATED: ", key_id, " -> ", new_key_id)
+    return new_key_id
+}
+
+fn revoke_key(key_id, reason) {
+    println("--- Nyx Security Engine: Revoking Compromised Key ---")
+    println("  REVOKED: ", key_id)
+    println("  REASON:  ", reason)
+    # Mark as revoked (simulate)
+    return true
+}
+
+fn verify_attestation(binary_hash, signer_id) {
+    println("--- Nyx Auditor: Verifying Build Attestation ---")
+    println("  Binary Hash: ", binary_hash)
+    println("  Signer ID:   ", signer_id)
+    
+    # Simulate verification against trusted registry
+    if signer_id == "NYX_BUILD_BOT_V1" {
+        println("  SUCCESS: Attestation verified. Build is authentic.")
+        return true
+    } else {
+        println("  FAILURE: Unauthorized signer detected!")
+        return false
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Automated Key Rotation (90-day cycle)")
+    rotate_keys("K-001")
+    
+    println("")
+    
+    println("Scenario 2: Emergency Revocation (ADVERSARIAL_INCIDENT)")
+    revoke_key("K-001", "Detected high-Epsilon compromise")
+    
+    println("")
+    
+    println("Scenario 3: Authorized Build Attestation")
+    verify_attestation("[a1, b2, c3, ...]", "NYX_BUILD_BOT_V1")
+}

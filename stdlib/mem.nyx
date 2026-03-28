@@ -1,0 +1,54 @@
+// Nyx Memory Management [Layer 2]
+// Provides raw memory allocation and manipulation primitives.
+
+export fn alloc(size: int) {
+    return std::mem::alloc(size);
+}
+
+export fn peek(buf, offset: int) -> int {
+    return std::mem::peek(buf, offset);
+}
+
+export fn poke(buf, offset: int, val: int) {
+    std::mem::poke(buf, offset, val);
+}
+
+export fn peek16(ptr: *u16) -> int {
+    return std::mem::peek16(ptr);
+}
+
+export fn peek32(ptr: *u32) -> int {
+    return std::mem::peek32(ptr);
+}
+
+export fn peek64(ptr: *u64) -> int {
+    return std::mem::peek64(ptr);
+}
+
+export fn poke16(ptr: *u16, val: int) {
+    std::mem::poke16(ptr, val);
+}
+
+export fn poke32(ptr: *u32, val: int) {
+    std::mem::poke32(ptr, val);
+}
+
+export fn poke64(ptr: *u64, val: int) {
+    std::mem::poke64(ptr, val);
+}
+
+export fn copy(src, src_off: int, dst, dst_off: int, len: int) {
+    std::mem::copy(src, src_off, dst, dst_off, len);
+}
+
+export fn addr_of(val) -> *u8 {
+    return std::mem::addr_of(val);
+}
+
+export fn from_addr(addr: int) -> *u8 {
+    return std::mem::from_addr(addr);
+}
+
+export fn size_of(ty: str) -> int {
+    return std::mem::size_of(ty);
+}

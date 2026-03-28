@@ -1,0 +1,317 @@
+// Nyx Web Middleware
+// HTTP middleware system for request/response processing
+
+// Middleware is a function that processes requests
+type Middleware = fn(Context) -> Context
+
+// Middleware chain
+struct MiddlewareChain {
+    middlewares: List<Middleware>
+}
+
+// Create a new middleware chain
+fn new_middleware_chain() -> MiddlewareChain {
+    return MiddlewareChain {
+        middlewares: List::new()
+    }
+}
+
+// Add middleware to chain
+fn add(chain: MiddlewareChain, middleware: Middleware) {
+    chain.middlewares.push(middleware)
+}
+
+// Logging middleware - logs all requests
+fn logging() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let timestamp = time::now()
+        let log_msg = "[{}] {} {} from {}"
+            .format(timestamp, ctx.request.method, ctx.request.path, ctx.request.remote_addr)
+        
+        console::log(log_msg)
+        
+        // Add timing
+        let start_time = time::now()
+        ctx.state["start_time"] = start_time.to_string()
+        
+        return ctx
+    }
+}
+
+// CORS middleware - handles cross-origin requests
+fn cors() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        ctx.response.headers.insert("Access-Control-Allow-Origin", "*")
+        ctx.response.headers.insert("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        ctx.response.headers.insert("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        
+        // Handle preflight
+        if ctx.request.method == "OPTIONS" {
+            ctx.response.status_code = 204
+        }
+        
+        return ctx
+    }
+}
+
+// Compression middleware - compresses responses
+fn compression() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let accept_encoding = get_header(ctx, "Accept-Encoding")
+        
+        match accept_encoding {
+            Some(encoding) => {
+                if encoding.contains("gzip") {
+                    ctx.response.headers.insert("Content-Encoding", "gzip")
+                    // Compress body
+                    ctx.response.body = compress::gzip(ctx.response.body)
+                } else if encoding.contains("deflate") {
+                    ctx.response.headers.insert("Content-Encoding", "deflate")
+                    ctx.response.body = compress::deflate(ctx.response.body)
+                }
+            }
+            None => {}
+        }
+        
+        return ctx
+    }
+}
+
+// Security headers middleware
+fn security_headers() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        ctx.response.headers.insert("X-Content-Type-Options", "nosniff")
+        ctx.response.headers.insert("X-Frame-Options", "DENY")
+        ctx.response.headers.insert("X-XSS-Protection", "1; mode=block")
+        ctx.response.headers.insert("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        
+        return ctx
+    }
+}
+
+// Rate limiting middleware
+fn rate_limit(requests_per_minute: u32) -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let key = "rate_limit:" + ctx.request.remote_addr
+        let current = cache::get(key).unwrap_or(0)
+        
+        if current >= requests_per_minute {
+            ctx.response.status_code = 429
+            ctx.response.headers.insert("Retry-After", "60")
+            return error(ctx, "Rate limit exceeded", 429)
+        }
+        
+        cache::set(key, current + 1, 60)  // 60 seconds TTL
+        
+        return ctx
+    }
+}
+
+// Body parser middleware - parses request body
+fn body_parser() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let content_type = get_header(ctx, "Content-Type")
+        
+        match content_type {
+            Some(ct) => {
+                if ct.contains("application/json") {
+                    let body_str = ctx.request.body.to_string()
+                    ctx.state["parsed_body"] = json::parse(body_str)
+                } else if ct.contains("application/x-www-form-urlencoded") {
+                    let body_str = ctx.request.body.to_string()
+                    ctx.state["form_data"] = parse_form_data(body_str)
+                }
+            }
+            None => {}
+        }
+        
+        return ctx
+    }
+}
+
+// Session middleware - manages sessions
+fn session() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let session_id = get_cookie(ctx, "nyx_session")
+        
+        match session_id {
+            Some(id) => {
+                // Load existing session
+                let session_data = session_store::get(id)
+                ctx.session = session_data
+            }
+            None => {
+                // Create new session
+                let new_id = generate_session_id()
+                ctx.session.id = new_id
+                set_cookie(ctx, "nyx_session", new_id, 86400)  // 24 hours
+            }
+        }
+        
+        return ctx
+    }
+}
+
+// Static file serving middleware
+fn static_files(root: string) -> Middleware {
+    return fn(ctx: Context) -> Context {
+        if !ctx.request.path.starts_with("/static/") {
+            return ctx
+        }
+        
+        let file_path = root + ctx.request.path.substring(8)  // Remove /static/
+        
+        if filesystem::exists(file_path) {
+            let content = filesystem::read(file_path)
+            let mime_type = get_mime_type(file_path)
+            
+            ctx.response.status_code = 200
+            ctx.response.headers.insert("Content-Type", mime_type)
+            ctx.response.body = content
+        } else {
+            ctx.response.status_code = 404
+        }
+        
+        return ctx
+    }
+}
+
+// JWT authentication middleware
+fn jwt_auth(secret: string) -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let auth_header = get_header(ctx, "Authorization")
+        
+        match auth_header {
+            Some(header) => {
+                if header.starts_with("Bearer ") {
+                    let token = header.substring(7)
+                    let claims = jwt::verify(token, secret)
+                    
+                    match claims {
+                        Some(c) => {
+                            ctx.state["user"] = c.subject
+                            ctx.state["claims"] = c
+                        }
+                        None => {
+                            return error(ctx, "Invalid token", 401)
+                        }
+                    }
+                } else {
+                    return error(ctx, "Invalid authorization header", 401)
+                }
+            }
+            None => {
+                return error(ctx, "Authorization required", 401)
+            }
+        }
+        
+        return ctx
+    }
+}
+
+// Basic authentication middleware
+fn basic_auth() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let auth_header = get_header(ctx, "Authorization")
+        
+        match auth_header {
+            Some(header) => {
+                if header.starts_with("Basic ") {
+                    let credentials = decode_base64(header.substring(6))
+                    let parts = credentials.split(":")
+                    
+                    let username = parts[0]
+                    let password = parts[1]
+                    
+                    // Validate credentials
+                    if validate_credentials(username, password) {
+                        ctx.state["user"] = username
+                        return ctx
+                    }
+                }
+            }
+            None => {}
+        }
+        
+        // Return 401
+        ctx.response.status_code = 401
+        ctx.response.headers.insert("WWW-Authenticate", "Basic realm=\"Nyx Web\"")
+        
+        return ctx
+    }
+}
+
+// Helper function to parse form data
+fn parse_form_data(body: string) -> Map<string, string> {
+    let result = Map::new()
+    let pairs = body.split("&")
+    
+    for pair in pairs {
+        let kv = pair.split("=")
+        let key = url_decode(kv[0])
+        let value = url_decode(kv[1])
+        result.insert(key, value)
+    }
+    
+    return result
+}
+
+// Helper function to get cookie
+fn get_cookie(ctx: Context, name: string) -> Option<string> {
+    return ctx.request.cookies.get(name)
+}
+
+// Helper function to set cookie
+fn set_cookie(ctx: Context, name: string, value: string, max_age: u32) {
+    let cookie = "{}={}; Max-Age={}; Path=/"
+        .format(name, value, max_age)
+    ctx.response.headers.insert("Set-Cookie", cookie)
+}
+
+// Helper function to get MIME type
+fn get_mime_type(path: string) -> string {
+    let ext = path.split(".").last()
+    
+    match ext {
+        "html" => return "text/html"
+        "css" => return "text/css"
+        "js" => return "application/javascript"
+        "json" => return "application/json"
+        "png" => return "image/png"
+        "jpg" => return "image/jpeg"
+        "gif" => return "image/gif"
+        "svg" => return "image/svg+xml"
+        "ico" => return "image/x-icon"
+        "woff" => return "font/woff"
+        "woff2" => return "font/woff2"
+        "ttf" => return "font/ttf"
+        "eot" => return "application/vnd.ms-fontobject"
+        _ => return "application/octet-stream"
+    }
+}
+
+// Execute middleware chain
+fn execute_chain(chain: MiddlewareChain, ctx: Context) -> Context {
+    let current = ctx
+    
+    for middleware in chain.middlewares {
+        current = middleware(current)
+    }
+    
+    return current
+}
+
+export Middleware
+export MiddlewareChain
+export new_middleware_chain
+export logging
+export cors
+export compression
+export security_headers
+export rate_limit
+export body_parser
+export session
+export static_files
+export jwt_auth
+export basic_auth
+

@@ -1,0 +1,17 @@
+# Minimal Bare-Metal Nyx OS
+
+fn main() {
+    # The VGA text buffer is at physical address 0xB8000
+    let vga_buffer = 0xB8000
+
+    # Write 'O' in white-on-blue
+    std::kernel::memory::write_byte(vga_buffer, 0x4F)       # 'O'
+    std::kernel::memory::write_byte(vga_buffer + 1, 0x1F)   # White text(F), Blue background(1)
+
+    # Write 'S'
+    std::kernel::memory::write_byte(vga_buffer + 2, 0x53)   # 'S'
+    std::kernel::memory::write_byte(vga_buffer + 3, 0x1F)
+
+    # Halt loop
+    while true {}
+}

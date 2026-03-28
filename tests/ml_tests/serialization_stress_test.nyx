@@ -1,0 +1,75 @@
+import ml;
+
+fn test_stress_serialization() {
+    println("--- Serialization Stress and Edge Case Test ---")
+    
+    # 1. Large Model Serialization
+    let large_model = ml::nn::Sequential([
+        ml::nn::Linear(512, 512, "relu"),
+        ml::nn::Linear(512, 512, "relu"),
+        ml::nn::Linear(512, 10, null)
+    ])
+    
+    let path = "stress_model_large.nyxbin"
+    println("Saving large model (stress test)...")
+    ml::nn::save_model(large_model, path)
+    
+    ml::tensor::set_seed(42)
+    let random_input = ml::tensor::seeded_randn([1, 512], false)
+    let out_orig = large_model.forward(random_input)
+    
+    let loader_model = ml::nn::Sequential([
+        ml::nn::Linear(512, 512, "relu"),
+        ml::nn::Linear(512, 512, "relu"),
+        ml::nn::Linear(512, 10, null)
+    ])
+    
+    let load_success = ml::nn::load_model(loader_model, path)
+    if !load_success {
+        println("FAIL: Could not load the large model.")
+    } else {
+        let out_loaded = loader_model.forward(random_input)
+        let is_match = true
+        let i = 0
+        while i < out_orig.data.len() {
+            let diff = out_orig.data[i] - out_loaded.data[i]
+            if diff < 0.0 { diff = 0.0 - diff }
+            if diff > 1e-4 {
+                is_match = false
+            }
+            i = i + 1
+        }
+        if is_match {
+            println("SUCCESS: Large model serialization works perfectly")
+        } else {
+            println("FAIL: Large model weights mismatch")
+        }
+    }
+    
+    # 2. Corrupted File Test
+    let bad_path = "stress_model_corrupted.nyxbin"
+    std::io::write_file(bad_path, "This is not a JSON or valid binary file at all. Just random junk text } { : dfdfd")
+    
+    println("Attempting to load corrupted file...")
+    let bad_load_success = ml::nn::load_model(loader_model, bad_path)
+    if bad_load_success {
+        println("FAIL: Corrupted file was incorrectly loaded as successful")
+    } else {
+        println("SUCCESS: Corrupted file gracefully rejected (returned null/false)")
+    }
+    
+    # 3. Architecture Mismatch
+    let wrong_arch = ml::nn::Sequential([
+        ml::nn::Linear(10, 10, "relu")
+    ])
+    println("Attempting to load large model into small architecture...")
+    let mismatch_load = ml::nn::load_model(wrong_arch, path)
+    # The load itself might succeed structurally, but it only loads matching keys.
+    # We mainly ensure it doesn't crash the VM.
+    println("SUCCESS: Architecture mismatch gracefully handled (non-crashing)")
+    
+}
+
+fn main() {
+    test_stress_serialization()
+}

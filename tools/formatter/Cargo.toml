@@ -1,0 +1,10 @@
+[package]
+name = "nyx_formatter"
+version = "1.0.0"
+edition = "2021"
+description = "Nyx source code formatter — canonical style for .nyx files"
+
+[dependencies]
+clap    = { version = "4.5", features = ["derive"] }
+colored = "2.1"
+nyx     = { path = "../../" }

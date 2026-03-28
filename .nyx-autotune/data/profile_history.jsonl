@@ -1,0 +1,1 @@
+{"generated_at":"2026-03-09T06:31:58.779129484+00:00","command":["cargo","test","-q"],"exit_code":0,"wall_time_ms":468,"cpu_time_seconds":0.2,"peak_rss_kb":33224,"peak_threads":33,"io_read_bytes":0,"io_write_bytes":40960}

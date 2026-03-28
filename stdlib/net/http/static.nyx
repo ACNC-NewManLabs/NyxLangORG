@@ -1,0 +1,548 @@
+/**
+ * Static File Server
+ * 
+ * Provides static file serving with:
+ * - MIME type detection
+ * - Directory listing (optional)
+ * - Caching headers
+ * - Range requests support
+ * 
+ * @module http::static
+ */
+
+import http.request;
+import http.response;
+
+/**
+ * Static file handler configuration
+ */
+type StaticHandler = {
+    root: string,
+    index_file: string,
+    show_listing: bool,
+    cache_max_age: i64,
+    default_content_type: string,
+    mime_types: Map<string, string>
+};
+
+/**
+ * File info for directory listings
+ */
+type FileInfo = {
+    name: string,
+    path: string,
+    is_directory: bool,
+    size: i64,
+    modified: string
+};
+
+/**
+ * MIME type mappings
+ */
+let default_mime_types: Map<string, string> = {
+    // Text
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".txt": "text/plain",
+    ".css": "text/css",
+    ".scss": "text/x-scss",
+    ".sass": "text/x-sass",
+    ".less": "text/x-less",
+    ".md": "text/markdown",
+    ".json": "application/json",
+    ".xml": "application/xml",
+    ".csv": "text/csv",
+    
+    // JavaScript
+    ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".ts": "application/typescript",
+    ".jsx": "text/jsx",
+    ".tsx": "text/tsx",
+    
+    // Images
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    
+    // Audio
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    
+    // Video
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".avi": "video/x-msvideo",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    
+    // Fonts
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".eot": "application/vnd.ms-fontobject",
+    
+    // Archives
+    ".zip": "application/zip",
+    ".tar": "application/x-tar",
+    ".gz": "application/gzip",
+    ".7z": "application/x-7z-compressed",
+    ".rar": "application/x-rar-compressed",
+    
+    // Documents
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    
+    // Other
+    ".wasm": "application/wasm",
+    ".wasm": "application/wasm",
+    ".webmanifest": "application/manifest+json",
+    ".svgz": "image/svg+xml"
+};
+
+/**
+ * Create a new static file handler
+ * 
+ * @param root - Root directory to serve files from
+ * @param options - Additional options
+ * @returns A new StaticHandler instance
+ */
+fn StaticHandler(root: string, options: Map<string, any> = {}) -> StaticHandler {
+    return StaticHandler {
+        root: root,
+        index_file: options["index_file"] ?? "index.html",
+        show_listing: options["show_listing"] ?? false,
+        cache_max_age: options["cache_max_age"] ?? 3600,
+        default_content_type: options["default_content_type"] ?? "application/octet-stream",
+        mime_types: options["mime_types"] ?? default_mime_types
+    };
+}
+
+/**
+ * Get MIME type for a file path
+ * 
+ * @param handler - Static handler
+ * @param path - File path
+ * @returns MIME type string
+ */
+fn get_mime_type(handler: StaticHandler, path: string) -> string {
+    // Find the last dot
+    let last_dot = -1;
+    let i = 0;
+    while i < path.length() {
+        if path[i] == "." {
+            last_dot = i;
+        }
+        i = i + 1;
+    }
+    
+    if last_dot >= 0 {
+        let ext = substring(path, last_dot, path.length());
+        if ext in handler.mime_types {
+            return handler.mime_types[ext];
+        }
+    }
+    
+    return handler.default_content_type;
+}
+
+/**
+ * Build full file path from request path
+ * 
+ * @param handler - Static handler
+ * @param request_path - Request path
+ * @returns Full file system path
+ */
+fn resolve_path(handler: StaticHandler, request_path: string) -> string {
+    // Remove leading slash and normalize
+    let clean_path = request_path;
+    
+    if request_path.length() > 0 and request_path[0] == "/" {
+        clean_path = substring(request_path, 1, request_path.length());
+    }
+    
+    // Prevent directory traversal
+    if contains(clean_path, "..") {
+        return "";
+    }
+    
+    // Combine with root
+    return handler.root + "/" + clean_path;
+}
+
+/**
+ * Generate directory listing HTML
+ * 
+ * @param handler - Static handler
+ * @param path - Current path
+ * @param files - List of files in directory
+ * @returns HTML string
+ */
+fn generate_directory_listing(handler: StaticHandler, path: string, files: List<FileInfo>) -> string {
+    let html = "<!DOCTYPE html>\n";
+    html = html + "<html>\n<head>\n";
+    html = html + "  <meta charset=\"utf-8\">\n";
+    html = html + "  <title>Index of " + path + "</title>\n";
+    html = html + "  <style>\n";
+    html = html + "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 50px auto; padding: 0 20px; }\n";
+    html = html + "    h1 { color: #333; }\n";
+    html = html + "    table { width: 100%; border-collapse: collapse; }\n";
+    html = html + "    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }\n";
+    html = html + "    th { background: #f5f5f5; }\n";
+    html = html + "    a { color: #0066cc; text-decoration: none; }\n";
+    html = html + "    a:hover { text-decoration: underline; }\n";
+    html = html + "  </style>\n";
+    html = html + "</head>\n<body>\n";
+    html = html + "  <h1>Index of " + path + "</h1>\n";
+    html = html + "  <table>\n";
+    html = html + "    <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>\n";
+    html = html + "    <tbody>\n";
+    
+    // Add parent directory link
+    if path != "/" {
+        html = html + "      <tr><td><a href=\"../\">../</a></td><td>-</td><td>-</td></tr>\n";
+    }
+    
+    // Add files
+    let i = 0;
+    while i < files.length() {
+        let file = files[i];
+        let name = file.name;
+        if file.is_directory {
+            name = name + "/";
+        }
+        
+        let size_str = "-";
+        if not file.is_directory {
+            size_str = format_file_size(file.size);
+        }
+        
+        html = html + "      <tr>";
+        html = html + "<td><a href=\"" + name + "\">" + name + "</a></td>";
+        html = html + "<td>" + size_str + "</td>";
+        html = html + "<td>" + file.modified + "</td>";
+        html = html + "</tr>\n";
+        
+        i = i + 1;
+    }
+    
+    html = html + "    </tbody>\n";
+    html = html + "  </table>\n";
+    html = html + "</body>\n</html>";
+    
+    return html;
+}
+
+/**
+ * Format file size for display
+ * 
+ * @param bytes - File size in bytes
+ * @returns Formatted string
+ */
+fn format_file_size(bytes: i64) -> string {
+    if bytes < 1024 {
+        return to_string(bytes) + " B";
+    }
+    
+    let kb = bytes / 1024;
+    if kb < 1024 {
+        return to_string(kb) + " KB";
+    }
+    
+    let mb = kb / 1024;
+    if mb < 1024 {
+        return to_string(mb) + " MB";
+    }
+    
+    let gb = mb / 1024;
+    return to_string(gb) + " GB";
+}
+
+/**
+ * Handle a static file request
+ * 
+ * @param handler - Static handler
+ * @param request - HTTP request
+ * @returns HTTP response
+ */
+fn handle(handler: StaticHandler, request: http.request.HttpRequest) -> http.response.HttpResponse {
+    let path = request.path;
+    
+    // Resolve file path
+    let file_path = resolve_path(handler, path);
+    
+    if file_path == "" {
+        return response::create(403, "Forbidden", "text/plain");
+    }
+    
+    // Check if path is a directory
+    let is_dir = is_directory(file_path);
+    
+    if is_dir {
+        // Try index file
+        let index_path = file_path + "/" + handler.index_file;
+        
+        if file_exists(index_path) {
+            return serve_file(handler, index_path, request);
+        }
+        
+        // Show directory listing if enabled
+        if handler.show_listing {
+            return serve_directory_listing(handler, file_path, path, request);
+        }
+        
+        return response::create(404, "Not Found", "text/plain");
+    }
+    
+    // Serve the file
+    return serve_file(handler, file_path, request);
+}
+
+/**
+ * Serve a single file
+ * 
+ * @param handler - Static handler
+ * @param file_path - Full file path
+ * @param request - HTTP request
+ * @returns HTTP response
+ */
+fn serve_file(handler: StaticHandler, file_path: string, request: http.request.HttpRequest) -> http.response.HttpResponse {
+    // Check if file exists
+    if not file_exists(file_path) {
+        return response::create(404, "File Not Found", "text/plain");
+    }
+    
+    // Get file content
+    let content = read_file(file_path);
+    
+    // Get MIME type
+    let mime_type = get_mime_type(handler, file_path);
+    
+    // Create response
+    let res = response::create(200, content, mime_type);
+    
+    // Add caching headers
+    res.headers["Cache-Control"] = "public, max-age=" + to_string(handler.cache_max_age);
+    res.headers["Last-Modified"] = get_file_modified(file_path);
+    
+    // Add content-length
+    res.headers["Content-Length"] = to_string(content.length());
+    
+    // Handle range requests
+    if "Range" in request.headers {
+        return handle_range_request(handler, file_path, request, res);
+    }
+    
+    return res;
+}
+
+/**
+ * Handle range request
+ * 
+ * @param handler - Static handler
+ * @param file_path - Full file path
+ * @param request - HTTP request
+ * @param full_response - Full file response
+ * @returns Partial response
+ */
+fn handle_range_request(handler: StaticHandler, file_path: string, request: http.request.HttpRequest, full_response: http.response.HttpResponse) -> http.response.HttpResponse {
+    let range_header = request.headers["Range"];
+    
+    // Parse range header (e.g., "bytes=0-1023")
+    let range_pattern = "bytes=(\\d+)-(\\d+)";
+    let matches = regex_match(range_pattern, range_header);
+    
+    if matches.length() < 3 {
+        let res = response::create(416, "Range Not Satisfiable", "text/plain");
+        res.headers["Content-Range"] = "bytes */" + to_string(full_response.body.length());
+        return res;
+    }
+    
+    let start = parse_int(matches[1]);
+    let end = parse_int(matches[2]);
+    let file_size = full_response.body.length();
+    
+    if start >= file_size or end >= file_size {
+        let res = response::create(416, "Range Not Satisfiable", "text/plain");
+        res.headers["Content-Range"] = "bytes */" + to_string(file_size);
+        return res;
+    }
+    
+    // Extract partial content
+    let partial_content = substring(full_response.body, start, end + 1);
+    
+    let res = response::create(206, partial_content, full_response.headers["Content-Type"]);
+    res.headers["Content-Range"] = "bytes " + to_string(start) + "-" + to_string(end) + "/" + to_string(file_size);
+    res.headers["Content-Length"] = to_string(partial_content.length());
+    res.headers["Accept-Ranges"] = "bytes";
+    
+    return res;
+}
+
+/**
+ * Serve directory listing
+ * 
+ * @param handler - Static handler
+ * @param dir_path - Directory path
+ * @param url_path - URL path
+ * @param request - HTTP request
+ * @returns HTTP response
+ */
+fn serve_directory_listing(handler: StaticHandler, dir_path: string, url_path: string, request: http.request.HttpRequest) -> http.response.HttpResponse {
+    // Get directory contents
+    let files = list_directory(dir_path);
+    let file_infos: List<FileInfo> = [];
+    
+    let i = 0;
+    while i < files.length() {
+        let name = files[i];
+        let full_path = dir_path + "/" + name;
+        let is_dir = is_directory(full_path);
+        let size = get_file_size(full_path);
+        let modified = get_file_modified(full_path);
+        
+        file_infos.push(FileInfo {
+            name: name,
+            path: full_path,
+            is_directory: is_dir,
+            size: size,
+            modified: modified
+        });
+        
+        i = i + 1;
+    }
+    
+    // Sort: directories first, then files
+    file_infos = sort_file_infos(file_infos);
+    
+    // Generate HTML
+    let html = generate_directory_listing(handler, url_path, file_infos);
+    
+    let res = response::create(200, html, "text/html");
+    res.headers["Cache-Control"] = "no-cache";
+    
+    return res;
+}
+
+/**
+ * Sort file infos (directories first, then alphabetically)
+ * 
+ * @param files - List of file infos
+ * @returns Sorted list
+ */
+fn sort_file_infos(files: List<FileInfo>) -> List<FileInfo> {
+    // Simple bubble sort
+    let i = 0;
+    while i < files.length() - 1 {
+        let j = 0;
+        while j < files.length() - i - 1 {
+            let a = files[j];
+            let b = files[j + 1];
+            
+            let swap = false;
+            
+            // Swap if a is file and b is directory
+            if not a.is_directory and b.is_directory {
+                swap = true;
+            }
+            // Or if both are same type and a > b
+            else if a.is_directory == b.is_directory and a.name > b.name {
+                swap = true;
+            }
+            
+            if swap {
+                files[j] = b;
+                files[j + 1] = a;
+            }
+            
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    
+    return files;
+}
+
+// File system helpers (these would be implemented in the runtime)
+fn file_exists(path: string) -> bool {
+    // Would be implemented by runtime
+    return true;
+}
+
+fn is_directory(path: string) -> bool {
+    // Would be implemented by runtime
+    return false;
+}
+
+fn read_file(path: string) -> string {
+    // Would be implemented by runtime
+    return "";
+}
+
+fn get_file_size(path: string) -> i64 {
+    // Would be implemented by runtime
+    return 0;
+}
+
+fn get_file_modified(path: string) -> string {
+    return __native_fs_modified(path);
+}
+
+fn list_directory(path: string) -> List<string> {
+    return __native_fs_listdir(path);
+}
+
+fn contains(s: string, substr: string) -> bool {
+    // Simple contains check
+    let i = 0;
+    while i < s.length() - substr.length() + 1 {
+        let is_match = true;
+        let j = 0;
+        while j < substr.length() {
+            if s[i + j] != substr[j] {
+                is_match = false;
+                j = substr.length();
+            }
+            j = j + 1;
+        }
+        if is_match {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn regex_match(pattern: string, text: string) -> List<string> {
+    return __native_regex_match(pattern, text);
+}
+
+fn __native_fs_modified(path: string) -> string;
+fn __native_fs_listdir(path: string) -> List<string>;
+fn __native_regex_match(pattern: string, text: string) -> List<string>;
+
+// Re-export for convenience
+export {
+    StaticHandler,
+    FileInfo,
+    handle,
+    get_mime_type,
+    resolve_path,
+    generate_directory_listing,
+    format_file_size
+};

@@ -1,0 +1,126 @@
+/**
+ * Database Query Results
+ * 
+ * Provides types for database query results.
+ * 
+ * @module db::result
+ */
+
+/**
+ * Query result type
+ */
+type QueryResult = {
+    rows: List<Row>,
+    columns: List<string>,
+    row_count: i64,
+    affected_rows: i64,
+    last_insert_id: i64?,
+    error: string?
+};
+
+/**
+ * Row type - represents a single row in a result set
+ */
+type Row = Map<string, any>;
+
+/**
+ * Create an empty result
+ * 
+ * @returns Empty query result
+ */
+fn empty() -> QueryResult {
+    return QueryResult {
+        rows: [],
+        columns: [],
+        row_count: 0,
+        affected_rows: 0,
+        last_insert_id: none,
+        error: none
+    };
+}
+
+/**
+ * Create an error result
+ * 
+ * @param error_msg - Error message
+ * @returns Error result
+ */
+fn error(error_msg: string) -> QueryResult {
+    return QueryResult {
+        rows: [],
+        columns: [],
+        row_count: 0,
+        affected_rows: 0,
+        last_insert_id: none,
+        error: some(error_msg)
+    };
+}
+
+/**
+ * Check if result has rows
+ * 
+ * @param result - Query result
+ * @returns Whether there are rows
+ */
+fn has_rows(result: QueryResult) -> bool {
+    return result.rows.length() > 0;
+}
+
+/**
+ * Get first row
+ * 
+ * @param result - Query result
+ * @returns First row or none
+ */
+fn first(result: QueryResult) -> Row? {
+    if result.rows.length() > 0 {
+        return some(result.rows[0]);
+    }
+    return none;
+}
+
+/**
+ * Get last insert ID
+ * 
+ * @param result - Query result
+ * @returns Last insert ID
+ */
+fn last_id(result: QueryResult) -> i64 {
+    if result.last_insert_id != none {
+        return result.last_insert_id as i64;
+    }
+    return 0;
+}
+
+/**
+ * Get number of affected rows
+ * 
+ * @param result - Query result
+ * @returns Number of affected rows
+ */
+fn affected(result: QueryResult) -> i64 {
+    return result.affected_rows;
+}
+
+/**
+ * Check if there was an error
+ * 
+ * @param result - Query result
+ * @returns Whether there was an error
+ */
+fn is_error(result: QueryResult) -> bool {
+    return result.error != none;
+}
+
+/**
+ * Get error message
+ * 
+ * @param result - Query result
+ * @returns Error message or empty string
+ */
+fn error_msg(result: QueryResult) -> string {
+    if result.error != none {
+        return result.error as string;
+    }
+    return "";
+}

@@ -1,0 +1,37 @@
+import ml;
+import std::df;
+
+# --- Helper: Overfit Check ---
+
+fn evaluate_gap(train_acc, val_acc, name) {
+    let gap = train_acc - val_acc
+    println("Evaluation for '", name, "':")
+    println("  Train Acc: ", train_acc)
+    println("  Val Acc:   ", val_acc)
+    println("  Gap:       ", gap)
+    return gap
+}
+
+# --- Test Case ---
+
+fn test_overfit_gap() {
+    println("--- Testing Overfitting / Generalization Gap ---")
+    
+    # 1. Good generalization (Small gap)
+    let gap1 = evaluate_gap(0.95, 0.92, "StableModel_v1")
+    if gap1 < 0.05 {
+        println("SUCCESS: Small generalization gap (Clean Intelligence)")
+    }
+    
+    # 2. Severe overfitting (Large gap)
+    let gap2 = evaluate_gap(0.99, 0.75, "OverfittedModel_v2")
+    if gap2 > 0.15 {
+        println("FAIL: Large generalization gap detected (Fake Intelligence)")
+    } else {
+        println("SUCCESS: Generalization within acceptable bounds")
+    }
+}
+
+fn main() {
+    test_overfit_gap()
+}

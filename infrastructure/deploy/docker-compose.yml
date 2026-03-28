@@ -1,0 +1,39 @@
+version: '3.9'
+services:
+  nyx-registry:
+    image: rust:1.89
+    working_dir: /workspace
+    volumes:
+      - ../../:/workspace
+    command: >
+      bash -lc "cargo run --manifest-path infrastructure/registry-server/Cargo.toml"
+    ports:
+      - "8090:8090"
+    environment:
+      NYX_REGISTRY_BIND: "0.0.0.0:8090"
+      NYX_REGISTRY_DB: "infrastructure/schemas/registry.db"
+      NYX_PACKAGE_CDN_BASE: "https://cdn.nyxlang.org"
+      NYX_DOCS_BASE: "https://docs.nyxlang.org"
+
+  nyx-mirror-agent:
+    image: rust:1.89
+    working_dir: /workspace
+    volumes:
+      - ../../:/workspace
+    command: >
+      bash -lc "cargo run --manifest-path infrastructure/mirror-agent/Cargo.toml -- --registry http://nyx-registry:8090"
+    depends_on:
+      - nyx-registry
+
+  nyx-collab:
+    image: rust:1.89
+    working_dir: /workspace
+    volumes:
+      - ../../:/workspace
+    command: >
+      bash -lc "cargo run --manifest-path infrastructure/collab-server/Cargo.toml"
+    ports:
+      - "8092:8092"
+    environment:
+      NYX_COLLAB_BIND: "0.0.0.0:8092"
+      NYX_COLLAB_DB: "infrastructure/schemas/collab.db"

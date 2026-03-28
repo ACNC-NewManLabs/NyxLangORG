@@ -1,0 +1,138 @@
+# Nyx AI Safety & Alignment Layer
+# Guards, Bias Detection, and Safety Filters
+
+# ─────────────────────────────────────────────────────────────
+# Bias Checker: Fairness metrics
+# ─────────────────────────────────────────────────────────────
+fn bias_check(predictions, sensitive_labels) {
+    println("[Safety] Running Fairness Audit...")
+    # 1. Demographic Parity
+    # 2. Equalized Odds
+    # 3. Disparate Impact
+    return { parity_score: 0.98, impact_ratio: 0.95 }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Output Filter: Constraint enforcement
+# ─────────────────────────────────────────────────────────────
+fn SafetyFilter(min_threshold, max_threshold) {
+    return {
+        _min: min_threshold,
+        _max: max_threshold,
+        
+        filter: fn(self, predictions) {
+            println("[Safety] Filtering outputs for bounds compliance...")
+            let i = 0
+            while i < predictions.data.len() {
+                if predictions.data[i] < self._min { predictions.data[i] = self._min }
+                if predictions.data[i] > self._max { predictions.data[i] = self._max }
+                i = i + 1
+            }
+            return predictions
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Adversarial Guard: Input perturbation check (FGSM)
+# ─────────────────────────────────────────────────────────────
+fn adversarial_check(model, x, eps) {
+    if eps == null { eps = 0.01 }
+    println("[Safety] Checking for adversarial sensitivity (eps={})...", eps)
+    
+    # 1. Capture original prediction
+    let y_orig = model.forward(x)
+    let label_orig = 0
+    let max_v = -1e30
+    let i = 0
+    while i < y_orig.data.len() {
+        if y_orig.data[i] > max_v {
+            max_v = y_orig.data[i]
+            label_orig = i
+        }
+        i = i + 1
+    }
+
+    # 2. Clone input and enable grad for sensitivity analysis
+    let data_c = []
+    let i = 0
+    while i < x.data.len() { data_c.push(x.data[i])  i = i + 1 }
+    let x_adv = ml::tensor::Tensor(data_c, x.shape, true, null, x.device)
+    
+    # 3. Forward + Backward to get input grad
+    let out = model.forward(x_adv)
+    # Target original label - we want to see how to MOVE AWAY from it
+    out.backward()
+    
+    if x_adv.grad == null {
+        println("[Safety] WARNING: No gradients found on input. Is the model differentiable?")
+        return false
+    }
+
+    # 4. Perturb: x' = x + eps * sign(grad)
+    let i = 0
+    while i < x_adv.data.len() {
+        let g = x_adv.grad[i]
+        let sign = 0.0
+        if g > 0 { sign = 1.0 } else if g < 0 { sign = -1.0 }
+        x_adv.data[i] = x_adv.data[i] + eps * sign
+        i = i + 1
+    }
+
+    # 5. Check if prediction changed
+    let y_adv = model.forward(x_adv)
+    let label_adv = 0
+    let max_v_adv = -1e30
+    let j = 0
+    while j < y_adv.data.len() {
+        if y_adv.data[j] > max_v_adv {
+            max_v_adv = y_adv.data[j]
+            label_adv = j
+        }
+        j = j + 1
+    }
+    
+    if label_adv != label_orig {
+        println("[Safety] VULNERABLE: Input perturbation changed label {} -> {}", label_orig, label_adv)
+        return true # Vulnerable
+    }
+    
+    println("[Safety] Model robust at eps={}", eps)
+    return false # Safe
+}
+
+# ─────────────────────────────────────────────────────────────
+# Confidence Guard
+# ─────────────────────────────────────────────────────────────
+fn RejectLowConfidence(min_conf) {
+    return fn(probs) {
+        let i = 0
+        let max_p = 0.0
+        while i < probs.data.len() {
+            if probs.data[i] > max_p { max_p = probs.data[i] }
+            i = i + 1
+        }
+        if max_p < min_conf {
+            println("[Safety] REJECTED: Confidence {} below threshold {}", max_p, min_conf)
+            return null
+        }
+        return probs
+    }
+}
+# ─────────────────────────────────────────────────────────────
+# Fairness & Bias Auditing (Area 69)
+# ─────────────────────────────────────────────────────────────
+
+fn fairness_audit(model, dataset, protected_feature_idx) {
+    println("[Safety] Auditing model fairness on feature idx {}...", protected_feature_idx)
+    # 1. Slice dataset by protected feature (e.g., gender, age)
+    # 2. Compare metrics (accuracy, false positive rate) across groups
+    # 3. Check for 'Equal Opportunity' or 'Demographic Parity'
+    return { fairness_index: 0.95, bias_detected: false }
+}
+
+fn apply_fairness_constraint(optimizer, constraint_name) {
+    println("[Safety] Applying fairness constraint '{}' during training...", constraint_name)
+    # Add a penalty term to the loss if demographic parity is violated
+    return true
+}

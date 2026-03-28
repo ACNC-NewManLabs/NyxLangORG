@@ -1,0 +1,49 @@
+import ml;
+import std::df;
+
+# --- Helper: Edge Case Processing ---
+
+fn predict_safe(model, input_val) {
+    # Simulating a model that handles nulls and OOD
+    if input_val == null { return 0 } # Default for null
+    if input_val > 100.0 { return 1 } # Saturated high for OOD
+    if input_val < -100.0 { return 0 } # Saturated low for OOD
+    
+    # Normal range logic
+    if input_val > 0.5 { return 1 }
+    return 0
+}
+
+# --- Test Case ---
+
+fn test_edge_inputs() {
+    println("--- Testing Robustness to Edge Inputs (Nulls, OOD) ---")
+    
+    # 1. Null / Missing Input
+    println("Checking Null input...")
+    let res_null = predict_safe(null, null)
+    println("  Prediction: ", res_null)
+    if res_null != null {
+        println("SUCCESS: Null input handled gracefully")
+    }
+    
+    # 2. Extreme Out-of-Distribution (OOD)
+    let extreme_high = 9999.0
+    let extreme_low = -9999.0
+    
+    println("Checking Extreme High (OOD)...")
+    let res_h = predict_safe(null, extreme_high)
+    println("  Prediction: ", res_h)
+    
+    println("Checking Extreme Low (OOD)...")
+    let res_l = predict_safe(null, extreme_low)
+    println("  Prediction: ", res_l)
+    
+    if res_h == 1 && res_l == 0 {
+        println("SUCCESS: OOD inputs handled via saturation")
+    }
+}
+
+fn main() {
+    test_edge_inputs()
+}

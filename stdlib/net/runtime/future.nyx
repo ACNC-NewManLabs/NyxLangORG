@@ -1,0 +1,404 @@
+/**
+ * Future Module
+ * 
+ * Provides a Future/Promise system for asynchronous programming.
+ * Futures represent values that may not be available yet.
+ * 
+ * @module future
+ */
+
+type Future<T> = {
+    id: i64,
+    state: FutureState,
+    value: T?,
+    error: any,
+    callbacks: List<fn(T)>,
+    error_callbacks: List<fn(any)>
+};
+
+type FutureState = 
+    | "pending"
+    | "fulfilled"
+    | "rejected";
+
+type Promise<T> = {
+    future: Future<T>,
+    resolve_fn: fn(T)?,
+    reject_fn: fn(any)?
+};
+
+let next_future_id: i64 = 0;
+
+/**
+ * Create a new pending future
+ */
+fn new<T>() -> Future<T> {
+    next_future_id = next_future_id + 1;
+    
+    return Future<T> {
+        id: next_future_id,
+        state: "pending",
+        value: none,
+        error: none,
+        callbacks: [],
+        error_callbacks: []
+    };
+}
+
+/**
+ * Create a future that resolves after a delay
+ * 
+ * @param ms - Delay in milliseconds
+ * @returns A future that completes after the delay
+ */
+fn delayed(ms: i64) -> Future<()> {
+    let f = new();
+    
+    // Schedule resolution after delay
+    set_timeout(ms, fn() {
+        resolve(f, ());
+    });
+    
+    return f;
+}
+
+/**
+ * Resolve a future with a value
+ * 
+ * @param future - The future to resolve
+ * @param value - The value to resolve with
+ */
+fn resolve<T>(future: Future<T>, value: T) {
+    if future.state != "pending" {
+        return;  // Already resolved
+    }
+    
+    future.value = some(value);
+    future.state = "fulfilled";
+    
+    // Execute all callbacks
+    for cb in future.callbacks {
+        cb(value);
+    }
+    
+    // Clear callbacks
+    future.callbacks = [];
+}
+
+/**
+ * Reject a future with an error
+ * 
+ * @param future - The future to reject
+ * @param error - The error to reject with
+ */
+fn reject<T>(future: Future<T>, error: any) {
+    if future.state != "pending" {
+        return;  // Already resolved
+    }
+    
+    future.error = error;
+    future.state = "rejected";
+    
+    // Execute all error callbacks
+    for cb in future.error_callbacks {
+        cb(error);
+    }
+    
+    // Clear callbacks
+    future.error_callbacks = [];
+}
+
+/**
+ * Add a callback to be called when the future resolves
+ * 
+ * @param future - The future to add the callback to
+ * @param callback - The callback function
+ * @returns The same future for chaining
+ */
+fn then<T, R>(future: Future<T>, callback: fn(T) -> R) -> Future<R> {
+    let result_future = new<R>();
+    
+    if future.state == "fulfilled" {
+        // Already fulfilled, execute immediately
+        let val = future.value as T;
+        let res = callback(val);
+        resolve(result_future, res);
+    } else if future.state == "rejected" {
+        // Already rejected, propagate error
+        reject(result_future, future.error);
+    } else {
+        // Still pending, add callback
+        future.callbacks = future.callbacks + [fn(t: T) {
+            let res = callback(t);
+            resolve(result_future, res);
+        }];
+        
+        // Also add error propagation
+        future.error_callbacks = future.error_callbacks + [fn(e: any) {
+            reject(result_future, e);
+        }];
+    }
+    
+    return result_future;
+}
+
+/**
+ * Add an error handler to a future
+ * 
+ * @param future - The future to add the error handler to
+ * @param callback - The error handler function
+ * @returns The same future for chaining
+ */
+fn catch<T>(future: Future<T>, callback: fn(any) -> T) -> Future<T> {
+    if future.state == "rejected" {
+        // Already rejected, execute immediately
+        let val = callback(future.error);
+        resolve(future, val);
+    } else if future.state == "pending" {
+        // Add error callback
+        future.error_callbacks = future.error_callbacks + [fn(e: any) {
+            let val = callback(e);
+            resolve(future, val);
+        }];
+    }
+    
+    return future;
+}
+
+/**
+ * Add a callback that runs regardless of success or failure
+ * 
+ * @param future - The future to add the callback to
+ * @param callback - The callback function
+ * @returns The same future for chaining
+ */
+fn finally<T>(future: Future<T>, callback: fn()) -> Future<T> {
+    let wrapper = fn(_: any) {
+        callback();
+    };
+    
+    // Add to both success and error callbacks
+    future.callbacks = future.callbacks + [fn(_: T) {
+        callback();
+    }];
+    
+    future.error_callbacks = future.error_callbacks + [wrapper];
+    
+    return future;
+}
+
+/**
+ * Create a resolved future with a value
+ * 
+ * @param value - The value to wrap in a future
+ * @returns A pre-resolved future
+ */
+fn resolved<T>(value: T) -> Future<T> {
+    let f = new<T>();
+    resolve(f, value);
+    return f;
+}
+
+/**
+ * Create a rejected future with an error
+ * 
+ * @param error - The error to wrap in a future
+ * @returns A pre-rejected future
+ */
+fn rejected<T>(error: any) -> Future<T> {
+    let f = new<T>();
+    reject(f, error);
+    return f;
+}
+
+/**
+ * Wait for multiple futures to complete
+ * 
+ * @param futures - List of futures to wait for
+ * @returns A future that resolves when all input futures resolve
+ */
+fn all<T>(futures: List<Future<T>>) -> Future<List<T>> {
+    let result = new<List<T>>();
+    let mut results: List<T> = [];
+    let mut completed = 0;
+    let total = len(futures);
+    
+    if total == 0 {
+        resolve(result, []);
+        return result;
+    }
+    
+    // Set up completion tracking
+    let mut index = 0;
+    for f in futures {
+        let i = index;
+        
+        f.callbacks = f.callbacks + [fn(t: T) {
+            results = results + [t];
+            completed = completed + 1;
+            
+            if completed >= total {
+                resolve(result, results);
+            }
+        }];
+        
+        f.error_callbacks = f.error_callbacks + [fn(e: any) {
+            reject(result, e);
+        }];
+        
+        index = index + 1;
+    }
+    
+    return result;
+}
+
+/**
+ * Wait for the first future to complete
+ * 
+ * @param futures - List of futures to race
+ * @returns A future that resolves with the first result
+ */
+fn race<T>(futures: List<Future<T>>) -> Future<T> {
+    let result = new<T>();
+    
+    for f in futures {
+        // Add callback to resolve result
+        f.callbacks = f.callbacks + [fn(t: T) {
+            if result.state == "pending" {
+                resolve(result, t);
+            }
+        }];
+        
+        // Add error callback
+        f.error_callbacks = f.error_callbacks + [fn(e: any) {
+            if result.state == "pending" {
+                reject(result, e);
+            }
+        }];
+    }
+    
+    return result;
+}
+
+/**
+ * Map a future's value to a different type
+ * 
+ * @param future - The future to map
+ * @param transform - The transformation function
+ * @returns A new future with the transformed value
+ */
+fn map<T, R>(future: Future<T>, transform: fn(T) -> R) -> Future<R> {
+    return then(future, transform);
+}
+
+/**
+ * Flatten a future of futures
+ * 
+ * @param future - The nested future
+ * @returns A flattened future
+ */
+fn flatten<T>(future: Future<Future<T>>) -> Future<T> {
+    let result = new<T>();
+    
+    future.callbacks = future.callbacks + [fn(inner: Future<T>) {
+        // Chain onto the inner future
+        inner.callbacks = inner.callbacks + [fn(val: T) {
+            resolve(result, val);
+        }];
+        
+        if inner.state == "fulfilled" {
+            resolve(result, inner.value as T);
+        }
+        
+        inner.error_callbacks = inner.error_callbacks + [fn(e: any) {
+            reject(result, e);
+        }];
+    }];
+    
+    return result;
+}
+
+/**
+ * Check if a future is pending
+ * 
+ * @param future - The future to check
+ * @returns Whether the future is pending
+ */
+fn is_pending<T>(future: Future<T>) -> bool {
+    return future.state == "pending";
+}
+
+/**
+ * Check if a future is fulfilled
+ * 
+ * @param future - The future to check
+ * @returns Whether the future is fulfilled
+ */
+fn is_fulfilled<T>(future: Future<T>) -> bool {
+    return future.state == "fulfilled";
+}
+
+/**
+ * Check if a future is rejected
+ * 
+ * @param future - The future to check
+ * @returns Whether the future is rejected
+ */
+fn is_rejected<T>(future: Future<T>) -> bool {
+    return future.state == "rejected";
+}
+
+/**
+ * Get the value of a fulfilled future
+ * 
+ * @param future - The future to get the value from
+ * @returns The value if fulfilled
+ */
+fn get_value<T>(future: Future<T>) -> T? {
+    return future.value;
+}
+
+/**
+ * Get the error of a rejected future
+ * 
+ * @param future - The future to get the error from
+ * @returns The error if rejected
+ */
+fn get_error<T>(future: Future<T>) -> any {
+    return future.error;
+}
+
+/**
+ * Set timeout for a future
+ * 
+ * @param future - The future to set timeout for
+ * @param ms - Timeout in milliseconds
+ * @param error - Error to reject with on timeout
+ */
+fn timeout<T>(future: Future<T>, ms: i64, error: any) {
+    set_timeout(ms, fn() {
+        if future.state == "pending" {
+            reject(future, error);
+        }
+    });
+}
+
+/**
+ * Create a promise (future with resolve/reject functions)
+ */
+fn promise<T>() -> Promise<T> {
+    let f = new<T>();
+    
+    return Promise<T> {
+        future: f,
+        resolve_fn: none,
+        reject_fn: none
+    };
+}
+
+/**
+ * Set timeout helper
+ */
+fn set_timeout(ms: i64, callback: fn()) {
+    // Would integrate with event loop
+}

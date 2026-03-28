@@ -1,0 +1,70 @@
+import ml;
+import std::df;
+
+# --- Nyx Adversarial Guard (Input Defense) ---
+
+fn sanitize_input(val) {
+    # 1. Simple clamp to statistical bounds (0.0 - 1.0)
+    if val < 0.0 { return 0.0 }
+    if val > 1.0 { return 1.0 }
+    return val
+}
+
+fn detect_high_frequency_noise(vals) {
+    # simulated check for jitter 
+    let sum_diff = 0.0
+    let i = 1
+    while i < vals.len() {
+        sum_diff = sum_diff + std::math::abs(vals[i] - vals[i-1])
+        i = i + 1
+    }
+    let avg_diff = sum_diff / (vals.len() - 1)
+    if avg_diff > 0.05 { return true }
+    return false
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("--- Testing Nyx Adversarial Guard: Input Defense ---")
+    
+    # 1. Sanitization (Clamping out-of-range attacks)
+    let bad_input = 1.5
+    let clean = sanitize_input(bad_input)
+    println("Input: ", bad_input, " Protected: ", clean)
+    if clean == 1.0 { println("  SUCCESS: Input sanitized (clamped to boundary)") }
+    
+    # 2. Noise Filtering (Detecting FGSM/jitter)
+    let clean_stream = [0.5, 0.51, 0.52, 0.51]
+    let noisy_stream = [0.5, 0.6, 0.4, 0.7] # high jitter
+    
+    let is_noisy_c = detect_high_frequency_noise(clean_stream)
+    let is_noisy_n = detect_high_frequency_noise(noisy_stream)
+    
+    println("Clean Stream Jitter: ", is_noisy_c)
+    println("Noisy Stream Jitter: ", is_noisy_n)
+    
+    if is_noisy_n { println("  SUCCESS: High-frequency adversarial jitter detected!") }
+}
+
+fn main() {
+    println("--- Testing Nyx Adversarial Guard: Input Defense ---")
+    
+    # 1. Sanitization (Clamping out-of-range attacks)
+    let bad_input = 1.5
+    let clean = sanitize_input(bad_input)
+    println("Input: ", bad_input, " Protected: ", clean)
+    if clean == 1.0 { println("  SUCCESS: Input sanitized (clamped to boundary)") }
+    
+    # 2. Noise Filtering (Detecting FGSM/jitter)
+    let clean_stream = [0.5, 0.51, 0.52, 0.51]
+    let noisy_stream = [0.5, 0.6, 0.4, 0.7] # high jitter
+    
+    let is_noisy_c = detect_high_frequency_noise(clean_stream)
+    let is_noisy_n = detect_high_frequency_noise(noisy_stream)
+    
+    println("Clean Stream Jitter: ", is_noisy_c)
+    println("Noisy Stream Jitter: ", is_noisy_n)
+    
+    if is_noisy_n { println("  SUCCESS: High-frequency adversarial jitter detected!") }
+}

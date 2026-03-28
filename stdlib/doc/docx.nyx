@@ -1,0 +1,6 @@
+# Nyx Document Library: DOCX
+# Provides DOCX generation capabilities
+
+fn write(path, text) {
+    return std::doc::write_docx(path, text)
+}

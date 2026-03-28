@@ -1,0 +1,639 @@
+# Nyx Dataframe Engine: LazyFrame
+# Accumulates operations as a DAG of logical plan nodes.
+# collect() triggers the optimizer and executes against the base DataFrame.
+# Helpers for deep cloning and remapping native plans (recursive maps)
+fn _clone_plan(plan) {
+    if plan == null { return null }
+    let new_p = {}
+    let ks = std::meta::fields(plan)
+    let i = 0
+    while i < ks.len() {
+        let k = ks[i]
+        let v = plan[k]
+        if k == "input" || k == "left" || k == "right" {
+            new_p[k] = _clone_plan(v)
+        } else {
+            new_p[k] = v
+        }
+        i = i + 1
+    }
+    return new_p
+}
+
+fn _remap_source(plan, old_id, new_id) {
+    if plan == null { return null }
+    if plan._op == "p_scan" && plan.source_id == old_id {
+        plan.source_id = new_id
+    }
+    if plan.input != null { _remap_source(plan.input, old_id, new_id) }
+    if plan.left != null { _remap_source(plan.left, old_id, new_id) }
+    if plan.right != null { _remap_source(plan.right, old_id, new_id) }
+}
+
+fn LazyFrame(source, plan) {
+    # source: DataFrame
+    # plan: [{op, args...}] — list of logical plan steps
+    if plan == null { plan = [] }
+    # plan can be a List (old style) or a Map (native plan object)
+    return {
+        _source: source,
+        _plan: plan,
+        _is_native: (plan._op != null),
+
+        # ── plan builders (return new LazyFrame, never mutate) ───────
+
+        filter: fn(self, filter_expr) {
+            if self._is_native {
+                let new_plan = { "_op": "p_filter", "input": self._plan, "predicate": filter_expr }
+                return LazyFrame(self._source, new_plan)
+            }
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "filter", expr: filter_expr })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        select: fn(self, exprs) {
+            if self._is_native {
+                # Check for aggregations to decide between p_projection and p_aggregate
+                let has_agg = false
+                let i = 0
+                while i < exprs.len() {
+                    let e = exprs[i]
+                    if e != null && (e._kind == "agg" || (e._kind == "alias" && e._args != null && e._args.len() > 0 && e._args[0]._kind == "agg")) {
+                        has_agg = true
+                    }
+                    i = i + 1
+                }
+                
+                if has_agg {
+                    let new_plan = { "_op": "p_aggregate", "input": self._plan, "keys": [], "aggs": exprs }
+                    return LazyFrame(self._source, new_plan)
+                }
+                
+                let new_plan = { "_op": "p_projection", "input": self._plan, "exprs": exprs }
+                return LazyFrame(self._source, new_plan)
+            }
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "select", exprs: exprs })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        with_columns: fn(self, exprs) {
+            if self._is_native {
+                let new_plan = { "_op": "p_projection", "input": self._plan, "exprs": exprs }
+                return LazyFrame(self._source, new_plan)
+            }
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "with_columns", exprs: exprs })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        groupby: fn(self, key_cols) {
+            if self._is_native {
+                # In native mode, we return a GroupByPlan (wrapped by LazyFrame if needed)
+                # but our engine expects a call to .agg() on it
+                return GroupByPlan(self._source, self._plan, key_cols, true)
+            }
+            return GroupByPlan(self._source, self._plan, key_cols, false)
+        },
+        group_by: fn(self, key_cols) { return self.groupby(key_cols) },
+
+        join: fn(self, other_lf, on, how) {
+            if how == null { how = "inner" }
+            if self._is_native {
+                let right_p_raw = other_lf.to_native_plan()
+                let right_plan = _clone_plan(right_p_raw)
+                
+                # Merge sources
+                let new_sources = {}
+                let ks_l = std::meta::fields(self._source)
+                let i_l = 0
+                while i_l < ks_l.len() {
+                    let k = ks_l[i_l]
+                    new_sources[k] = self._source[k]
+                    i_l = i_l + 1
+                }
+                
+                # Handle possible collisions in source identifiers
+                let ks_r = std::meta::fields(other_lf._source)
+                let i_r = 0
+                while i_r < ks_r.len() {
+                    let k = ks_r[i_r]
+                    let final_k = k
+                    if new_sources[k] != null && new_sources[k] != other_lf._source[k] {
+                        # Identifier collision with different data — must remap
+                        final_k = k + "_r"
+                        _remap_source(right_plan, k, final_k)
+                    }
+                    new_sources[final_k] = other_lf._source[k]
+                    i_r = i_r + 1
+                }
+                
+                let new_plan = { "_op": "p_join", "left": self._plan, "right": right_plan, "on_left": on, "on_right": on }
+                return LazyFrame(new_sources, new_plan)
+            }
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "join", other: other_lf._source, on: on, how: how })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        sort: fn(self, col_name, descending) {
+            if descending == null { descending = false }
+            if self._is_native {
+                let new_plan = { "_op": "p_sort", "input": self._plan, "column": col_name, "ascending": !descending }
+                return LazyFrame(self._source, new_plan)
+            }
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "sort", col: col_name, descending: descending })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        limit: fn(self, n) {
+            if self._is_native {
+                let new_plan = { "_op": "p_limit", "input": self._plan, "n": n }
+                return LazyFrame(self._source, new_plan)
+            }
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "limit", n: n })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        rename: fn(self, old_name, new_name) {
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "rename", old: old_name, new: new_name })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        drop: fn(self, names) {
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "drop", names: names })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        # ── plan inspection ─────────────────────────────────────────
+        explain: fn(self) {
+            if self._is_native {
+                # Use native ASCII plan renderer
+                let tree = std::df::explain_plan(self._plan, self._source)
+                if tree == null {
+                    println("[LazyFrame] explain: native plan (non-renderable)")
+                    return null
+                }
+                println(tree)
+                return tree
+            }
+            let native_p = self.to_native_plan()
+            if native_p != null {
+                let tree = std::df::explain_plan(native_p, { "base": self._source })
+                println(tree)
+                return tree
+            }
+            println("[LazyFrame] explain: plan is empty or old-style")
+            return null
+        },
+    
+        profile: fn(self) {
+            if self._is_native {
+                let metrics = std::df::profile_plan(self._plan, self._source)
+                if metrics != null {
+                    println("[LazyFrame profile]")
+                    println("  total_ms:", metrics.total_ms)
+                    println("  chunks:  ", metrics.chunks)
+                    println("  rows:    ", metrics.rows)
+                }
+                return metrics
+            }
+            # Fallback: measure collect() time
+            let t0 = get_system_time()
+            let df = self.collect()
+            let elapsed = get_system_time() - t0
+            println("[LazyFrame profile] elapsed:", elapsed, "ms, rows:", df.nrows())
+            return { total_ms: elapsed, chunks: 1, rows: df.nrows() }
+        },
+
+        sum_simd: fn(self, col_name) {
+            # Trigger collect and then parallel sum
+            let df = self.collect()
+            return df.sum_simd(col_name)
+        },
+
+        # over: add a window function result as a new column
+        # func_name: "rank" | "row_number"
+        over: fn(self, col_name, partition_by_col, func_name) {
+            let new_plan = []
+            let i = 0
+            while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+            new_plan.push({ op: "over", col: col_name, partition_by: partition_by_col, func: func_name })
+            return LazyFrame(self._source, new_plan)
+        },
+
+        # ── collect: optimize + execute ──────────────────────────────
+        collect: fn(self) {
+            let res = null
+            if self._is_native {
+                # Already a native plan (e.g. from scan_csv)
+                res = std::df::execute_plan(self._plan, self._source)
+            } else {
+                # Convert Nyx plan list to native recursive plan
+                let native_p = self.to_native_plan()
+                if native_p != null {
+                    res = std::df::execute_plan(native_p, { "base": self._source })
+                }
+            }
+            
+            if res != null {
+                # Wrap native columns in Nyx Column objects for full method support
+                let nyx_cols = []
+                let col_sources = res._columns
+                let k = 0
+                while k < col_sources.len() {
+                    let rc = col_sources[k]
+                    if rc == null {
+                        print("DEBUG collect: column at index "); print(k); print(" is NULL\n");
+                    } else {
+                        # print("DEBUG collect: processing column: "); print(rc._name); print("\n");
+                        let c_name = rc._name
+                        let c_dtype = rc._dtype
+                        let c_data = rc._data
+                        if c_data == null {
+                            print("DEBUG collect: column '"); print(c_name); print("' has NULL _data\n");
+                        }
+                        nyx_cols.push(df::column::Column(c_name, c_dtype, c_data, null))
+                    }
+                    k = k + 1
+                }
+                return df::dataframe::DataFrame(nyx_cols, null)
+            }
+            
+            # Fallback to pure Nyx interpreter
+            let opt_plan = optimize_plan(self._plan, self._source)
+            return interpreter_execute_plan(self._source, opt_plan)
+        },
+
+        to_native_plan: fn(self) {
+            # Convert list-based _plan to recursive _op-based plan
+            if self._is_native { return self._plan }
+            
+            # Start with the source scan
+            let current_plan = { "_op": "p_scan", "source_id": "base" }
+            
+            let i = 0
+            while i < self._plan.len() {
+                let step = self._plan[i]
+                if step.op == "filter" {
+                    current_plan = { "_op": "p_filter", "input": current_plan, "predicate": step.expr }
+                } else if step.op == "select" || step.op == "projection" || step.op == "with_columns" {
+                    # Convert Nyx exprs to the simplified format the engine likes
+                    # For now just use the exprs directly if they are already in the right format
+                    current_plan = { "_op": "p_projection", "input": current_plan, "exprs": step.exprs }
+                } else if step.op == "sort" {
+                    current_plan = { "_op": "p_sort", "input": current_plan, "column": step.col, "ascending": !step.descending }
+                } else if step.op == "limit" {
+                    current_plan = { "_op": "p_limit", "input": current_plan, "n": step.n }
+                } else if step.op == "groupby_agg" {
+                    let key_exprs = []
+                    let k = 0
+                    while k < step.keys.len() {
+                        key_exprs.push(col(step.keys[k]))
+                        k = k + 1
+                    }
+                    current_plan = { "_op": "p_aggregate", "input": current_plan, "keys": key_exprs, "aggs": step.exprs }
+                } else if step.op == "join" {
+                    current_plan = { "_op": "p_join", "left": current_plan, "right": { "_op": "p_scan", "source_id": "other" }, "on_left": step.on, "on_right": step.on }
+                }
+                i = i + 1
+            }
+            return current_plan
+        }
+    }
+}
+
+# ── GroupBy plan wrapper ──────────────────────────────────────────────────────
+
+fn GroupByPlan(source, plan, key_cols, is_native) {
+    return {
+        _source: source,
+        _plan: plan,
+        _keys: key_cols,
+        _is_native: is_native,
+
+        agg: fn(self, agg_exprs) {
+            let new_plan = null
+            if self._is_native {
+                new_plan = { "_op": "p_aggregate", "input": self._plan, "keys": self._keys, "aggs": agg_exprs }
+            } else {
+                new_plan = []
+                let i = 0
+                while i < self._plan.len() { new_plan.push(self._plan[i])  i = i + 1 }
+                new_plan.push({ op: "groupby_agg", keys: self._keys, exprs: agg_exprs })
+            }
+            let lf = LazyFrame(self._source, new_plan)
+            return lf
+        }
+    }
+}
+
+# ── Plan optimizer ────────────────────────────────────────────────────────────
+fn optimize_plan(plan, source) {
+    # Rule 1: Predicate pushdown — move filter before select/with_columns
+    let optimized = []
+    let filters = []
+    let i = 0
+    while i < plan.len() {
+        let step = plan[i]
+        if step.op == "filter" {
+            filters.push(step)
+        } else {
+            # Flush accumulated filters before any non-filter op
+            let f = 0
+            while f < filters.len() {
+                optimized.push(filters[f])
+                f = f + 1
+            }
+            filters = []
+            optimized.push(step)
+        }
+        i = i + 1
+    }
+    # Remaining filters at end
+    let f = 0
+    while f < filters.len() { optimized.push(filters[f])  f = f + 1 }
+
+    # Rule 2: Projection pruning is implicit — eval_expr only touches referenced columns
+
+    # Rule 3: Constant folding — if both sides of a binop are lit, fold now
+    # (deferred to expression evaluator for now)
+
+    return optimized
+}
+
+# ── Plan executor ─────────────────────────────────────────────────────────────
+fn interpreter_execute_plan(source, plan) {
+    let current = source
+    let i = 0
+    while i < plan.len() {
+        let step = plan[i]
+
+        if step.op == "filter" {
+            let mask_col = eval_expr(step.expr, current)
+            if mask_col != null {
+                current = current.filter(mask_col)
+            }
+        }
+
+        if step.op == "select" {
+            let new_cols = []
+            let j = 0
+            while j < step.exprs.len() {
+                let e = step.exprs[j]
+                let result = eval_expr(e, current)
+                if result != null {
+                    let out_name = expr_output_name(e)
+                    new_cols.push(result.alias(out_name))
+                }
+                j = j + 1
+            }
+            current = DataFrame(new_cols, null)
+        }
+
+        if step.op == "with_columns" {
+            # Fused single-pass: evaluate all expr columns then add to frame
+            let j = 0
+            while j < step.exprs.len() {
+                let e = step.exprs[j]
+                let result = eval_expr(e, current)
+                if result != null {
+                    let out_name = expr_output_name(e)
+                    let named = result.alias(out_name)
+                    current = current.with_column(named)
+                }
+                j = j + 1
+            }
+        }
+
+        if step.op == "sort" {
+            current = current.sort(step.col, step.descending)
+        }
+
+        if step.op == "limit" {
+            current = current.head(step.n)
+        }
+
+        if step.op == "rename" {
+            current = current.rename(step.old, step.new)
+        }
+
+        if step.op == "drop" {
+            let j = 0
+            while j < step.names.len() {
+                current = current.drop(step.names[j])
+                j = j + 1
+            }
+        }
+
+        if step.op == "groupby_agg" {
+            current = exec_groupby(current, step.keys, step.exprs)
+        }
+
+        if step.op == "join" {
+            current = exec_join(current, step.other, step.on, step.how)
+        }
+
+        i = i + 1
+    }
+    return current
+}
+
+# ── GroupBy executor ──────────────────────────────────────────────────────────
+fn exec_groupby(df, keys, agg_exprs) {
+    # Collect unique key tuples
+    let nr = df.nrows()
+    let groups = {}  # key_str -> [row_indices]
+    let group_order = []  # preserve insertion order
+
+    let r = 0
+    while r < nr {
+        let key_str = ""
+        let k = 0
+        while k < keys.len() {
+            let kc = df.col(keys[k])
+            if kc != null {
+                if k > 0 { key_str = key_str + "|" }
+                key_str = key_str + "" + kc._data[r]
+            }
+            k = k + 1
+        }
+        if groups[key_str] == null {
+            groups[key_str] = []
+            group_order.push(key_str)
+        }
+        groups[key_str].push(r)
+        println("DEBUG exec_groupby: row=", r, " key_str=", key_str, " groups_at_key=", groups[key_str])
+        r = r + 1
+    }
+
+    # Build result columns: key cols + agg cols
+    let result_cols = []
+
+    # Key columns
+    let k = 0
+    while k < keys.len() {
+        let key_data = []
+        let g = 0
+        while g < group_order.len() {
+            let key_str = group_order[g]
+            let first_row = groups[key_str][0]
+            let kc = df.col(keys[k])
+            if kc != null { key_data.push(kc._data[first_row]) }
+            else { key_data.push(null) }
+            g = g + 1
+        }
+        let kc = df.col(keys[k])
+        let dtype = "str"
+        if kc != null { dtype = kc._dtype }
+        result_cols.push(Column(keys[k], dtype, key_data, null))
+        k = k + 1
+    }
+
+    # Agg columns
+    let a = 0
+    while a < agg_exprs.len() {
+        let e = agg_exprs[a]
+        # Determine source column name from inner expr
+        let src_name = ""
+        if e._kind == "agg" && e._args[0]._kind == "col" {
+            src_name = e._args[0]._value
+        }
+        let agg_op = e._value
+        let out_name = expr_output_name(e)
+        let agg_data = []
+
+        let g = 0
+        while g < group_order.len() {
+            let key_str = group_order[g]
+            let indices = groups[key_str]
+            # Extract group slice data
+            let src_col = df.col(src_name)
+            let group_data = []
+            let idx = 0
+            while idx < indices.len() {
+                if src_col != null { group_data.push(src_col._data[indices[idx]]) }
+                idx = idx + 1
+            }
+            # Apply agg
+            let result_val = 0
+            if agg_op == "sum"   { result_val = std::math::sum(group_data) }
+            if agg_op == "mean"  { result_val = std::math::mean(group_data) }
+            if agg_op == "count" { result_val = group_data.len() * 1 }
+            if agg_op == "min"   { result_val = std::df::col_min(group_data) }
+            if agg_op == "max"   { result_val = std::df::col_max(group_data) }
+            if agg_op == "std"   { result_val = std::df::col_std(group_data) }
+            if agg_op == "first" { result_val = group_data[0] }
+            if agg_op == "last"  { result_val = group_data[group_data.len() - 1] }
+            agg_data.push(result_val)
+            g = g + 1
+        }
+        result_cols.push(Column(out_name, "float", agg_data, null))
+        a = a + 1
+    }
+
+    return DataFrame(result_cols, null)
+}
+
+# ── Hash Join executor ────────────────────────────────────────────────────────
+fn exec_join(left, right, on, how) {
+    # Build hash map from right key → row index list
+    let right_key_col = right.col(on)
+    if right_key_col == null { return left }
+
+    let right_index = {}
+    let right_order = []
+    let r = 0
+    while r < right.nrows() {
+        let k = "" + right_key_col._data[r]
+        if right_index[k] == null {
+            right_index[k] = []
+            right_order.push(k)
+        }
+        right_index[k].push(r)
+        r = r + 1
+    }
+
+    let left_key_col = left.col(on)
+    if left_key_col == null { return left }
+
+    # Collect matched row pairs
+    let left_rows = []
+    let right_rows = []
+    let l = 0
+    while l < left.nrows() {
+        let k = "" + left_key_col._data[l]
+        if right_index[k] != null {
+            let matches = right_index[k]
+            let m = 0
+            while m < matches.len() {
+                left_rows.push(l)
+                right_rows.push(matches[m])
+                m = m + 1
+            }
+        } else if how == "left" {
+            left_rows.push(l)
+            right_rows.push(-1)
+        }
+        l = l + 1
+    }
+
+    # Build output columns
+    let out_cols = []
+    let lc = 0
+    while lc < left._columns.len() {
+        let c = left._columns[lc]
+        let new_data = []
+        let i = 0
+        while i < left_rows.len() {
+            new_data.push(c._data[left_rows[i]])
+            i = i + 1
+        }
+        out_cols.push(Column(c._name, c._dtype, new_data, null))
+        lc = lc + 1
+    }
+
+    # Add right columns (excluding the join key)
+    let rc = 0
+    while rc < right._columns.len() {
+        let c = right._columns[rc]
+        if c._name != on {
+            let new_data = []
+            let i = 0
+            while i < right_rows.len() {
+                let ri = right_rows[i]
+                if ri == -1 { new_data.push(null) }
+                else { new_data.push(c._data[ri]) }
+                i = i + 1
+            }
+            let col_name = c._name
+            # Avoid name collision: suffix with "_right"
+            if left.col(c._name) != null { col_name = c._name + "_right" }
+            out_cols.push(Column(col_name, c._dtype, new_data, null))
+        }
+        rc = rc + 1
+    }
+
+    return DataFrame(out_cols, null)
+}

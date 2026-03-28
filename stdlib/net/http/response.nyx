@@ -1,0 +1,418 @@
+/**
+ * HTTP Response Module
+ * 
+ * Provides HTTP response building and utilities.
+ * 
+ * @module http::response
+ */
+
+type HttpResponse = {
+    status_code: i64,
+    status_text: string,
+    headers: Map<string, string>,
+    body: string,
+    version: string
+};
+
+type StatusCode = i64;
+
+// Common status codes
+let STATUS_OK = 200;
+let STATUS_CREATED = 201;
+let STATUS_ACCEPTED = 202;
+let STATUS_NO_CONTENT = 204;
+let STATUS_MOVED_PERMANENTLY = 301;
+let STATUS_FOUND = 302;
+let STATUS_NOT_MODIFIED = 304;
+let STATUS_BAD_REQUEST = 400;
+let STATUS_UNAUTHORIZED = 401;
+let STATUS_FORBIDDEN = 403;
+let STATUS_NOT_FOUND = 404;
+let STATUS_METHOD_NOT_ALLOWED = 405;
+let STATUS_CONFLICT = 409;
+let STATUS_TOO_MANY_REQUESTS = 429;
+let STATUS_INTERNAL_ERROR = 500;
+let STATUS_NOT_IMPLEMENTED = 501;
+let STATUS_BAD_GATEWAY = 502;
+let STATUS_SERVICE_UNAVAILABLE = 503;
+
+// Status code to text mapping
+let status_texts: Map<i64, string> = {
+    200: "OK",
+    201: "Created",
+    202: "Accepted",
+    204: "No Content",
+    301: "Moved Permanently",
+    302: "Found",
+    304: "Not Modified",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    409: "Conflict",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable"
+};
+
+/**
+ * Create a new HTTP response
+ * 
+ * @param status_code - HTTP status code
+ * @param body - Response body
+ * @param content_type - Content-Type header
+ * @returns A new HTTP response
+ */
+fn create(status_code: i64, body: string, content_type: string) -> HttpResponse {
+    let status_text = "OK";
+    
+    if status_code in status_texts {
+        status_text = status_texts[status_code];
+    }
+    
+    return HttpResponse {
+        status_code: status_code,
+        status_text: status_text,
+        headers: {
+            "Content-Type": content_type,
+            "Content-Length": str(len(body))
+        },
+        body: body,
+        version: "HTTP/1.1"
+    };
+}
+
+/**
+ * Create an OK response
+ * 
+ * @param body - Response body
+ * @returns HTTP 200 response
+ */
+fn ok(body: string) -> HttpResponse {
+    return create(200, body, "text/plain");
+}
+
+/**
+ * Create an HTML response
+ * 
+ * @param html - HTML content
+ * @returns HTTP 200 response with HTML content-type
+ */
+fn html(html: string) -> HttpResponse {
+    return create(200, html, "text/html");
+}
+
+/**
+ * Create a JSON response
+ * 
+ * @param data - JSON data (string or serialized)
+ * @returns HTTP 200 response with JSON content-type
+ * 
+ * @example
+ * response.json({"status": "ok", "data": [1, 2, 3]});
+ */
+fn json(data: string) -> HttpResponse {
+    return create(200, data, "application/json");
+}
+
+/**
+ * Create a Created response
+ * 
+ * @param body - Response body
+ * @returns HTTP 201 response
+ */
+fn created(body: string) -> HttpResponse {
+    return create(201, body, "text/plain");
+}
+
+/**
+ * Create a No Content response
+ * 
+ * @returns HTTP 204 response
+ */
+fn no_content() -> HttpResponse {
+    return HttpResponse {
+        status_code: 204,
+        status_text: "No Content",
+        headers: {},
+        body: "",
+        version: "HTTP/1.1"
+    };
+}
+
+/**
+ * Create a Bad Request response
+ * 
+ * @param message - Error message
+ * @returns HTTP 400 response
+ */
+fn bad_request(message: string) -> HttpResponse {
+    return create(400, message, "text/plain");
+}
+
+/**
+ * Create an Unauthorized response
+ * 
+ * @param message - Error message
+ * @returns HTTP 401 response
+ */
+fn unauthorized(message: string) -> HttpResponse {
+    let resp = create(401, message, "text/plain");
+    resp.headers["WWW-Authenticate"] = "Basic realm=\"protected\"";
+    return resp;
+}
+
+/**
+ * Create a Forbidden response
+ * 
+ * @param message - Error message
+ * @returns HTTP 403 response
+ */
+fn forbidden(message: string) -> HttpResponse {
+    return create(403, message, "text/plain");
+}
+
+/**
+ * Create a Not Found response
+ * 
+ * @param message - Error message
+ * @returns HTTP 404 response
+ */
+fn not_found(message: string) -> HttpResponse {
+    return create(404, message, "text/plain");
+}
+
+/**
+ * Create a Method Not Allowed response
+ * 
+ * @returns HTTP 405 response
+ */
+fn method_not_allowed() -> HttpResponse {
+    return create(405, "Method Not Allowed", "text/plain");
+}
+
+/**
+ * Create an Internal Server Error response
+ * 
+ * @param message - Error message
+ * @returns HTTP 500 response
+ */
+fn internal_error(message: string) -> HttpResponse {
+    return create(500, message, "text/plain");
+}
+
+/**
+ * Create a Not Implemented response
+ * 
+ * @returns HTTP 501 response
+ */
+fn not_implemented() -> HttpResponse {
+    return create(501, "Not Implemented", "text/plain");
+}
+
+/**
+ * Create a Service Unavailable response
+ * 
+ * @param message - Error message
+ * @returns HTTP 503 response
+ */
+fn service_unavailable(message: string) -> HttpResponse {
+    let resp = create(503, message, "text/plain");
+    resp.headers["Retry-After"] = "60";
+    return resp;
+}
+
+/**
+ * Create a redirect response
+ * 
+ * @param location - Redirect URL
+ * @returns HTTP 302 response
+ */
+fn redirect(location: string) -> HttpResponse {
+    let resp = HttpResponse {
+        status_code: 302,
+        status_text: "Found",
+        headers: {
+            "Location": location
+        },
+        body: "",
+        version: "HTTP/1.1"
+    };
+    
+    return resp;
+}
+
+/**
+ * Create a permanent redirect response
+ * 
+ * @param location - Redirect URL
+ * @returns HTTP 301 response
+ */
+fn permanent_redirect(location: string) -> HttpResponse {
+    let resp = HttpResponse {
+        status_code: 301,
+        status_text: "Moved Permanently",
+        headers: {
+            "Location": location
+        },
+        body: "",
+        version: "HTTP/1.1"
+    };
+    
+    return resp;
+}
+
+/**
+ * Set a header on a response
+ * 
+ * @param response - The HTTP response
+ * @param name - Header name
+ * @param value - Header value
+ * @returns The same response for chaining
+ */
+fn set_header(response: HttpResponse, name: string, value: string) -> HttpResponse {
+    response.headers[name] = value;
+    return response;
+}
+
+/**
+ * Set multiple headers on a response
+ * 
+ * @param response - The HTTP response
+ * @param headers - Map of headers
+ * @returns The same response for chaining
+ */
+fn set_headers(response: HttpResponse, headers: Map<string, string>) -> HttpResponse {
+    for key in keys(headers) {
+        response.headers[key] = headers[key];
+    }
+    return response;
+}
+
+/**
+ * Set content type
+ * 
+ * @param response - The HTTP response
+ * @param content_type - Content-Type value
+ * @returns The same response for chaining
+ */
+fn content_type(response: HttpResponse, content_type: string) -> HttpResponse {
+    response.headers["Content-Type"] = content_type;
+    return response;
+}
+
+/**
+ * Set status code
+ * 
+ * @param response - The HTTP response
+ * @param code - Status code
+ * @returns The same response for chaining
+ */
+fn status(response: HttpResponse, code: i64) -> HttpResponse {
+    response.status_code = code;
+    
+    if code in status_texts {
+        response.status_text = status_texts[code];
+    }
+    
+    return response;
+}
+
+/**
+ * Set response body
+ * 
+ * @param response - The HTTP response
+ * @param body - Response body
+ * @returns The same response for chaining
+ */
+fn body(response: HttpResponse, body: string) -> HttpResponse {
+    response.body = body;
+    response.headers["Content-Length"] = str(len(body));
+    return response;
+}
+
+/**
+ * Add CORS headers
+ * 
+ * @param response - The HTTP response
+ * @param origin - Allowed origin
+ * @returns The same response for chaining
+ */
+fn cors(response: HttpResponse, origin: string) -> HttpResponse {
+    response.headers["Access-Control-Allow-Origin"] = origin;
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
+    return response;
+}
+
+/**
+ * Convert response to string for sending
+ * 
+ * @param response - The HTTP response
+ * @returns Raw HTTP response string
+ */
+fn to_string(response: HttpResponse) -> string {
+    let output = response.version + " " + str(response.status_code) + " " + response.status_text + "\r\n";
+    
+    // Add headers
+    for key in keys(response.headers) {
+        output = output + key + ": " + response.headers[key] + "\r\n";
+    }
+    
+    output = output + "\r\n";
+    
+    // Add body
+    output = output + response.body;
+    
+    return output;
+}
+
+/**
+ * Get status code
+ * 
+ * @param response - The HTTP response
+ * @returns Status code
+ */
+fn get_status_code(response: HttpResponse) -> i64 {
+    return response.status_code;
+}
+
+/**
+ * Get status text
+ * 
+ * @param response - The HTTP response
+ * @returns Status text
+ */
+fn get_status_text(response: HttpResponse) -> string {
+    return response.status_text;
+}
+
+/**
+ * Get body
+ * 
+ * @param response - The HTTP response
+ * @returns Response body
+ */
+fn get_body(response: HttpResponse) -> string {
+    return response.body;
+}
+
+// Helper functions
+
+fn str(n: i64) -> string {
+    // Would be native implementation
+    return "";
+}
+
+fn len(s: string) -> i64 {
+    // Would be native implementation
+    return 0;
+}
+
+fn keys(m: Map<string, string>) -> List<string> {
+    // Would be native implementation
+    return [];
+}

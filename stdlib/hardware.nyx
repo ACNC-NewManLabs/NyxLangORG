@@ -1,0 +1,16 @@
+// Nyx Hardware Layer [Layer 26]
+// Bridging to VM hypercalls and low-level port I/O.
+
+export fn hypercall(num: int, a1: int, a2: int, a3: int) -> int {
+    return std::hypervisor::call(num, a1, a2, a3);
+}
+
+// Emulated Port I/O
+export fn out_port(port: int, val: int) {
+    // Port 0x3F8 is usually COM1 in many emulators
+    std::hypervisor::call(10, port, val, 0); 
+}
+
+export fn in_port(port: int) -> int {
+    return std::hypervisor::call(11, port, 0, 0);
+}

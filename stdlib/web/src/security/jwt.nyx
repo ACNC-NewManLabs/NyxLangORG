@@ -1,0 +1,343 @@
+// Nyx Web Security - JWT
+// JSON Web Token implementation
+
+// JWT Claims
+struct JWTClaims {
+    subject: string
+    issuer: string
+    audience: List<string>
+    expiration: u64
+    not_before: u64
+    issued_at: u64
+    jwt_id: string
+    custom: Map<string, any>
+}
+
+// JWT Token
+struct JWT {
+    header: JWTHeader
+    payload: JWTClaims
+    signature: string
+}
+
+// JWT Header
+struct JWTHeader {
+    algorithm: string
+    type: string
+    key_id: string
+}
+
+// JWT Config
+struct JWTConfig {
+    secret: string
+    algorithm: string
+    issuer: string
+    audience: List<string>
+    expiry_seconds: u64
+}
+
+// Create new JWT config
+fn jwt_config(secret: string) -> JWTConfig {
+    return JWTConfig {
+        secret: secret
+        algorithm: "HS256"
+        issuer: "nyx-web"
+        audience: List::new()
+        expiry_seconds: 3600  // 1 hour
+    }
+}
+
+// Create JWT token
+fn create_token(config: JWTConfig, subject: string, custom_claims: Map<string, any> = Map::new()) -> string {
+    let now = time::now()
+    
+    let claims = JWTClaims {
+        subject: subject
+        issuer: config.issuer
+        audience: config.audience.clone()
+        expiration: now + config.expiry_seconds
+        not_before: now
+        issued_at: now
+        jwt_id: generate_id()
+        custom: custom_claims
+    }
+    
+    let header = JWTHeader {
+        algorithm: config.algorithm
+        type: "JWT"
+        key_id: ""
+    }
+    
+    // Encode header and payload
+    let header_b64 = base64_url_encode(json::serialize(header))
+    let payload_b64 = base64_url_encode(json::serialize(claims))
+    
+    // Create signature
+    let message = header_b64 + "." + payload_b64
+    let signature = sign(message, config.secret, config.algorithm)
+    
+    return message + "." + signature
+}
+
+// Verify JWT token
+fn verify_token(config: JWTConfig, token: string) -> Option<JWTClaims> {
+    let parts = token.split(".")
+    
+    if parts.len() != 3 {
+        return Option::none()
+    }
+    
+    let header_b64 = parts[0]
+    let payload_b64 = parts[1]
+    let signature = parts[2]
+    
+    // Verify signature
+    let message = header_b64 + "." + payload_b64
+    let expected_signature = sign(message, config.secret, config.algorithm)
+    
+    if signature != expected_signature {
+        return Option::none()
+    }
+    
+    // Decode payload
+    let payload_json = base64_url_decode(payload_b64)
+    let claims: JWTClaims = json::parse(payload_json)
+    
+    // Check expiration
+    let now = time::now()
+    
+    if claims.expiration < now {
+        return Option::none()
+    }
+    
+    // Check not before
+    if claims.not_before > now {
+        return Option::none()
+    }
+    
+    // Check issuer
+    if config.issuer != "" && claims.issuer != config.issuer {
+        return Option::none()
+    }
+    
+    // Check audience
+    if config.audience.len() > 0 {
+        let valid_audience = false
+        for aud in claims.audience {
+            if config.audience.contains(aud) {
+                valid_audience = true
+                break
+            }
+        }
+        if !valid_audience {
+            return Option::none()
+        }
+    }
+    
+    return Option::some(claims)
+}
+
+// Sign message (HMAC)
+fn sign(message: string, secret: string, algorithm: string) -> string {
+    match algorithm {
+        "HS256" => {
+            return hmac_sha256(secret, message)
+        }
+        "HS384" => {
+            return hmac_sha384(secret, message)
+        }
+        "HS512" => {
+            return hmac_sha512(secret, message)
+        }
+        _ => {
+            return hmac_sha256(secret, message)
+        }
+    }
+}
+
+// HMAC-SHA256
+fn hmac_sha256(key: string, message: string) -> string {
+    // Simplified - in production use proper HMAC
+    return sha256(key + message)
+}
+
+// HMAC-SHA384
+fn hmac_sha384(key: string, message: string) -> string {
+    return sha384(key + message)
+}
+
+// HMAC-SHA512
+fn hmac_sha512(key: string, message: string) -> string {
+    return sha512(key + message)
+}
+
+// Base64 URL encode
+fn base64_url_encode(data: string) -> string {
+    let encoded = base64_encode(data)
+    // Replace + with -, / with _, and remove =
+    return encoded.replace("+", "-").replace("/", "_").replace("=", "")
+}
+
+// Base64 URL decode
+fn base64_url_decode(data: string) -> string {
+    // Add padding if needed
+    let padded = data
+    let remainder = data.length() % 4
+    if remainder > 0 {
+        padded = padded + "=".repeat(4 - remainder)
+    }
+    // Replace - with +, _ with /
+    return base64_decode(padded.replace("-", "+").replace("_", "/"))
+}
+
+// Refresh token
+fn refresh_token(config: JWTConfig, token: string) -> Option<string> {
+    let claims = verify_token(config, token)
+    
+    match claims {
+        Some(c) => {
+            // Create new token with same subject but new expiry
+            return Option::some(create_token(config, c.subject, c.custom))
+        }
+        None => {
+            return Option::none()
+        }
+    }
+}
+
+// Decode token without verification (for inspection)
+fn decode_token(token: string) -> Option<JWT> {
+    let parts = token.split(".")
+    
+    if parts.len() != 3 {
+        return Option::none()
+    }
+    
+    let header_json = base64_url_decode(parts[0])
+    let payload_json = base64_url_decode(parts[1])
+    
+    let header: JWTHeader = json::parse(header_json)
+    let payload: JWTClaims = json::parse(payload_json)
+    
+    return Option::some(JWT {
+        header: header
+        payload: payload
+        signature: parts[2]
+    })
+}
+
+// Get token from Authorization header
+fn extract_token(auth_header: string) -> Option<string> {
+    if auth_header.starts_with("Bearer ") {
+        return Option::some(auth_header.substring(7))
+    }
+    return Option::none()
+}
+
+// JWT middleware
+fn jwt_middleware(config: JWTConfig) -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let auth_header = get_header(ctx, "Authorization")
+        
+        match auth_header {
+            Some(header) => {
+                let token = extract_token(header)
+                
+                match token {
+                    Some(t) => {
+                        let claims = verify_token(config, t)
+                        
+                        match claims {
+                            Some(c) => {
+                                ctx.state["user"] = c.subject
+                                ctx.state["claims"] = c
+                            }
+                            None => {
+                                return error(ctx, "Invalid token", 401)
+                            }
+                        }
+                    }
+                    None => {
+                        return error(ctx, "Invalid authorization header", 401)
+                    }
+                }
+            }
+            None => {
+                return error(ctx, "Authorization required", 401)
+            }
+        }
+        
+        return ctx
+    }
+}
+
+// Create access token (short-lived)
+fn create_access_token(config: JWTConfig, subject: string) -> string {
+    let access_config = jwt_config(config.secret)
+    access_config.expiry_seconds = 900  // 15 minutes
+    return create_token(access_config, subject)
+}
+
+// Create refresh token (long-lived)
+fn create_refresh_token(config: JWTConfig, subject: string) -> string {
+    let refresh_config = jwt_config(config.secret)
+    refresh_config.expiry_seconds = 604800  // 7 days
+    return create_token(refresh_config, subject)
+}
+
+// Token pair (access + refresh)
+struct TokenPair {
+    access_token: string
+    refresh_token: string
+    expires_in: u64
+}
+
+// Create token pair
+fn create_token_pair(config: JWTConfig, subject: string) -> TokenPair {
+    return TokenPair {
+        access_token: create_access_token(config, subject)
+        refresh_token: create_refresh_token(config, subject)
+        expires_in: 900
+    }
+}
+
+// Validate token expiration
+fn is_token_expired(claims: JWTClaims) -> bool {
+    return claims.expiration < time::now()
+}
+
+// Get token expiration time
+fn get_expiration(claims: JWTClaims) -> u64 {
+    return claims.expiration
+}
+
+// Time until expiration
+fn time_until_expiry(claims: JWTClaims) -> i64 {
+    return claims.expiration - time::now()
+}
+
+export JWTClaims
+export JWT
+export JWTHeader
+export JWTConfig
+export jwt_config
+export create_token
+export verify_token
+export sign
+export hmac_sha256
+export hmac_sha384
+export hmac_sha512
+export base64_url_encode
+export base64_url_decode
+export refresh_token
+export decode_token
+export extract_token
+export jwt_middleware
+export create_access_token
+export create_refresh_token
+export TokenPair
+export create_token_pair
+export is_token_expired
+export get_expiration
+export time_until_expiry
+

@@ -1,0 +1,74 @@
+import ml;
+
+# --- Nyx Data Governance & Privacy (GDPR/Compliance) ---
+
+let governance_policy = {
+    ttl_days: 90,
+    pii_masking: true,
+    feature_whitelist: ["age", "income", "zip_code"]
+}
+
+fn enforce_minimization(features) {
+    println("--- Nyx Privacy Engine: Feature Minimization Audit ---")
+    let minimized = {}
+    let keys = features.keys()
+    let i = 0
+    while i < std::list::len(keys) {
+        let f = keys[i]
+        let found = false
+        let j = 0
+        while j < std::list::len(governance_policy.feature_whitelist) {
+            if f == governance_policy.feature_whitelist[j] {
+                found = true
+            }
+            j = j + 1
+        }
+        
+        if found {
+            minimized[f] = features[f]
+        } else {
+            println("  MINIMIZED: Dropping non-whitelisted feature [", f, "]")
+        }
+        i = i + 1
+    }
+    return minimized
+}
+
+fn handle_dsr_request(user_id, action) {
+    println("--- Nyx Compliance: Handling Data Subject Request (DSR) ---")
+    println("  USER:   ", user_id)
+    println("  ACTION: ", action)
+    
+    if action == "DELETE" {
+        println("  SUCCESS: Records for ", user_id, " marked for hard deletion (TTL 0).")
+    }
+    if action == "EXPORT" {
+         println("  SUCCESS: User data bundle serialized for portability.")
+    }
+    return true
+}
+
+fn mask_pii(text) {
+    # Simple simulation of masking
+    return "****-MASKED-****"
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: Feature Minimization (Drop unneeded fields)")
+    let raw_feats = { age: 34, income: 55000, zip_code: "90210", ssn: "123-45-678" }
+    let mini = enforce_minimization(raw_feats)
+    println("  RESULT: Minimized Features: ", mini)
+    
+    println("")
+    
+    println("Scenario 2: DSR Delete Hook")
+    handle_dsr_request("U-777", "DELETE")
+    
+    println("")
+    
+    println("Scenario 3: PII Masking in Traces")
+    let pii = "SecretUser123"
+    println("  Masked Result: ", mask_pii(pii))
+}

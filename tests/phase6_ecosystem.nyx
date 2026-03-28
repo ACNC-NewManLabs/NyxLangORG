@@ -1,0 +1,103 @@
+# Nyx Dataframe Engine: Phase 6 - Ecosystem & Platform Test
+
+import df.column;
+import df.dataframe;
+import df.sql;
+import df.ml_bridge;
+import df.python_bridge;
+import df.transform;
+import df.expr;
+import df.lazy;
+
+fn main() {
+    println("=== Phase 6: Ecosystem & Platform Tests ===")
+    let all_passed = true
+
+    # Build test data
+    let emp = df::dataframe::DataFrame([
+        df::column::Column("id",     "int",   [1, 2, 3, 4, 5], null),
+        df::column::Column("name",   "str",   ["Alice", "Bob", "Carol", "Dave", "Eve"], null),
+        df::column::Column("dept",   "str",   ["Eng", "Eng", "HR", "HR", "Eng"], null),
+        df::column::Column("salary", "float", [90000.0, 85000.0, 75000.0, 70000.0, 95000.0], null)
+    ], null)
+    let ctx = { employees: emp }
+
+    # ── Test 1: SQL WHERE numeric ─────────────────────────────────────────────
+    let q1 = df::sql::sql("SELECT name, salary FROM employees WHERE salary > 80000", ctx)
+    let passed_1 = (q1 != null && q1.nrows() == 3)
+    if passed_1 { println("✅ Test 1: SQL WHERE numeric PASSED") }
+    else { println("❌ Test 1: SQL WHERE numeric FAILED  rows:", q1 != null ? q1.nrows() : "null")  all_passed = false }
+
+    # ── Test 2: SQL ORDER BY DESC ─────────────────────────────────────────────
+    let q2 = df::sql::sql("SELECT name, salary FROM employees ORDER BY salary DESC", ctx)
+    let passed_2 = (q2 != null && q2.nrows() == 5)
+    if passed_2 { println("✅ Test 2: SQL ORDER BY DESC PASSED") }
+    else { println("❌ Test 2: SQL ORDER BY DESC FAILED")  all_passed = false }
+
+    # ── Test 3: SQL LIMIT ────────────────────────────────────────────────────
+    let q3 = df::sql::sql("SELECT name FROM employees LIMIT 3", ctx)
+    let passed_3 = (q3 != null && q3.nrows() == 3)
+    if passed_3 { println("✅ Test 3: SQL LIMIT PASSED") }
+    else { println("❌ Test 3: SQL LIMIT FAILED  rows:", q3 != null ? q3.nrows() : "null")  all_passed = false }
+
+    # ── Test 4: SQL SELECT * ──────────────────────────────────────────────────
+    let q4 = df::sql::sql("SELECT * FROM employees", ctx)
+    let passed_4 = (q4 != null && q4.nrows() == 5)
+    if passed_4 { println("✅ Test 4: SQL SELECT * PASSED") }
+    else { println("❌ Test 4: SQL SELECT * FAILED")  all_passed = false }
+
+    # ── Test 5: DISTINCT deduplicate ─────────────────────────────────────────
+    let dept_df = df::dataframe::DataFrame([
+        df::column::Column("dept", "str", ["Eng", "HR", "Eng", "HR", "Finance"], null)
+    ], null)
+    let distinct_df = std::df::distinct(dept_df)
+    let passed_5 = (distinct_df != null && distinct_df._columns[0]._data.len() == 3)
+    if passed_5 { println("✅ Test 5: DISTINCT deduplicate PASSED") }
+    else { println("❌ Test 5: DISTINCT deduplicate FAILED")  all_passed = false }
+
+    # ── Test 6: ML Bridge - from_tensor ──────────────────────────────────────
+    let tensor_obj = { data: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0], shape: [3, 2] }
+    let from_t = df::ml_bridge::from_tensor(tensor_obj, ["x", "y"])
+    let passed_6 = (from_t != null && from_t._columns != null)
+    if passed_6 { println("✅ Test 6: from_tensor PASSED") }
+    else { println("❌ Test 6: from_tensor FAILED")  all_passed = false }
+
+    # ── Test 7: ML Bridge - predict_batch ────────────────────────────────────
+    let feat_df = df::dataframe::DataFrame([
+        df::column::Column("x", "float", [1.0, 2.0, 3.0], null)
+    ], null)
+    let preds = df::ml_bridge::predict_batch(feat_df, ["x"], fn(row) { return row[0] * 2.0 })
+    let passed_7 = (preds != null && preds.col("prediction") != null)
+    if passed_7 { println("✅ Test 7: predict_batch PASSED") }
+    else { println("❌ Test 7: predict_batch FAILED")  all_passed = false }
+
+    # ── Test 8: Arrow IPC export ──────────────────────────────────────────────
+    let ipc_bytes = std::df::export_arrow_ipc(emp)
+    let passed_8 = (ipc_bytes != null)
+    if passed_8 { println("✅ Test 8: export_arrow_ipc PASSED") }
+    else { println("❌ Test 8: export_arrow_ipc FAILED")  all_passed = false }
+
+    # ── Test 9: Python bridge to_json_records ─────────────────────────────────
+    let small_df = df::dataframe::DataFrame([
+        df::column::Column("a", "int", [1, 2], null)
+    ], null)
+    let json_str = df::python_bridge::to_json_records(small_df)
+    let passed_9 = (json_str != null && std::string::contains(json_str, "a"))
+    if passed_9 { println("✅ Test 9: to_json_records PASSED") }
+    else { println("❌ Test 9: to_json_records FAILED  got:", json_str)  all_passed = false }
+
+    # ── Test 10: SQL GROUP BY ─────────────────────────────────────────────────
+    let q10 = df::sql::sql("SELECT dept, AVG(salary) FROM employees GROUP BY dept", ctx)
+    let passed_10 = (q10 != null && q10.nrows() == 2)
+    if passed_10 { println("✅ Test 10: SQL GROUP BY + AVG PASSED") }
+    else { println("❌ Test 10: SQL GROUP BY + AVG FAILED  rows:", q10 != null ? q10.nrows() : "null")  all_passed = false }
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    if all_passed {
+        println("")
+        println("NYX PHASE 6 TESTS: ALL PASSED ✓")
+    } else {
+        println("")
+        println("NYX PHASE 6 TESTS: SOME FAILED ✗")
+    }
+}

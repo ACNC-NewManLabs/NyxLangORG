@@ -1,0 +1,45 @@
+import ml;
+
+# --- Nyx Runtime Fairness Guard (Per-Request Audit) ---
+
+# High-risk demographic audit list (based on v3.0 audit)
+# 1 = Female, 1 = Young
+let high_risk_segments = [
+    { sex: 1, age: 1 } # Female Young (FY)
+]
+
+fn protect_fairness_request(sex, age) {
+    println("Auditing Fairness for Demographic: Sex=", sex, " Age=", age)
+    
+    let k = 0
+    while k < high_risk_segments.len() {
+        let seg = high_risk_segments[k]
+        if sex == seg.sex && age == seg.age {
+            println("  BLOCK: Systematic bias risk detected for this subgroup!")
+            println("  ACTION: Triggering Fallback logic (Bypassing biased ML model).")
+            return false
+        }
+        k = k + 1
+    }
+    
+    println("  PASS: Fairness audit clean.")
+    return true
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("--- Testing Nyx Runtime Fairness Guard ---")
+    
+    # 1. Safe Request (Male Old)
+    println("Scenario 1: Safe request")
+    let r1 = protect_fairness_request(0, 0)
+    println("  Result: ", r1)
+    
+    println("")
+    
+    # 2. Biased Request (Female Young)
+    println("Scenario 2: Biased request (identified in v3 audit)")
+    let r2 = protect_fairness_request(1, 1)
+    println("  Result: ", r2)
+}

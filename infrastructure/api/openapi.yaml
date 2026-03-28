@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: Nyx Global Registry API
+  version: 1.0.0
+servers:
+  - url: https://registry.nyxlang.org
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/auth/register:
+    post:
+      summary: Register a developer and issue API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, signing_public_key]
+              properties:
+                username: { type: string }
+                email: { type: string }
+                signing_public_key: { type: string }
+      responses:
+        '200':
+          description: Developer registered
+  /api/v1/packages/publish:
+    post:
+      summary: Publish package version
+      parameters:
+        - in: header
+          name: x-api-key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, version, description, nyx_toml, source_sha256, signature, dependencies, tags]
+      responses:
+        '200':
+          description: Package accepted and verified
+  /api/v1/packages/search:
+    get:
+      summary: Search packages by name and tag
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: tag
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+  /api/v1/packages/{name}:
+    get:
+      summary: Package info
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Package metadata
+  /api/v1/packages/{name}/download/{version}:
+    get:
+      summary: Get package download URL and integrity hash
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+        - in: path
+          name: version
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Package artifact pointer
+  /api/v1/docs/{name}/{version}:
+    get:
+      summary: Documentation endpoint for package version
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+        - in: path
+          name: version
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Docs URL
+  /api/v1/mirrors/register:
+    post:
+      summary: Register mirror node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [region, endpoint]
+              properties:
+                region: { type: string }
+                endpoint: { type: string }
+      responses:
+        '200':
+          description: Mirror registered
+  /api/v1/mirrors/snapshot:
+    get:
+      summary: Snapshot used by mirror synchronization
+      responses:
+        '200':
+          description: Snapshot payload

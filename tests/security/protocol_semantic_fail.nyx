@@ -1,0 +1,13 @@
+secure protocol BadProtocol {
+    roles: Client, Server
+
+    primitives {
+        kem: X25519
+    }
+
+    handshake {
+        Client -> UnknownRole: hello {
+            e = 1
+        }
+    }
+}

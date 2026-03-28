@@ -1,0 +1,261 @@
+// Nyx Web Router
+// Request routing with pattern matching
+
+// Route represents a web route
+struct Route {
+    method: HttpMethod
+    path: string
+    pattern: string
+    handler: fn(Context) -> Response
+    name: string
+    middleware: List<Middleware>
+}
+
+// Route parameters
+struct RouteParams {
+    params: Map<string, string>
+    query: Map<string, string>
+}
+
+// Router manages route registration and matching
+struct Router {
+    routes: List<Route>
+    named_routes: Map<string, Route>
+    middleware: List<Middleware>
+    groups: List<RouteGroup>
+}
+
+// Route group for prefix and middleware
+struct RouteGroup {
+    prefix: string
+    middleware: List<Middleware>
+}
+
+// Route match result
+struct RouteMatch {
+    route: Route
+    params: Map<string, string>
+    matched: bool
+}
+
+// Create a new router
+fn new_router() -> Router {
+    return Router {
+        routes: List::new()
+        named_routes: Map::new()
+        middleware: List::new()
+        groups: List::new()
+    }
+}
+
+// Add a route to the router
+fn add_route(router: Router, method: HttpMethod, path: string, handler: fn(Context) -> Response) -> Route {
+    let route = Route {
+        method: method
+        path: path
+        pattern: path
+        handler: handler
+        name: ""
+        middleware: List::new()
+    }
+    
+    router.routes.push(route)
+    return route
+}
+
+// Add GET route
+fn get(router: Router, path: string, handler: fn(Context) -> Response) -> Route {
+    return add_route(router, HttpMethod::GET, path, handler)
+}
+
+// Add POST route
+fn post(router: Router, path: string, handler: fn(Context) -> Response) -> Route {
+    return add_route(router, HttpMethod::POST, path, handler)
+}
+
+// Add PUT route
+fn put(router: Router, path: string, handler: fn(Context) -> Response) -> Route {
+    return add_route(router, HttpMethod::PUT, path, handler)
+}
+
+// Add DELETE route
+fn delete(router: Router, path: string, handler: fn(Context) -> Response) -> Route {
+    return add_route(router, HttpMethod::DELETE, path, handler)
+}
+
+// Add PATCH route
+fn patch(router: Router, path: string, handler: fn(Context) -> Response) -> Route {
+    return add_route(router, HttpMethod::PATCH, path, handler)
+}
+
+// Add OPTIONS route
+fn options(router: Router, path: string, handler: fn(Context) -> Response) -> Route {
+    return add_route(router, HttpMethod::OPTIONS, path, handler)
+}
+
+// Name a route
+fn name(route: Route, name: string) -> Route {
+    route.name = name
+    return route
+}
+
+// Add middleware to route
+fn use(route: Route, middleware: Middleware) -> Route {
+    route.middleware.push(middleware)
+    return route
+}
+
+// Group routes with prefix
+fn group(router: Router, prefix: string, callback: fn(Router)) {
+    let group = RouteGroup {
+        prefix: prefix
+        middleware: List::new()
+    }
+    router.groups.push(group)
+    callback(router)
+}
+
+// Parse route pattern and extract parameters
+fn parse_pattern(pattern: string) -> List<string> {
+    let params = List::new()
+    let parts = pattern.split("/")
+    
+    for part in parts {
+        if (part.starts_with(":")) {
+            params.push(part.substring(1))
+        }
+    }
+    
+    return params
+}
+
+// Match route against path
+fn match_route(router: Router, method: HttpMethod, path: string) -> Option<RouteMatch> {
+    let path_parts = path.split("/")
+    
+    for route in router.routes {
+        if (route.method != method) {
+            continue
+        }
+        
+        let pattern_parts = route.pattern.split("/")
+        
+        if (pattern_parts.len() != path_parts.len()) {
+            continue
+        }
+        
+        let params = Map::new()
+        let matched = true
+        
+        for i in 0..pattern_parts.len() {
+            let pattern_part = pattern_parts[i]
+            let path_part = path_parts[i]
+            
+            if (pattern_part.starts_with(":")) {
+                // Extract parameter
+                let param_name = pattern_part.substring(1)
+                params.insert(param_name, path_part)
+            } else if (pattern_part != path_part) {
+                matched = false
+                break
+            }
+        }
+        
+        if (matched) {
+            return Option::some(RouteMatch {
+                route: route
+                params: params
+                matched: true
+            })
+        }
+    }
+    
+    return Option::none()
+}
+
+// Handle request through router
+fn handle_request(router: Router, ctx: Context) -> Response {
+    let method = string_to_method(ctx.request.method)
+    let match_result = match_route(router, method, ctx.request.path)
+    
+    match match_result {
+        Some(route_match) => {
+            // Set path parameters
+            for key in route_match.params.keys() {
+                ctx.params.insert(key, route_match.params.get(key))
+            }
+            
+            // Execute route middleware
+            for middleware in route_match.route.middleware {
+                ctx = middleware(ctx)
+                if (ctx.response.status_code != 200) {
+                    return ctx.response
+                }
+            }
+            
+            // Execute route handler
+            return route_match.route.handler(ctx)
+        }
+        None => {
+            // No route found - 404
+            return error(ctx, "Not Found", 404)
+        }
+    }
+}
+
+// Convert string to HTTP method
+fn string_to_method(method: string) -> HttpMethod {
+    match method {
+        "GET" => return HttpMethod::GET
+        "POST" => return HttpMethod::POST
+        "PUT" => return HttpMethod::PUT
+        "DELETE" => return HttpMethod::DELETE
+        "PATCH" => return HttpMethod::PATCH
+        "OPTIONS" => return HttpMethod::OPTIONS
+        "HEAD" => return HttpMethod::HEAD
+        _ => return HttpMethod::GET
+    }
+}
+
+// Resource-style routing
+fn resource(router: Router, name: string, controller: fn(Context, string) -> Response) {
+    let base = "/" + name
+    
+    // Index
+    get(router, base, fn(ctx: Context) -> controller(ctx, "index"))
+    // New
+    get(router, base + "/new", fn(ctx: Context) -> controller(ctx, "new"))
+    // Show
+    get(router, base + "/:id", fn(ctx: Context) -> controller(ctx, "show"))
+    // Create
+    post(router, base, fn(ctx: Context) -> controller(ctx, "create"))
+    // Edit
+    get(router, base + "/:id/edit", fn(ctx: Context) -> controller(ctx, "edit"))
+    // Update
+    put(router, base + "/:id", fn(ctx: Context) -> controller(ctx, "update"))
+    // Delete
+    delete(router, base + "/:id", fn(ctx: Context) -> controller(ctx, "destroy"))
+}
+
+export {
+    Route,
+    RouteParams,
+    RouteMatch,
+    Router,
+    RouteGroup,
+    new_router,
+    add_route,
+    get,
+    post,
+    put,
+    delete,
+    patch,
+    options,
+    name,
+    use,
+    group,
+    parse_pattern,
+    match_route,
+    handle_request,
+    resource
+}

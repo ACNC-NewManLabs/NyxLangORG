@@ -1,0 +1,90 @@
+# ============================================================
+# Nyx Full OS Architecture Standard Library Demo
+# Demonstrates GDT, IDT, Paging, PCI, ACPI, APIC, and CPUID
+# ============================================================
+
+fn main() {
+    print("=== Nyx Advanced OS Subsystems ===\n")
+
+    # ── 1. GDT (Global Descriptor Table) ─────────────────────
+    print("[ std::kernel::gdt ]")
+    let pr    = std::kernel::gdt::ACCESS_PR()
+    let ring0 = std::kernel::gdt::ACCESS_PRIV_RING0()
+    let ex    = std::kernel::gdt::ACCESS_EX()
+    let rw    = std::kernel::gdt::ACCESS_RW()
+    let gr    = std::kernel::gdt::FLAG_GR()
+    let sz    = std::kernel::gdt::FLAG_SZ()
+    let l_mode= std::kernel::gdt::FLAG_L()
+
+    # Kernel Code Segment (64-bit): Present, Ring 0, Executable, Read/Write, Granularity, Long Mode
+    let kcode_access = pr | ring0 | ex | rw
+    let kcode_flags  = gr | l_mode
+    let kcode_desc   = std::kernel::gdt::build_entry(0, 0xFFFFF, kcode_access, kcode_flags)
+    
+    # Kernel Data Segment (64-bit): Present, Ring 0, Read/Write, Granularity, Size(32-bit compat)
+    let kdata_access = pr | ring0 | rw
+    let kdata_flags  = gr | sz
+    let kdata_desc   = std::kernel::gdt::build_entry(0, 0xFFFFF, kdata_access, kdata_flags)
+
+    print("  Kernel Code Access Byte: " + kcode_access)
+    print("  Kernel Code Descriptor:  " + kcode_desc)
+    print("  Kernel Data Descriptor:  " + kdata_desc)
+
+    # ── 2. IDT (Interrupt Descriptor Table) ──────────────────
+    print("\n[ std::kernel::idt ]")
+    print("  ATTR_PRESENT:   " + std::kernel::idt::ATTR_PRESENT())
+    print("  ATTR_INT_GATE:  " + std::kernel::idt::ATTR_INT_GATE())
+    print("  ATTR_TRAP_GATE: " + std::kernel::idt::ATTR_TRAP_GATE())
+
+    # ── 3. Paging ────────────────────────────────────────────
+    print("\n[ std::kernel::paging ]")
+    print("  FLAG_PRESENT:  " + std::kernel::paging::FLAG_PRESENT())
+    print("  FLAG_WRITABLE: " + std::kernel::paging::FLAG_WRITABLE())
+    print("  FLAG_USER:     " + std::kernel::paging::FLAG_USER())
+    print("  FLAG_HUGE:     " + std::kernel::paging::FLAG_HUGE_PAGE())
+
+    # ── 4. PCI (Peripheral Component Interconnect) ───────────
+    print("\n[ std::kernel::pci ]")
+    let pci_addr = std::kernel::pci::CONFIG_ADDRESS()
+    let pci_data = std::kernel::pci::CONFIG_DATA()
+    
+    print("  CONFIG_ADDRESS Port: " + pci_addr)
+    print("  CONFIG_DATA Port:    " + pci_data)
+
+    # Get address for Bus 0, Device 2 (VGA), Function 0, Offset 0 (Vendor ID)
+    let vga_vendor_addr = std::kernel::pci::build_address(0, 2, 0, std::kernel::pci::OFFSET_VENDOR_ID())
+    # 0x80001000 expected for 0:2.0 offset 0
+    print("  PCI Bus 0:2.0 offset 0 (VGA Vendor) Address: " + vga_vendor_addr)
+
+    # ── 5. ACPI (Advanced Configuration and Power Interface) ─
+    print("\n[ std::kernel::acpi ]")
+    print("  SIG_RSDP: '" + std::kernel::acpi::SIG_RSDP() + "'")
+    print("  SIG_MADT: '" + std::kernel::acpi::SIG_MADT() + "' (Multiple APIC Description Table)")
+    print("  SIG_MCFG: '" + std::kernel::acpi::SIG_MCFG() + "' (PCI Express memory mapped config)")
+
+    # ── 6. Multiboot2 ────────────────────────────────────────
+    print("\n[ std::kernel::multiboot2 ]")
+    print("  MAGIC_BOOTLOADER: 0x" + std::kernel::multiboot2::MAGIC()) # should be 0x36d76289
+    print("  TAG_MMAP:         " + std::kernel::multiboot2::TAG_MMAP())
+    print("  TAG_FRAMEBUFFER:  " + std::kernel::multiboot2::TAG_FRAMEBUFFER())
+
+    # ── 7. APIC (Advanced Programmable Interrupt Controller) ─
+    print("\n[ std::kernel::apic ]")
+    print("  BASE_MSR:      0x" + std::kernel::apic::BASE_MSR())
+    print("  REG_ID:        0x" + std::kernel::apic::REG_ID())
+    print("  REG_EOI:       0x" + std::kernel::apic::REG_EOI())
+    print("  REG_ICR_LOW:   0x" + std::kernel::apic::REG_ICR_LOW())
+    print("  REG_LVT_TIMER: 0x" + std::kernel::apic::REG_LVT_TIMER())
+
+    # ── 8. CPUID ─────────────────────────────────────────────
+    print("\n[ std::kernel::cpuid ]")
+    print("  LEAF_VENDOR_ID:  0x" + std::kernel::cpuid::LEAF_VENDOR_ID())
+    print("  LEAF_FEATURES:   0x" + std::kernel::cpuid::LEAF_FEATURES())
+    let mask_apic = std::kernel::cpuid::FEAT_EDX_APIC()
+    let mask_sse2 = std::kernel::cpuid::FEAT_EDX_SSE2()
+    print("  FEAT_EDX_APIC:   " + mask_apic)
+    print("  FEAT_EDX_SSE2:   " + mask_sse2)
+    print("  EXT_LONG_MODE:   " + std::kernel::cpuid::EXT_EDX_LONG_MODE())
+
+    print("\n=== OS Full System verification successfully ===")
+}

@@ -1,0 +1,124 @@
+# Nyx ML Training Engine
+# High-level orchestration, loop abstraction, and callbacks
+
+# ─────────────────────────────────────────────────────────────
+# Base Callback
+# ─────────────────────────────────────────────────────────────
+fn Callback() {
+    return {
+        on_train_begin: fn(self) {},
+        on_train_end: fn(self) {},
+        on_epoch_begin: fn(self, epoch) {},
+        on_epoch_end: fn(self, epoch, logs) {},
+        on_batch_begin: fn(self, batch) {},
+        on_batch_end: fn(self, batch, logs) {}
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Trainer Class
+# ─────────────────────────────────────────────────────────────
+fn Trainer(model, optimizer, criterion) {
+    return {
+        model: model,
+        optimizer: optimizer,
+        criterion: criterion,
+        callbacks: [],
+        
+        add_callback: fn(self, cb) {
+            self.callbacks.push(cb)
+        },
+        
+        fit: fn(self, x_train, y_train, epochs, batch_size) {
+            if batch_size == null { batch_size = 32 }
+            println("[Trainer] Starting fitting for {} epochs...", epochs)
+            
+            # Start callbacks
+            let i = 0
+            while i < self.callbacks.len() {
+                self.callbacks[i].on_train_begin()
+                i = i + 1
+            }
+            
+            let epoch = 0
+            while epoch < epochs {
+                # Epoch begin callbacks
+                let i = 0
+                while i < self.callbacks.len() {
+                    self.callbacks[i].on_epoch_begin(epoch)
+                    i = i + 1
+                }
+                
+                # Simple Batching (Area 7)
+                let n_samples = x_train.shape[0]
+                let n_batches = n_samples / batch_size
+                if n_samples % batch_size != 0 { n_batches = n_batches + 1 }
+                
+                let b = 0
+                let epoch_loss = 0.0
+                while b < n_batches {
+                    self.optimizer.zero_grad()
+                    # (In a real engine, we would slice x_train[b*bs : (b+1)*bs])
+                    # For now, simplistic full-batch or simulated batch for brevity
+                    let preds = self.model.forward(x_train)
+                    let loss = self.criterion(preds, y_train)
+                    loss.backward()
+                    self.optimizer.step()
+                    epoch_loss = epoch_loss + loss.item()
+                    b = b + 1
+                }
+                
+                let avg_loss = epoch_loss / n_batches
+                let logs = { loss: avg_loss }
+                
+                # Epoch end callbacks
+                let i = 0
+                while i < self.callbacks.len() {
+                    self.callbacks[i].on_epoch_end(epoch, logs)
+                    i = i + 1
+                }
+                
+                if epoch % 10 == 0 {
+                    println("Epoch {}: loss = {:.4f}", epoch, avg_loss)
+                }
+                epoch = epoch + 1
+            }
+            
+            # End callbacks
+            let i = 0
+            while i < self.callbacks.len() {
+                self.callbacks[i].on_train_end()
+                i = i + 1
+            }
+            
+            println("[Trainer] Training complete.")
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Standard Callbacks
+# ─────────────────────────────────────────────────────────────
+
+fn EarlyStopping(patience, min_delta) {
+    let cb = Callback()
+    cb.patience = patience
+    cb.min_delta = min_delta
+    cb.best_loss = null
+    cb.wait = 0
+    
+    cb.on_epoch_end = fn(self, epoch, logs) {
+        let current = logs.loss
+        if self.best_loss == null || (self.best_loss - current) > self.min_delta {
+            self.best_loss = current
+            self.wait = 0
+        } else {
+            self.wait = self.wait + 1
+            if self.wait >= self.patience {
+                println("[EarlyStopping] Epoch {}: Stop training.", epoch)
+                # (Need a mechanism to signal the trainer to stop)
+            }
+        }
+    }
+    return cb
+}

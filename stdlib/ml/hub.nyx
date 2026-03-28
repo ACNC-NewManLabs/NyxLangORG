@@ -1,0 +1,127 @@
+# ─────────────────────────────────────────────────────────────
+# Nyx ML Hub: The HuggingFace Bridge
+# ─────────────────────────────────────────────────────────────
+
+use pretrainedLLM::llama3;
+use pretrainedLLM::mistral;
+use pretrainedLLM::gemma;
+use pretrainedLLM::phi3;
+use pretrainedLLM::qwen;
+use pretrainedLLM::bert;
+use pretrainedLLM::roberta;
+use pretrainedLLM::t5;
+use pretrainedLLM::whisper;
+use pretrainedLLM::clip;
+use pretrainedLLM::llama2;
+use pretrainedLLM::mixtral;
+use pretrainedLLM::gemma2;
+use pretrainedLLM::phi2;
+use pretrainedLLM::yi;
+use pretrainedLLM::falcon;
+use pretrainedLLM::grok;
+use pretrainedLLM::starcoder;
+use pretrainedLLM::codellama;
+use pretrainedLLM::solar;
+use pretrainedLLM::openelm;
+use pretrainedLLM::mamba;
+use pretrainedLLM::jamba;
+use pretrainedLLM::aya;
+use pretrainedLLM::dolly;
+use pretrainedLLM::vicuna;
+use pretrainedLLM::alpaca;
+use pretrainedLLM::stablelm;
+use pretrainedLLM::gpt_neo;
+use pretrainedLLM::gpt_j;
+use pretrainedLLM::vit;
+use pretrainedLLM::resnet;
+use pretrainedLLM::efficientnet;
+use pretrainedLLM::convnext;
+use pretrainedLLM::swin;
+use pretrainedLLM::mobilenet;
+use pretrainedLLM::dit;
+use pretrainedLLM::segformer;
+use pretrainedLLM::maskformer;
+use pretrainedLLM::dinov2;
+use pretrainedLLM::whisper_v3;
+use pretrainedLLM::wav2vec2;
+use pretrainedLLM::hubert;
+use pretrainedLLM::audiolm;
+use pretrainedLLM::encodec;
+use pretrainedLLM::vits;
+use pretrainedLLM::llava;
+use pretrainedLLM::flamingo;
+use pretrainedLLM::blip2;
+use pretrainedLLM::sam;
+use pretrainedLLM::grok1;
+use pretrainedLLM::starcoder2;
+use pretrainedLLM::phind_codellama;
+use pretrainedLLM::dolly_v2;
+use pretrainedLLM::mistral_nemo;
+use pretrainedLLM::phi3_vision;
+use pretrainedLLM::owlvit;
+use pretrainedLLM::x_clip;
+use pretrainedLLM::musicgen;
+use pretrainedLLM::sd_transformer;
+
+fn from_pretrained(model_name, bits) {
+    if (bits == null) { bits = "nf4" }
+    print("[Hub] Booting " + model_name + " in " + bits + " mode...");
+    
+    let registry = {
+        "llama-3": pretrainedLLM::llama3::create, "mistral": pretrainedLLM::mistral::create, "gemma": pretrainedLLM::gemma::create,
+        "phi-3": pretrainedLLM::phi3::create, "qwen": pretrainedLLM::qwen::create, "bert": pretrainedLLM::bert::create,
+        "roberta": pretrainedLLM::roberta::create, "t5": pretrainedLLM::t5::create, "whisper": pretrainedLLM::whisper::create,
+        "clip": pretrainedLLM::clip::create, "llama-2": pretrainedLLM::llama2::create, "mixtral": pretrainedLLM::mixtral::create,
+        "gemma-2": pretrainedLLM::gemma2::create, "phi-2": pretrainedLLM::phi2::create, "yi": pretrainedLLM::yi::create,
+        "falcon": pretrainedLLM::falcon::create, "grok": pretrainedLLM::grok::create, "starcoder": pretrainedLLM::starcoder::create,
+        "codellama": pretrainedLLM::codellama::create, "solar": pretrainedLLM::solar::create, "openelm": pretrainedLLM::openelm::create,
+        "mamba": pretrainedLLM::mamba::create, "jamba": pretrainedLLM::jamba::create, "aya": pretrainedLLM::aya::create,
+        "dolly": pretrainedLLM::dolly::create, "vicuna": pretrainedLLM::vicuna::create, "alpaca": pretrainedLLM::alpaca::create,
+        "stablelm": pretrainedLLM::stablelm::create, "gpt-neo": pretrainedLLM::gpt_neo::create, "gpt-j": pretrainedLLM::gpt_j::create,
+        "vit": pretrainedLLM::vit::create, "resnet": pretrainedLLM::resnet::create, "efficientnet": pretrainedLLM::efficientnet::create,
+        "convnext": pretrainedLLM::convnext::create, "swin": pretrainedLLM::swin::create, "mobilenet": pretrainedLLM::mobilenet::create,
+        "dit": pretrainedLLM::dit::create, "segformer": pretrainedLLM::segformer::create, "maskformer": pretrainedLLM::maskformer::create,
+        "dinov2": pretrainedLLM::dinov2::create, "whisper-v3": pretrainedLLM::whisper_v3::create, "wav2vec2": pretrainedLLM::wav2vec2::create,
+        "hubert": pretrainedLLM::hubert::create, "audiolm": pretrainedLLM::audiolm::create, "encodec": pretrainedLLM::encodec::create,
+        "vits": pretrainedLLM::vits::create, "llava": pretrainedLLM::llava::create, "flamingo": pretrainedLLM::flamingo::create,
+        "blip2": pretrainedLLM::blip2::create, "sam": pretrainedLLM::sam::create, "grok-1": pretrainedLLM::grok1::create,
+        "starcoder-2": pretrainedLLM::starcoder2::create, "phind-codellama": pretrainedLLM::phind_codellama::create,
+        "dolly-v2": pretrainedLLM::dolly_v2::create, "mistral-nemo": pretrainedLLM::mistral_nemo::create,
+        "phi-3-vision": pretrainedLLM::phi3_vision::create, "owlvit": pretrainedLLM::owlvit::create, 
+        "x-clip": pretrainedLLM::x_clip::create, "musicgen": pretrainedLLM::musicgen::create, 
+        "sd-transformer": pretrainedLLM::sd_transformer::create
+    }
+
+    let factory = registry[model_name]
+    if (factory == null) {
+        print("[Hub] Error: Unknown model '" + model_name + "'")
+        return null
+    }
+
+    let config = {} 
+    let model = factory(config)
+
+    # 2. Load Weights from Cache/Registry
+    let path = "stdlib/pretrainedLLM/" + model_name
+    let weights = std::ml::load_safetensors(path + "/model.safetensors")
+    
+    if (weights != null) {
+        # Quantize & Load
+        for name in weights.keys() {
+            let tensor = weights[name]
+            if (bits == "nf4") { tensor.data = std::math::quantize_nf4(tensor.data) }
+            else if (bits == "int8") { tensor.data = std::math::quantize_int8(tensor.data) }
+        }
+        model.load_weights(weights)
+    } else {
+        print("[Hub] Warning: Weights not found at " + path + ". Running with random init.")
+    }
+
+    return model
+}
+
+fn save_to_pretrained(model, name) {
+    let path = "stdlib/pretrainedLLM/" + name + ".nyxw"
+    print("[Hub] Archiving model to: " + path)
+    std::ml::save_weights_bin(path, model.get_weights())
+}

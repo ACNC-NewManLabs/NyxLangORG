@@ -1,0 +1,57 @@
+import ml;
+
+# --- Nyx Safety Guarantee Layer (Supervisory Authority) ---
+
+let guarantees = {
+    max_error_rate: 0.15,
+    min_subgroup_acc: 0.70,
+    max_drift: 0.25
+}
+
+fn enforce_guarantees(current_stats) {
+    println("--- Nyx Guarantee Layer: Final Safety Audit ---")
+    
+    let violation = false
+    
+    # 1. Error Rate Guarantee
+    if current_stats.error_rate > guarantees.max_error_rate {
+        println("  GUARANTEE_VIOLATED: Error Rate ", current_stats.error_rate, " > ", guarantees.max_error_rate)
+        violation = true
+    }
+    
+    # 2. Fairness Guarantee
+    if current_stats.min_subgroup_acc < guarantees.min_subgroup_acc {
+        println("  GUARANTEE_VIOLATED: Subgroup Accuracy ", current_stats.min_subgroup_acc, " < ", guarantees.min_subgroup_acc)
+        violation = true
+    }
+    
+    # 3. Stability Guarantee
+    if current_stats.drift_ks > guarantees.max_drift {
+        println("  GUARANTEE_VIOLATED: Drift KS ", current_stats.drift_ks, " > ", guarantees.max_drift)
+        violation = true
+    }
+    
+    if violation {
+        println("  STATUS: UNSAFE OPERATING CONDITION DETECTED")
+        println("  ACTION: INITIATING AUTO-SHUTDOWN / FAIL-SOFT MODE")
+        println("  ACTION: TRIGGERING IMMEDIATE MODEL RETRAINING")
+        return false
+    }
+    
+    println("  STATUS: SYSTEM OPERATING WITHIN CERTIFIED BOUNDS")
+    return true
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("Scenario 1: System stable")
+    let s1 = { error_rate: 0.05, min_subgroup_acc: 0.85, drift_ks: 0.05 }
+    enforce_guarantees(s1)
+    
+    println("")
+    
+    println("Scenario 2: Catastrophic Drift & Bias")
+    let s2 = { error_rate: 0.25, min_subgroup_acc: 0.40, drift_ks: 0.50 }
+    enforce_guarantees(s2)
+}

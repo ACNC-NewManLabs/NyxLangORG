@@ -1,0 +1,147 @@
+# Nyx ML Metrics & Evaluation Suite
+# Standard utilities for model assessment and performance monitoring
+
+# ─────────────────────────────────────────────────────────────
+# Classification Metrics
+# ─────────────────────────────────────────────────────────────
+
+fn accuracy(preds, targets) {
+    let p_data = preds.data
+    let t_data = targets.data
+    let correct = 0
+    let i = 0
+    while i < p_data.len() {
+        # Classification: assuming rounded or argmax values
+        if p_data[i] == t_data[i] {
+            correct = correct + 1
+        }
+        i = i + 1
+    }
+    return correct / p_data.len()
+}
+
+fn confusion_matrix(preds, targets, num_classes) {
+    if num_classes == null { num_classes = 2 }
+    let matrix = []
+    let i = 0
+    while i < num_classes {
+        let row = []
+        let j = 0
+        while j < num_classes {
+            row.push(0)
+            j = j + 1
+        }
+        matrix.push(row)
+        i = i + 1
+    }
+    
+    let i = 0
+    while i < preds.data.len() {
+        let p = preds.data[i]
+        let t = targets.data[i]
+        # Ensure indices are integers
+        if p >= 0 && p < num_classes && t >= 0 && t < num_classes {
+            matrix[t][p] = matrix[t][p] + 1
+        }
+        i = i + 1
+    }
+    return matrix
+}
+
+# Precision, Recall, F1 for Binary Classification (Class 1)
+fn binary_metrics(preds, targets) {
+    let tp = 0.0
+    let fp = 0.0
+    let fn_ = 0.0
+    let tn = 0.0
+    
+    let i = 0
+    while i < preds.data.len() {
+        let p = preds.data[i]
+        let t = targets.data[i]
+        if p > 0.5 { # predicted positive
+            if t > 0.5 { tp = tp + 1.0 } else { fp = fp + 1.0 }
+        } else { # predicted negative
+            if t > 0.5 { fn_ = fn_ + 1.0 } else { tn = tn + 1.0 }
+        }
+        i = i + 1
+    }
+    
+    let precision = 0.0
+    if (tp + fp) > 0 { precision = tp / (tp + fp) }
+    
+    let recall = 0.0
+    if (tp + fn_) > 0 { recall = tp / (tp + fn_) }
+    
+    let f1 = 0.0
+    if (precision + recall) > 0 {
+        f1 = 2.0 * (precision * recall) / (precision + recall)
+    }
+    
+    return {
+        tp: tp, fp: fp, fn: fn_, tn: tn,
+        precision: precision,
+        recall: recall,
+        f1: f1,
+        accuracy: (tp + tn) / (tp + tn + fp + fn_)
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Regression Metrics
+# ─────────────────────────────────────────────────────────────
+
+fn r2_score(preds, targets) {
+    let p_data = preds.data
+    let t_data = targets.data
+    let n = p_data.len()
+    
+    let sum_t = 0.0
+    let i = 0
+    while i < n {
+        sum_t = sum_t + t_data[i]
+        i = i + 1
+    }
+    let mean_t = sum_t / n
+    
+    let ss_res = 0.0
+    let ss_tot = 0.0
+    let j = 0
+    while j < n {
+        let diff = t_data[j] - p_data[j]
+        ss_res = ss_res + diff * diff
+        let diff_m = t_data[j] - mean_t
+        ss_tot = ss_tot + diff_m * diff_m
+        j = j + 1
+    }
+    
+    if ss_tot == 0 { return 0.0 }
+    return 1.0 - (ss_res / ss_tot)
+}
+
+fn mae(preds, targets) {
+    let p_data = preds.data
+    let t_data = targets.data
+    let sum_abs = 0.0
+    let i = 0
+    while i < p_data.len() {
+        let diff = p_data[i] - t_data[i]
+        if diff < 0 { diff = -diff }
+        sum_abs = sum_abs + diff
+        i = i + 1
+    }
+    return sum_abs / p_data.len()
+}
+
+fn rmse(preds, targets) {
+    let p_data = preds.data
+    let t_data = targets.data
+    let sum_sq = 0.0
+    let i = 0
+    while i < p_data.len() {
+        let diff = p_data[i] - t_data[i]
+        sum_sq = sum_sq + diff * diff
+        i = i + 1
+    }
+    return std::math::sqrt(sum_sq / p_data.len())
+}

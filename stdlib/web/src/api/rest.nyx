@@ -1,0 +1,364 @@
+// Nyx Web API - REST
+// RESTful API development support
+
+// REST API Endpoint
+struct RestEndpoint {
+    path: string
+    method: HttpMethod
+    handler: fn(Context) -> Response
+    middlewares: List<Middleware>
+    validators: List<Validator>
+}
+
+// REST Controller
+struct RestController {
+    name: string
+    endpoints: List<RestEndpoint>
+    base_path: string
+}
+
+// API Response wrapper
+struct ApiResponse {
+    success: bool
+    data: any
+    message: string
+    errors: List<string>
+    meta: ApiMeta
+}
+
+// API Metadata
+struct ApiMeta {
+    page: u32
+    per_page: u32
+    total: u32
+    total_pages: u32
+}
+
+// Pagination request
+struct Pagination {
+    page: u32
+    per_page: u32
+    sort_by: string
+    sort_order: string
+}
+
+// Create a new REST controller
+fn new_controller(name: string, base_path: string) -> RestController {
+    return RestController {
+        name: name
+        endpoints: List::new()
+        base_path: base_path
+    }
+}
+
+// Add index endpoint (GET /resources)
+fn index(controller: RestController, handler: fn(Context) -> Response) {
+    let endpoint = RestEndpoint {
+        path: controller.base_path
+        method: HttpMethod::GET
+        handler: handler
+        middlewares: List::new()
+        validators: List::new()
+    }
+    controller.endpoints.push(endpoint)
+}
+
+// Add show endpoint (GET /resources/:id)
+fn show(controller: RestController, handler: fn(Context) -> Response) {
+    let endpoint = RestEndpoint {
+        path: controller.base_path + "/:id"
+        method: HttpMethod::GET
+        handler: handler
+        middlewares: List::new()
+        validators: List::new()
+    }
+    controller.endpoints.push(endpoint)
+}
+
+// Add create endpoint (POST /resources)
+fn create(controller: RestController, handler: fn(Context) -> Response) {
+    let endpoint = RestEndpoint {
+        path: controller.base_path
+        method: HttpMethod::POST
+        handler: handler
+        middlewares: List::new()
+        validators: List::new()
+    }
+    controller.endpoints.push(endpoint)
+}
+
+// Add update endpoint (PUT /resources/:id)
+fn update(controller: RestController, handler: fn(Context) -> Response) {
+    let endpoint = RestEndpoint {
+        path: controller.base_path + "/:id"
+        method: HttpMethod::PUT
+        handler: handler
+        middlewares: List::new()
+        validators: List::new()
+    }
+    controller.endpoints.push(endpoint)
+}
+
+// Add delete endpoint (DELETE /resources/:id)
+fn destroy(controller: RestController, handler: fn(Context) -> Response) {
+    let endpoint = RestEndpoint {
+        path: controller.base_path + "/:id"
+        method: HttpMethod::DELETE
+        handler: handler
+        middlewares: List::new()
+        validators: List::new()
+    }
+    controller.endpoints.push(endpoint)
+}
+
+// Success response
+fn ok(ctx: Context, data: any) -> Response {
+    let response = ApiResponse {
+        success: true
+        data: data
+        message: "Success"
+        errors: List::new()
+        meta: ApiMeta::default()
+    }
+    return json(ctx, response)
+}
+
+// Created response (201)
+fn created(ctx: Context, data: any, message: string = "Created successfully") -> Response {
+    let response = ApiResponse {
+        success: true
+        data: data
+        message: message
+        errors: List::new()
+        meta: ApiMeta::default()
+    }
+    ctx.response.status_code = 201
+    return json(ctx, response)
+}
+
+// No content response (204)
+fn no_content(ctx: Context) -> Response {
+    ctx.response.status_code = 204
+    return ctx.response
+}
+
+// Bad request response (400)
+fn bad_request(ctx: Context, message: string, errors: List<string> = List::new()) -> Response {
+    let response = ApiResponse {
+        success: false
+        data: null
+        message: message
+        errors: errors
+        meta: ApiMeta::default()
+    }
+    ctx.response.status_code = 400
+    return json(ctx, response)
+}
+
+// Unauthorized response (401)
+fn unauthorized(ctx: Context, message: string = "Unauthorized") -> Response {
+    let response = ApiResponse {
+        success: false
+        data: null
+        message: message
+        errors: List::new()
+        meta: ApiMeta::default()
+    }
+    ctx.response.status_code = 401
+    return json(ctx, response)
+}
+
+// Forbidden response (403)
+fn forbidden(ctx: Context, message: string = "Forbidden") -> Response {
+    let response = ApiResponse {
+        success: false
+        data: null
+        message: message
+        errors: List::new()
+        meta: ApiMeta::default()
+    }
+    ctx.response.status_code = 403
+    return json(ctx, response)
+}
+
+// Not found response (404)
+fn not_found(ctx: Context, message: string = "Resource not found") -> Response {
+    let response = ApiResponse {
+        success: false
+        data: null
+        message: message
+        errors: List::new()
+        meta: ApiMeta::default()
+    }
+    ctx.response.status_code = 404
+    return json(ctx, response)
+}
+
+// Internal server error response (500)
+fn server_error(ctx: Context, message: string = "Internal server error") -> Response {
+    let response = ApiResponse {
+        success: false
+        data: null
+        message: message
+        errors: List::new()
+        meta: ApiMeta::default()
+    }
+    ctx.response.status_code = 500
+    return json(ctx, response)
+}
+
+// Paginated response
+fn paginated(ctx: Context, data: List<any>, page: u32, per_page: u32, total: u32) -> Response {
+    let total_pages = (total + per_page - 1) / per_page
+    
+    let response = ApiResponse {
+        success: true
+        data: data
+        message: "Success"
+        errors: List::new()
+        meta: ApiMeta {
+            page: page
+            per_page: per_page
+            total: total
+            total_pages: total_pages
+        }
+    }
+    return json(ctx, response)
+}
+
+// Parse pagination from request
+fn parse_pagination(ctx: Context) -> Pagination {
+    let page = get_query(ctx, "page").unwrap_or("1").parse_u32()
+    let per_page = get_query(ctx, "per_page").unwrap_or("20").parse_u32()
+    let sort_by = get_query(ctx, "sort_by").unwrap_or("id")
+    let sort_order = get_query(ctx, "sort_order").unwrap_or("asc")
+    
+    // Clamp values
+    if page < 1 { page = 1 }
+    if per_page < 1 { per_page = 20 }
+    if per_page > 100 { per_page = 100 }
+    
+    return Pagination {
+        page: page
+        per_page: per_page
+        sort_by: sort_by
+        sort_order: sort_order
+    }
+}
+
+// Input validation
+struct Validator {
+    field: string
+    rules: List<ValidationRule>
+}
+
+// Validation rule
+enum ValidationRule {
+    Required
+    MinLength(u32)
+    MaxLength(u32)
+    Min(u32)
+    Max(u32)
+    Email
+    Url
+    Regex(string)
+    Custom(fn(string) -> bool)
+}
+
+// Validate request
+fn validate(ctx: Context, validators: List<Validator>) -> Option<List<string>> {
+    let errors = List::new()
+    let body = ctx.state["parsed_body"]
+    
+    for validator in validators {
+        let value = get_nested_value(body, validator.field)
+        
+        for rule in validator.rules {
+            match rule {
+                ValidationRule::Required => {
+                    if value.is_empty() {
+                        errors.push(validator.field + " is required")
+                    }
+                }
+                ValidationRule::MinLength(len) => {
+                    if value.length() < len {
+                        errors.push(validator.field + " must be at least " + len + " characters")
+                    }
+                }
+                ValidationRule::MaxLength(len) => {
+                    if value.length() > len {
+                        errors.push(validator.field + " must be at most " + len + " characters")
+                    }
+                }
+                ValidationRule::Email => {
+                    if !is_valid_email(value) {
+                        errors.push(validator.field + " must be a valid email")
+                    }
+                }
+                ValidationRule::Url => {
+                    if !is_valid_url(value) {
+                        errors.push(validator.field + " must be a valid URL")
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    
+    if errors.len() > 0 {
+        return Option::some(errors)
+    }
+    
+    return Option::none()
+}
+
+// Helper to get nested value from map
+fn get_nested_value(data: any, path: string) -> string {
+    let parts = path.split(".")
+    let current = data
+    
+    for part in parts {
+        match current {
+            Map(m) => {
+                current = m.get(part)
+            }
+            _ => return ""
+        }
+    }
+    
+    return current.to_string()
+}
+
+// Email validation
+fn is_valid_email(email: string) -> bool {
+    return email.matches(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+}
+
+// URL validation
+fn is_valid_url(url: string) -> bool {
+    return url.matches(r"^https?://[^\s]+$")
+}
+
+export RestEndpoint
+export RestController
+export ApiResponse
+export ApiMeta
+export Pagination
+export new_controller
+export index
+export show
+export create
+export update
+export destroy
+export ok
+export created
+export no_content
+export bad_request
+export unauthorized
+export forbidden
+export not_found
+export server_error
+export paginated
+export parse_pagination
+export validate
+

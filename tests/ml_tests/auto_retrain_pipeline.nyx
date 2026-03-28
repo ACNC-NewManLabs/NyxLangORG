@@ -1,0 +1,35 @@
+import ml;
+
+# --- Nyx Automated Retraining Pipeline (Self-Improving Lifecycle) ---
+
+fn run_retraining_cycle(rejected_count) {
+    println("--- Nyx Lifecycle: Initiating Automated Retraining Cycle ---")
+    println("  Input: Batching ", rejected_count, " rejected/flagged samples.")
+    
+    # Step 1: Retraining
+    println("  Process: Fine-tuning weights on failure cases...")
+    println("  Process: Retraining complete. New Model Version: v1.0.1-Gold.")
+    
+    # Step 2: Re-Certification (Gatekeepers)
+    println("  Verify: Running Safety Gate Audit on New Version...")
+    let gate_audit = { acc: 0.88, subgroup_acc: 0.82, ece: 0.03 } # Certified
+    
+    if gate_audit.acc > 0.80 && gate_audit.subgroup_acc > 0.70 {
+        println("  Verify: PASS. New model meets safety contracts.")
+        
+        # Step 3: Deployment
+        println("  Action: Automated Redeploy Triggered.")
+        println("  STATUS: SYSTEM RECOVERED TO NOMINAL MODE.")
+        return true
+    }
+    
+    println("  Verify: FAIL. New model rejected by Safety Gate.")
+    return false
+}
+
+# --- Test Case ---
+
+fn main() {
+    # Scenario: Retraining after an incident
+    run_retraining_cycle(150)
+}

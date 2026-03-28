@@ -1,0 +1,51 @@
+// Nyx-Level-Zero Verification: Pointer Math & Intrinsics
+// Demonstrating C/Rust-level power.
+
+fn main() {
+    println("--- Nyx-Level-Zero Verification ---");
+
+    // 1. Raw Pointer from Bytes
+    let buf = std::mem::alloc(10);
+    let ptr = std::mem::addr_of(buf);
+    println("Buffer base pointer: {}", ptr);
+
+    // 2. Pointer Arithmetic and Deref
+    // In Nyx-Level-Zero, we can cast pointers to ints and back for math
+    let ptr_val = ptr as int;
+    let ptr_plus_5 = (ptr_val + 5) as *u8;
+    println("Pointer + 5: {}", ptr_plus_5);
+
+    // 3. Unsafe Memory Access
+    unsafe {
+        println("Writing to pointer + 5 via poke...");
+        std::mem::poke(ptr, 5, 0x42); 
+        
+        println("Reading back via deref...");
+        // This is a direct memory read at the address
+        let val = *ptr_plus_5; 
+        println("Value at ptr + 5: {}", val);
+
+        if val == 0x42 {
+            println("SUCCESS: Pointer math and deref verified.");
+        } else {
+            println("FAILURE: Value mismatch!");
+        }
+    }
+
+    // 4. Hardware Intrinsics
+    println("Testing intrinsics...");
+    std::arch::nop();
+    std::arch::pause();
+    let t1 = std::arch::rdtsc();
+    println("RDTSC check: {}", t1);
+
+    // 5. Unsafe Block scope
+    var x = 100;
+    unsafe {
+        let p_x = &x;
+        println("Pointer to local x: {}", p_x);
+        // *p_x = 200; // Not yet supported for general Value pointers in assign_target
+    }
+
+    println("Verification complete.");
+}

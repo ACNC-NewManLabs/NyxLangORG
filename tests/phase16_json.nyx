@@ -1,0 +1,33 @@
+import df.io;
+import df.lazy;
+
+fn main() {
+    println("=== PHASE 16: JSON INGESTION TEST ===");
+    
+    let path = "tests/test_data.json";
+    println("Scanning JSON:", path);
+    
+    # Using the new high-performance JSON scanner
+    let lf = df::io::scan_json(path);
+    
+    println("Applying Lazy Filter: val > 10.0");
+    let result = lf.filter({ "_kind": "binop", "_value": ">", "_args": [
+        { "_kind": "col", "_value": "val" },
+        { "_kind": "lit", "_value": 10.0 }
+    ]})
+    .collect();
+    
+    if result == null {
+        println("❌ Test Failed: Result is null");
+        return;
+    }
+    
+    println("Result Shape:", result.shape());
+    result.print(10);
+    
+    if result.nrows() > 0 {
+        println("✅ JSON Ingestion Test Passed!");
+    } else {
+        println("❌ Test Failed: No rows returned");
+    }
+}

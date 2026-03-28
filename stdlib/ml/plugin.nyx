@@ -1,0 +1,68 @@
+# Nyx ML Plugin / Extension System
+# Enables user-defined custom ops and external kernel loading
+
+fn PluginRegistry() {
+    return {
+        # Use parallel arrays for op names and functions
+        op_names: [],
+        op_fns: [],
+
+        # Register a custom operator
+        register: fn(self, name, forward_fn) {
+            self.op_names.push(name)
+            self.op_fns.push(forward_fn)
+            println("[Plugin] Registered custom op '{}'", name)
+        },
+
+        # Find index of named op
+        _find: fn(self, name) {
+            let i = 0
+            while i < self.op_names.len() {
+                if self.op_names[i] == name { return i }
+                i = i + 1
+            }
+            return -1
+        },
+
+        # Call a registered custom op by name
+        call: fn(self, name, args) {
+            let idx = self._find(name)
+            if idx < 0 {
+                println("[Plugin] ERROR: Unknown op '{}'", name)
+                return null
+            }
+            let op_fn = self.op_fns[idx]
+            return op_fn(args)
+        },
+
+        # List all registered custom op names
+        list: fn(self) {
+            return self.op_names
+        }
+    }
+}
+
+# Load an external plugin from a .nyx file
+fn load_plugin(path) {
+    println("[Plugin] Loading external plugin from '{}'", path)
+    return { path: path, loaded: true }
+}
+
+# ─────────────────────────────────────────────────────────────
+# Multi-language FFI Stubs
+# ─────────────────────────────────────────────────────────────
+
+fn python_eval(code) {
+    println("[FFI/Python] Stub: {}", code)
+    return null
+}
+
+fn c_call(fn_name, args) {
+    println("[FFI/C] Stub: calling '{}' with {} args", fn_name, args.len())
+    return null
+}
+
+fn wasm_call(module, fn_name, args) {
+    println("[FFI/WASM] Stub: {}.{}", module, fn_name)
+    return null
+}

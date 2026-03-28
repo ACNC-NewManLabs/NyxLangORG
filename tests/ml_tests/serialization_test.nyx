@@ -1,0 +1,61 @@
+import ml;
+
+fn test_serialization_identity() {
+    println("--- Model Serialization Identity Test ---")
+    
+    # 1. Create a model and set specific weights
+    let model1 = ml::nn::Sequential([
+        ml::nn::Linear(2, 4, "relu"),
+        ml::nn::Linear(4, 1, null)
+    ])
+    
+    # 2. Generate a random input
+    let x = ml::tensor::randn([1, 2], false)
+    let out1 = model1.forward(x)
+    
+    # 3. Save model
+    let path = "tmp_model.bin"
+    println("Saving model to ", path)
+    ml::nn::save_model(model1, path)
+    
+    # 4. Create a new model and load weights
+    let model2 = ml::nn::Sequential([
+        ml::nn::Linear(2, 4, "relu"),
+        ml::nn::Linear(4, 1, null)
+    ])
+    
+    # Initially they should be different (random init)
+    let out2_init = model2.forward(x)
+    
+    println("Loading model from ", path)
+    ml::nn::load_model(model2, path)
+    
+    # 5. Verify identity
+    let out1_data = out1.data
+    let out2 = model2.forward(x)
+    let out2_data = out2.data
+    
+    let is_match = true
+    let i = 0
+    while i < out1_data.len() {
+        if out1_data[i] != out2_data[i] {
+            is_match = false
+        }
+        i = i + 1
+    }
+    
+    if is_match {
+        println("SUCCESS: Models produce identical output after reload")
+    } else {
+        println("FAIL: Models produce DIFFERENT output after reload")
+        println("out1: ", out1_data)
+        println("out2: ", out2_data)
+    }
+    
+    # Cleanup
+    # std::fs::remove(path)
+}
+
+fn main() {
+    test_serialization_identity()
+}

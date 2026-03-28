@@ -1,0 +1,97 @@
+# Nyx Dataframe Engine: Statistics
+# Descriptive stats, correlation, value_counts, hypothesis testing.
+
+fn describe(df) {
+    let names = df.col_names()
+    let stat_names = ["count", "mean", "std", "min", "25%", "50%", "75%", "max"]
+
+    # Build a result DataFrame: one row per stat, one col per source col
+    let stat_col_data = {}
+    let i = 0
+    while i < stat_names.len() { stat_col_data[stat_names[i]] = []  i = i + 1 }
+
+    let c = 0
+    while c < df._columns.len() {
+        let col_obj = df._columns[c]
+        let desc = std::df::col_describe(col_obj._data)
+        let s = 0
+        while s < stat_names.len() {
+            let sn = stat_names[s]
+            if desc[sn] != null { stat_col_data[sn].push(desc[sn]) }
+            else { stat_col_data[sn].push(null) }
+            s = s + 1
+        }
+        c = c + 1
+    }
+
+    # Output as {stat_name: [val_per_col]}
+    println("--- describe ---")
+    println("stat    |", names)
+    let s = 0
+    while s < stat_names.len() {
+        let sn = stat_names[s]
+        println(sn, "|", stat_col_data[sn])
+        s = s + 1
+    }
+    return stat_col_data
+}
+
+fn corr(df) {
+    # Returns a map of {col_a + "_x_" + col_b: pearson_r}
+    let names = df.col_names()
+    let result = {}
+    let i = 0
+    while i < names.len() {
+        let j = 0
+        while j < names.len() {
+            let ci = df.col(names[i])
+            let cj = df.col(names[j])
+            if ci != null && cj != null && ci._dtype != "str" && cj._dtype != "str" {
+                let r = std::df::pearson_corr(ci._data, cj._data)
+                result[names[i] + "_x_" + names[j]] = r
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return result
+}
+
+fn value_counts(df, col_name) {
+    let c = df.col(col_name)
+    if c == null { return null }
+    let raw = std::df::value_counts(c._data)
+    # Convert to a small DataFrame: {value, count}
+    let vals = []
+    let counts = []
+    let i = 0
+    while i < raw.len() {
+        vals.push(raw[i].value)
+        counts.push(raw[i].count)
+        i = i + 1
+    }
+    let vcols = [
+        Column("value", c._dtype, vals, null),
+        Column("count", "int", counts, null)
+    ]
+    return DataFrame(vcols, null)
+}
+
+fn t_test(df, col_a, col_b) {
+    let ca = df.col(col_a)
+    let cb = df.col(col_b)
+    if ca == null || cb == null { return null }
+    return std::df::t_test(ca._data, cb._data)
+}
+
+fn percentile(df, col_name, p) {
+    let c = df.col(col_name)
+    if c == null { return null }
+    return std::df::col_quantile(c._data, p)
+}
+
+fn median_col(df, col_name) {
+    let c = df.col(col_name)
+    if c == null { return null }
+    return std::df::col_median(c._data)
+}

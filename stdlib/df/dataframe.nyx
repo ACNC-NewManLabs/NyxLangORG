@@ -1,0 +1,341 @@
+# Nyx Dataframe Engine: DataFrame
+# The primary user-facing object. A collection of named, typed columns.
+# Supports zero-copy slicing, head/tail, column access, and Tensor bridge.
+
+fn DataFrame(columns, schema) {
+    # columns: [Column], schema: Schema (auto-derived if null)
+    if columns == null { columns = [] }
+    if schema == null { schema = schema_from_columns(columns) }
+    return {
+        _columns: columns,
+        _schema: schema,
+
+        # ── shape / info ─────────────────────────────────────────────
+        nrows: fn(self) {
+            if self._columns.len() == 0 { return 0 }
+            return self._columns[0].len()
+        },
+
+        ncols: fn(self) { return self._columns.len() },
+
+        shape: fn(self) {
+            return [self.nrows(), self.ncols()]
+        },
+
+        schema: fn(self) { return self._schema },
+
+        dtypes: fn(self) { return self._schema.dtypes() },
+
+        col_names: fn(self) { return self._schema.names() },
+
+        # ── column access ────────────────────────────────────────────
+        col: fn(self, name) {
+            let i = 0
+            while i < self._columns.len() {
+                if self._columns[i]._name == name { return self._columns[i] }
+                i = i + 1
+            }
+            return null
+        },
+
+        col_at: fn(self, idx) {
+            if idx < 0 || idx >= self._columns.len() { return null }
+            return self._columns[idx]
+        },
+
+        # ── row access (returns object {col_name: value}) ────────────
+        row: fn(self, i) {
+            let record = {}
+            let j = 0
+            while j < self._columns.len() {
+                let c = self._columns[j]
+                record[c._name] = c.get(i)
+                j = j + 1
+            }
+            return record
+        },
+
+        # ── slicing (zero-copy column slices) ────────────────────────
+        slice: fn(self, offset, length) {
+            let new_cols = []
+            let i = 0
+            while i < self._columns.len() {
+                let c = self._columns[i]
+                new_cols.push(c.slice(offset, length))
+                i = i + 1
+            }
+            return DataFrame(new_cols, self._schema)
+        },
+
+        head: fn(self, n) {
+            if n == null { n = 5 }
+            return self.slice(0, n)
+        },
+
+        tail: fn(self, n) {
+            if n == null { n = 5 }
+            let nr = self.nrows()
+            let offset = nr - n
+            if offset < 0 { offset = 0 }
+            return self.slice(offset, n)
+        },
+
+        # ── mutation: add/replace/drop columns ───────────────────────
+        with_column: fn(self, new_col) {
+            let new_cols = []
+            let found = false
+            let i = 0
+            while i < self._columns.len() {
+                if self._columns[i]._name == new_col._name {
+                    new_cols.push(new_col)
+                    found = true
+                } else {
+                    new_cols.push(self._columns[i])
+                }
+                i = i + 1
+            }
+            if found == false { new_cols.push(new_col) }
+            let new_schema = schema_from_columns(new_cols)
+            return DataFrame(new_cols, new_schema)
+        },
+
+        drop: fn(self, name) {
+            let new_cols = []
+            let i = 0
+            while i < self._columns.len() {
+                if self._columns[i]._name != name {
+                    new_cols.push(self._columns[i])
+                }
+                i = i + 1
+            }
+            let new_schema = schema_from_columns(new_cols)
+            return DataFrame(new_cols, new_schema)
+        },
+
+        rename: fn(self, old_name, new_name) {
+            let new_cols = []
+            let i = 0
+            while i < self._columns.len() {
+                let c = self._columns[i]
+                if c._name == old_name {
+                    new_cols.push(c.alias(new_name))
+                } else {
+                    new_cols.push(c)
+                }
+                i = i + 1
+            }
+            let new_schema = schema_from_columns(new_cols)
+            return DataFrame(new_cols, new_schema)
+        },
+
+        # ── conversion ───────────────────────────────────────────────
+        lazy: fn(self) {
+            return df::lazy::LazyFrame({"base": self}, { "_op": "p_scan", "source_id": "base" })
+        },
+
+        group_by: fn(self, key_cols) {
+            return self.lazy().group_by(key_cols)
+        },
+
+        # ── select a subset of columns ───────────────────────────────
+        select: fn(self, names) {
+            let new_cols = []
+            let j = 0
+            while j < names.len() {
+                let c = self.col(names[j])
+                if c != null { new_cols.push(c) }
+                j = j + 1
+            }
+            let new_schema = schema_from_columns(new_cols)
+            return DataFrame(new_cols, new_schema)
+        },
+
+        # ── row filter ───────────────────────────────────────────────
+        filter: fn(self, bool_col) {
+            # bool_col: a Column of dtype "bool"
+            let new_cols = []
+            let i = 0
+            while i < self._columns.len() {
+                let c = self._columns[i]
+                new_cols.push(c.filter(bool_col))
+                i = i + 1
+            }
+            return DataFrame(new_cols, self._schema)
+        },
+
+        # ── sort by a column ─────────────────────────────────────────
+        sort: fn(self, col_name, descending) {
+            if descending == null { descending = false }
+            let sort_col = self.col(col_name)
+            if sort_col == null { return self }
+            let indices = sort_col.argsort(descending)
+            let new_cols = []
+            let c_idx = 0
+            while c_idx < self._columns.len() {
+                let c = self._columns[c_idx]
+                let sorted_data = []
+                let i = 0
+                while i < indices.len() {
+                    sorted_data.push(c._data[indices[i]])
+                    i = i + 1
+                }
+                new_cols.push(Column(c._name, c._dtype, sorted_data, null))
+                c_idx = c_idx + 1
+            }
+            return DataFrame(new_cols, self._schema)
+        },
+
+        # ── null handling ────────────────────────────────────────────
+        drop_nulls: fn(self) {
+            # Build a combined validity mask
+            let nr = self.nrows()
+            let valid_mask = []
+            let i = 0
+            while i < nr {
+                valid_mask.push(true)
+                i = i + 1
+            }
+            let c_idx = 0
+            while c_idx < self._columns.len() {
+                let c = self._columns[c_idx]
+                if c._validity != null {
+                    let i2 = 0
+                    while i2 < c._validity.len() {
+                        if c._validity[i2] == false { valid_mask[i2] = false }
+                        i2 = i2 + 1
+                    }
+                }
+                c_idx = c_idx + 1
+            }
+            let bool_col = Column("__valid__", "bool", valid_mask, null)
+            return self.filter(bool_col)
+        },
+
+        fill_null: fn(self, col_name, value) {
+            let c = self.col(col_name)
+            if c == null { return self }
+            let filled = c.fill_null(value)
+            return self.with_column(filled)
+        },
+
+        # ── lazy entry point ─────────────────────────────────────────
+        to_csv: fn(self, path) {
+            return df::io::write_csv(self, path)
+        },
+
+        sum_simd: fn(self, col_name) {
+            let c = self.col(col_name)
+            if c == null { return null }
+            # _data is the raw list (or Arc pointer in native case)
+            return std::df::sum_simd(c._data)
+        },
+
+        dot_simd: fn(self, col_a, col_b) {
+            let ca = self.col(col_a)
+            let cb = self.col(col_b)
+            if ca == null || cb == null { return null }
+            return std::df::dot_simd(ca._data, cb._data)
+        },
+
+        check_health: fn(self) {
+            return std::df::check_health(self)
+        },
+        
+        to_json: fn(self, path) {
+            return std::df::write_json(self, path)
+        },
+
+        lazy: fn(self) {
+            return LazyFrame({ "auto_source": self }, { "_op": "p_scan", "source_id": "auto_source" })
+        },
+
+        # to_tensor moved to df::ml_bridge to avoid circular dependency with ml::tensor
+
+
+        from_tensor: fn(self, tensor, col_names) {
+            if col_names == null { return null }
+            let nr = tensor.shape[0]
+            let nc = tensor.shape[1]
+            let columns = []
+            let c = 0
+            while c < nc {
+                let col_data = []
+                let r = 0
+                while r < nr {
+                    col_data.push(tensor.data[r * nc + c])
+                    r = r + 1
+                }
+                columns.push(Column(col_names[c], "float", col_data, null))
+                c = c + 1
+            }
+            return DataFrame(columns, null)
+        },
+
+        # ── display ──────────────────────────────────────────────────
+        print: fn(self, n) {
+            if n == null { n = 10 }
+            let names = self.col_names()
+            println("DataFrame shape:", self.shape())
+            # header
+            let hdr = ""
+            let i = 0
+            while i < names.len() {
+                if i > 0 { hdr = hdr + " | " }
+                hdr = hdr + names[i]
+                i = i + 1
+            }
+            println(hdr)
+            println("---")
+            # rows
+            let nr = self.nrows()
+            let limit = nr
+            if n < limit { limit = n }
+            let r = 0
+            while r < limit {
+                let row_str = ""
+                let c = 0
+                while c < self._columns.len() {
+                    if c > 0 { row_str = row_str + " | " }
+                    let v = self._columns[c]._data[r]
+                    if v == null { row_str = row_str + "null" }
+                    else { row_str = row_str + "" + v }
+                    c = c + 1
+                }
+                println(row_str)
+                r = r + 1
+            }
+            if nr > n { println("... (" + (nr - n) + " more rows)") }
+        }
+    }
+}
+
+# ── builders ──────────────────────────────────────────────────────────────────
+
+fn df_from_rows(rows, col_names) {
+    # rows: [{col: val, ...}]  col_names: [str]
+    if rows.len() == 0 { return DataFrame([], null) }
+    let col_data = {}
+    let i = 0
+    while i < col_names.len() {
+        col_data[col_names[i]] = []
+        i = i + 1
+    }
+    let r = 0
+    while r < rows.len() {
+        let row = rows[r]
+        let c = 0
+        while c < col_names.len() {
+            let nm = col_names[c]
+            col_data[nm].push(row[nm])
+            c = c + 1
+        }
+        r = r + 1
+    }
+    let columns = []
+    let j = 0
+    while j < col_names.len() {
+        columns.push(Column(col_names[j], "float", col_data[col_names[j]], null))
+        j = j + 1
+    }
+    return DataFrame(columns, null)
+}

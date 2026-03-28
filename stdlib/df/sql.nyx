@@ -1,0 +1,317 @@
+# Nyx Dataframe Engine: SQL Interface
+# Supports a subset of SQL: SELECT [DISTINCT], FROM, JOIN ON, WHERE, GROUP BY,
+# HAVING, ORDER BY [DESC], LIMIT.
+# Translates to a LazyFrame plan and calls collect().
+
+fn sql(query, ctx) {
+    # ctx: {table_name: dataframe}
+    let tokens = _sql_tokenize(query)
+    let ast = _sql_parse(tokens)
+    if ast == null {
+        println("[df.sql] Parse error for query:", query)
+        return null
+    }
+    return _sql_execute(ast, ctx)
+}
+
+fn _sql_tokenize(query) {
+    let chars = std::string::chars(query)
+    let tokens = []
+    let current = ""
+    let in_string = false
+    let i = 0
+    while i < chars.len() {
+        let c = chars[i]
+        if c == "'" || c == "\"" {
+            if in_string {
+                current = current + c
+                tokens.push(current)
+                current = ""
+                in_string = false
+            } else {
+                if std::string::len(current) > 0 { tokens.push(current)  current = "" }
+                current = c
+                in_string = true
+            }
+        } else if in_string {
+            current = current + c
+        } else if c == " " || c == "\t" || c == "\n" || c == "\r" {
+            if std::string::len(current) > 0 { tokens.push(current)  current = "" }
+        } else if c == "," || c == "(" || c == ")" || c == ";" {
+            if std::string::len(current) > 0 { tokens.push(current)  current = "" }
+            tokens.push(c)
+        } else {
+            current = current + c
+        }
+        i = i + 1
+    }
+    if std::string::len(current) > 0 { tokens.push(current) }
+    return tokens
+}
+
+fn _sql_upper_tok(tok) {
+    return std::string::to_upper(tok)
+}
+
+fn _sql_parse(tokens) {
+    let ast = {
+        distinct: false,
+        select: [],
+        from: null,
+        where: null,
+        groupby: [],
+        having: null,
+        orderby: null,
+        orderby_desc: false,
+        limit: null,
+        joins: []
+    }
+    let i = 0
+    let n = tokens.len()
+
+    # SELECT [DISTINCT]
+    if i < n && _sql_upper_tok(tokens[i]) == "SELECT" {
+        i = i + 1
+        if i < n && _sql_upper_tok(tokens[i]) == "DISTINCT" {
+            ast.distinct = true
+            i = i + 1
+        }
+        while i < n && _sql_upper_tok(tokens[i]) != "FROM" {
+            if tokens[i] != "," { ast.select.push(tokens[i]) }
+            i = i + 1
+        }
+    }
+
+    # FROM
+    if i < n && _sql_upper_tok(tokens[i]) == "FROM" {
+        i = i + 1
+        if i < n { ast.from = tokens[i]  i = i + 1 }
+    }
+
+    # Optional JOIN ... ON left_col = right_col
+    while i < n && (_sql_upper_tok(tokens[i]) == "JOIN" || _sql_upper_tok(tokens[i]) == "INNER" || _sql_upper_tok(tokens[i]) == "LEFT") {
+        # Skip INNER/LEFT/RIGHT qualifiers before JOIN
+        if _sql_upper_tok(tokens[i]) != "JOIN" { i = i + 1 }
+        i = i + 1  # skip JOIN
+        let join_table = null
+        let join_left_col = "id"
+        let join_right_col = "id"
+        if i < n { join_table = tokens[i]  i = i + 1 }
+        if i < n && _sql_upper_tok(tokens[i]) == "ON" {
+            i = i + 1
+            # Parse: [table.]col = [table.]col
+            if i < n {
+                let left_expr = tokens[i]
+                i = i + 1
+                # Strip table prefix if present
+                let dot_parts = std::string::split(left_expr, ".")
+                if dot_parts.len() > 1 { join_left_col = dot_parts[1] } else { join_left_col = left_expr }
+            }
+            if i < n && tokens[i] == "=" { i = i + 1 }
+            if i < n {
+                let right_expr = tokens[i]
+                i = i + 1
+                let dot_parts = std::string::split(right_expr, ".")
+                if dot_parts.len() > 1 { join_right_col = dot_parts[1] } else { join_right_col = right_expr }
+            }
+        }
+        ast.joins.push({ table: join_table, left_col: join_left_col, right_col: join_right_col })
+    }
+
+    # WHERE
+    if i < n && _sql_upper_tok(tokens[i]) == "WHERE" {
+        i = i + 1
+        let where_col = null
+        let where_op = null
+        let where_val = null
+        let where_val_is_str = false
+        if i < n { where_col = tokens[i]  i = i + 1 }
+        if i < n { where_op = tokens[i]   i = i + 1 }
+        if i < n {
+            where_val = tokens[i]
+            # Check for string literal
+            if std::string::len(where_val) > 0 && (std::string::substring(where_val, 0, 1) == "'" || std::string::substring(where_val, 0, 1) == "\"") {
+                where_val_is_str = true
+                # Strip quotes
+                where_val = std::string::substring(where_val, 1, std::string::len(where_val) - 1)
+            }
+            i = i + 1
+        }
+        ast.where = { col: where_col, op: where_op, val: where_val, is_str: where_val_is_str }
+    }
+
+    # GROUP BY
+    if i < n && _sql_upper_tok(tokens[i]) == "GROUP" {
+        i = i + 1
+        if i < n && _sql_upper_tok(tokens[i]) == "BY" { i = i + 1 }
+        while i < n && _sql_upper_tok(tokens[i]) != "HAVING" && _sql_upper_tok(tokens[i]) != "ORDER" && _sql_upper_tok(tokens[i]) != "LIMIT" && _sql_upper_tok(tokens[i]) != ";" {
+            if tokens[i] != "," { ast.groupby.push(tokens[i]) }
+            i = i + 1
+        }
+    }
+
+    # HAVING (post-aggregation filter)
+    if i < n && _sql_upper_tok(tokens[i]) == "HAVING" {
+        i = i + 1
+        let hav_col = null
+        let hav_op = null
+        let hav_val = null
+        if i < n { hav_col = tokens[i]  i = i + 1 }
+        if i < n { hav_op = tokens[i]   i = i + 1 }
+        if i < n { hav_val = tokens[i]  i = i + 1 }
+        ast.having = { col: hav_col, op: hav_op, val: hav_val }
+    }
+
+    # ORDER BY
+    if i < n && _sql_upper_tok(tokens[i]) == "ORDER" {
+        i = i + 1
+        if i < n && _sql_upper_tok(tokens[i]) == "BY" { i = i + 1 }
+        if i < n { ast.orderby = tokens[i]  i = i + 1 }
+        if i < n && (_sql_upper_tok(tokens[i]) == "DESC" || _sql_upper_tok(tokens[i]) == "DESCENDING") {
+            ast.orderby_desc = true
+            i = i + 1
+        }
+    }
+
+    # LIMIT
+    if i < n && _sql_upper_tok(tokens[i]) == "LIMIT" {
+        i = i + 1
+        if i < n { ast.limit = std::string::to_int(tokens[i])  i = i + 1 }
+    }
+
+    return ast
+}
+
+fn _sql_build_filter(wc, lf) {
+    let expr_left = col(wc.col)
+    let filter_expr = null
+    if wc.is_str {
+        # String comparison: use eq with literal string
+        if wc.op == "=" || wc.op == "==" { filter_expr = expr_left.eq(lit(wc.val)) }
+        if wc.op == "!="               { filter_expr = expr_left.neq(lit(wc.val)) }
+    } else {
+        let val = std::string::to_float(wc.val)
+        if val == null { val = 0.0 }
+        if wc.op == ">"  { filter_expr = expr_left.gt(lit(val)) }
+        if wc.op == "<"  { filter_expr = expr_left.lt(lit(val)) }
+        if wc.op == ">=" { filter_expr = expr_left.gte(lit(val)) }
+        if wc.op == "<=" { filter_expr = expr_left.lte(lit(val)) }
+        if wc.op == "="  { filter_expr = expr_left.eq(lit(val)) }
+        if wc.op == "==" { filter_expr = expr_left.eq(lit(val)) }
+        if wc.op == "!=" { filter_expr = expr_left.neq(lit(val)) }
+    }
+    if filter_expr != null { lf = lf.filter(filter_expr) }
+    return lf
+}
+
+fn _sql_execute(ast, ctx) {
+    let src = ctx[ast.from]
+    if src == null {
+        println("[df.sql] Table not found:", ast.from)
+        return null
+    }
+
+    let lf = src.lazy()
+
+    # JOIN
+    let j = 0
+    while j < ast.joins.len() {
+        let jn = ast.joins[j]
+        let right_df = ctx[jn.table]
+        if right_df != null {
+            lf = lf.join(right_df.lazy(), jn.left_col, jn.right_col, "inner")
+        }
+        j = j + 1
+    }
+
+    # WHERE
+    if ast.where != null {
+        lf = _sql_build_filter(ast.where, lf)
+    }
+
+    # GROUP BY + aggregations
+    if ast.groupby.len() > 0 {
+        let agg_exprs = []
+        let s = 0
+        while s < ast.select.len() {
+            let sel = ast.select[s]
+            if std::string::contains(sel, "(") {
+                let chars = std::string::chars(sel)
+                let paren_pos = 0
+                let ci = 0
+                while ci < chars.len() {
+                    if chars[ci] == "(" { paren_pos = ci }
+                    ci = ci + 1
+                }
+                let func_name = std::string::substring(sel, 0, paren_pos)
+                let inner_col = std::string::substring(sel, paren_pos + 1, std::string::len(sel) - 1)
+                let fu = _sql_upper_tok(func_name)
+                if fu == "SUM"   { agg_exprs.push(col(inner_col).sum()) }
+                if fu == "AVG"   { agg_exprs.push(col(inner_col).mean()) }
+                if fu == "COUNT" { agg_exprs.push(col(inner_col).count()) }
+                if fu == "MIN"   { agg_exprs.push(col(inner_col).min()) }
+                if fu == "MAX"   { agg_exprs.push(col(inner_col).max()) }
+            }
+            s = s + 1
+        }
+        let result = lf.groupby(ast.groupby).agg(agg_exprs)
+        let df_res = result.collect()
+        # HAVING: post-agg filter
+        if ast.having != null {
+            let hav = ast.having
+            let val = std::string::to_float(hav.val)
+            if val == null { val = 0.0 }
+            let hav_mask = []
+            let n_rows = df_res.nrows()
+            let r = 0
+            while r < n_rows {
+                let col_obj = df_res.col(hav.col)
+                if col_obj != null {
+                    let v = col_obj._data[r]
+                    if v == null { hav_mask.push(false) }
+                    else if hav.op == ">"  { hav_mask.push(v > val) }
+                    else if hav.op == "<"  { hav_mask.push(v < val) }
+                    else if hav.op == ">=" { hav_mask.push(v >= val) }
+                    else if hav.op == "<=" { hav_mask.push(v <= val) }
+                    else if hav.op == "="  { hav_mask.push(v == val) }
+                    else if hav.op == "!=" { hav_mask.push(v != val) }
+                    else { hav_mask.push(true) }
+                } else { hav_mask.push(true) }
+                r = r + 1
+            }
+            df_res = df_res.filter(hav_mask)
+        }
+        if ast.distinct { df_res = std::df::distinct(df_res) }
+        return df_res
+    }
+
+    # SELECT columns (project)
+    if ast.select.len() > 0 && ast.select[0] != "*" {
+        let sel_exprs = []
+        let s = 0
+        while s < ast.select.len() {
+            sel_exprs.push(col(ast.select[s]))
+            s = s + 1
+        }
+        lf = lf.select(sel_exprs)
+    }
+
+    # ORDER BY
+    if ast.orderby != null {
+        lf = lf.sort(ast.orderby, ast.orderby_desc)
+    }
+
+    # LIMIT
+    if ast.limit != null {
+        lf = lf.limit(ast.limit)
+    }
+
+    let result = lf.collect()
+
+    # DISTINCT
+    if ast.distinct && result != null {
+        result = std::df::distinct(result)
+    }
+
+    return result
+}

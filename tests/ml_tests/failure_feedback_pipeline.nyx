@@ -1,0 +1,43 @@
+import ml;
+
+# --- Nyx Failure Feedback Pipeline (Learning Loop) ---
+
+let feedback_log = []
+
+fn capture_failure(features, reason) {
+    println("  LOGGING_REJECTION: Reason=", reason, " Features=", features)
+    let entry = {
+        timestamp: std::time::now_nanos(),
+        features: features,
+        reason: reason
+    }
+    # Use standard library list push
+    std::list::push(feedback_log, entry)
+}
+
+fn process_feedback_for_retraining() {
+    println("--- Nyx Loop Update: Processing Rejected Cases for Retraining ---")
+    let count = std::list::len(feedback_log)
+    println("  Total Cases Captured: ", count)
+    
+    let i = 0
+    while i < count {
+        let entry = feedback_log[i]
+        println("  Candidate for retraining: ", entry.features, " (Ref: ", entry.reason, ")")
+        i = i + 1
+    }
+}
+
+# --- Test Case ---
+
+fn main() {
+    println("--- Testing Nyx Feedback Loop Pipeline ---")
+    
+    # Simulate some rejections
+    capture_failure([0.1, 0.2], "LOW_CONFIDENCE")
+    capture_failure([5.5, -1.0], "OUT_OF_DOMAIN")
+    capture_failure([0.5, 0.5], "SYSTEMATIC_BIAS")
+    
+    println("")
+    process_feedback_for_retraining()
+}

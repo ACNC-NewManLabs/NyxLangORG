@@ -1,0 +1,71 @@
+import ml;
+import std::df;
+
+# --- Helper: Data Leakage Detection ---
+
+fn detect_leakage(df, label_col, threshold) {
+    if threshold == null { threshold = 0.95 }
+    let names = df.col_names()
+    let i = 0
+    let passed = true
+    
+    # Check for direct identity leakage
+    let label = df.col(label_col)
+    if label == null { return false }
+    
+    while i < names.len() {
+        let name = names[i]
+        if name != label_col {
+            let col = df.col(name)
+            
+            # 1. Pearson Correlation (using native kernel)
+            if col._dtype != "str" {
+                let r = std::df::pearson_corr(col._data, label._data)
+                let abs_r = r
+                if abs_r < 0 { abs_r = 0.0 - abs_r }
+                
+                if abs_r > threshold {
+                    println("FAIL: High correlation (leakage risk) in '", name, "'. Pearson R: ", r)
+                    passed = false
+                }
+            }
+            
+            # 2. Heuristic: Name check for common leakage targets
+            if name == "id" || name == "timestamp" || name == "date" {
+                println("WARN: Column '", name, "' is an identifier/timestamp. Ensure it is not used as a raw feature.")
+            }
+        }
+        i = i + 1
+    }
+    return passed
+}
+
+# --- Test Case ---
+
+fn test_data_leakage() {
+    println("--- Testing Data Leakage Foundation ---")
+    
+    # 1. Clean data (Random features vs noisy target)
+    let feat1 = std::df::Column("feat1", "float", [0.1, 0.2, 0.9, 0.8], null)
+    let feat2 = std::df::Column("feat2", "float", [0.8, 0.2, 0.5, 0.3], null)
+    let label = std::df::Column("label", "float", [1.0, 0.0, 1.0, 0.0], null)
+    let df_clean = std::df::DataFrame([feat1, feat2, label], null)
+    
+    # 2. Leaky data (Target + small noise as feature)
+    let leaky_feat = std::df::Column("prox_target", "float", [0.99, 0.01, 0.98, 0.02], null)
+    let df_leaky = std::df::DataFrame([feat1, leaky_feat, label], null)
+    
+    println("Checking clean data...")
+    if detect_leakage(df_clean, "label", 0.9) {
+        println("SUCCESS: Clean data identified correctly")
+    }
+    
+    println("Checking leaky data (expected to fail for prox_target)...")
+    if detect_leakage(df_leaky, "label", 0.9) == false {
+        println("SUCCESS: Leakage in 'prox_target' detected correctly")
+    }
+}
+
+fn main() {
+    test_data_leakage()
+}

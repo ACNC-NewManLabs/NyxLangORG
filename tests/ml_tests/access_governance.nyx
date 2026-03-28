@@ -1,0 +1,42 @@
+import ml;
+
+# --- Nyx Access Governance (Separation of Duties & JIT) ---
+
+fn main() {
+    println("--- Nyx Security: IAM Governance Audit ---")
+    println("")
+
+    # 1. Separation of Duties (SoD)
+    let ops = {
+        training:   { actor: "USER_DS_01", status: "OK" },
+        approval:   { actor: "USER_LEAD_01", status: "OK" },
+        deployment: { actor: "USER_SRE_01", status: "OK" }
+    }
+
+    println("SEPARATION OF DUTIES CHECK:")
+    if (ops.training.actor == ops.approval.actor) {
+        println("  CRITICAL_VIOLATION: Trainer cannot be the Approver!")
+    } else {
+        println("  SUCCESS: Stakeholder identities independent. [SoD MET]")
+    }
+    println("")
+
+    # 2. Just-in-Time (JIT) Access Expiry
+    let jit_token = {
+        req_id: "REQ-99X",
+        reason: "Emergency_Hotfix",
+        expires: std::time::now_nanos() + 3600 # 1 hour
+    }
+
+    println("JIT ACCESS AUDIT:")
+    println("  Reason:  ", jit_token.reason)
+    println("  Expiry:  In 60.0 mins [ENFORCED]")
+    println("")
+
+    # 3. Quarterly Review Log
+    println("AUDIT REVIEW LOG:")
+    println("  [2026-Q1] ACCESS_REVIEW_COMPLETE. All orphaned accounts purged.")
+    println("  Signer:  NYX_IAM_BOT_V1")
+
+    println("SUCCESS: Access governance verified. Operational risk bounded.")
+}

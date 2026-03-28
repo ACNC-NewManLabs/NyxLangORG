@@ -1,0 +1,75 @@
+import ml;
+import std::df;
+
+# --- Helper: Class-wise Performance ---
+
+fn accuracy(y_true, y_pred) {
+    let n = y_true.len()
+    if n == 0 { return 0.0 }
+    let correct = 0
+    let i = 0
+    while i < n {
+        if y_true[i] == y_pred[i] { correct = correct + 1 }
+        i = i + 1
+    }
+    return correct * 1.0 / n
+}
+
+fn classwise_performance(y_true, y_pred, classes) {
+    let results = {}
+    let i = 0
+    while i < classes.len() {
+        let cls = classes[i]
+        
+        # Filter for this class
+        let true_subset = []
+        let pred_subset = []
+        let j = 0
+        while j < y_true.len() {
+            if y_true[j] == cls {
+                true_subset.push(y_true[j])
+                pred_subset.push(y_pred[j])
+            }
+            j = j + 1
+        }
+        
+        results[cls] = {
+            count: true_subset.len(),
+            accuracy: accuracy(true_subset, pred_subset)
+        }
+        i = i + 1
+    }
+    return results
+}
+
+# --- Test Case ---
+
+fn test_classwise() {
+    println("--- Testing Class-wise Model Performance ---")
+    
+    # 1. Mock imbalanced dataset
+    # Class 0: 8 items, Class 1: 2 items
+    let y_true = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1]
+    let y_pred = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0] # Model gets one Class 1 right (50%)
+    
+    let res = classwise_performance(y_true, y_pred, [0, 1])
+    
+    println("Class 0 Performance:")
+    println("  Count:    ", res[0].count)
+    println("  Accuracy: ", res[0].accuracy)
+    
+    println("Class 1 Performance (Minority):")
+    println("  Count:    ", res[1].count)
+    println("  Accuracy: ", res[1].accuracy)
+    
+    # Validation
+    if res[1].accuracy < 0.5 {
+        println("FAIL: Critical performance drop in minority Class 1")
+    } else {
+        println("SUCCESS: Minority class performance is acceptable")
+    }
+}
+
+fn main() {
+    test_classwise()
+}

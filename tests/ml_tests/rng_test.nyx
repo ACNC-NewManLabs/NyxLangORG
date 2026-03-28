@@ -1,0 +1,30 @@
+import ml;
+
+fn main() {
+    println("--- RNG State Test ---")
+    
+    # Test internal rand (if accessible) or just randn
+    ml::tensor::set_seed(42)
+    let r1 = ml::tensor::randn([1], false).data[0]
+    println("Seed 42, r1: ", r1)
+    
+    ml::tensor::set_seed(42)
+    let r2 = ml::tensor::randn([1], false).data[0]
+    println("Seed 42, r2: ", r2)
+    
+    ml::tensor::set_seed(123)
+    let r3 = ml::tensor::randn([1], false).data[0]
+    println("Seed 123, r3: ", r3)
+    
+    if r1 == r2 {
+        println("SUCCESS: Same seed produces same results")
+    } else {
+        println("FAIL: Same seed produced DIFFERENT results")
+    }
+    
+    if r1 != r3 {
+        println("SUCCESS: Different seeds produce different results")
+    } else {
+        println("FAIL: Different seeds produced SAME results")
+    }
+}

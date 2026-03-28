@@ -1,0 +1,68 @@
+# Nyx OS & AI - Advanced AI Training Demonstration
+# This script demonstrates utilizing the high-level Nyx Native ML abstractions 
+# to build, train, and orchestrate a multi-layer neural network from scratch.
+
+import ml;
+
+fn build_dataset() {
+    println("[1/4] Generating simulated synthetic dataset...")
+    # Generating 5000 samples with 10 features for binary classification
+    let x_train = ml::tensor::randn([5000, 10], false)
+    
+    # We create a simulated continuous target based on a linear combination + noise
+    let weights = ml::tensor::randn([10, 1], false)
+    let y_train = x_train.matmul(weights).add(ml::tensor::randn([5000, 1], false).mul(0.1))
+    
+    return { x: x_train, y: y_train }
+}
+
+fn build_model() {
+    println("[2/4] Constructing Deep Neural Network...")
+    # A 3-layer MLP Neural Network using Sequential API
+    let model = ml::nn::Sequential([
+        ml::nn::Linear(10, 64, "relu"),
+        ml::nn::LayerNorm(64, 1e-5),
+        ml::nn::Linear(64, 32, "relu"),
+        ml::nn::Linear(32, 1, null)
+    ])
+    return model
+}
+
+fn configure_trainer(model) {
+    println("[3/4] Configuring Adam Optimizer & Trainer API...")
+    
+    # Use Adam optimizer native bindings (LR = 0.01)
+    let opt = ml::optim::Adam(model.layers, 0.01)
+    
+    # MSE Loss criterion
+    let criterion = ml::nn::mse_loss
+    
+    # Initialize the Trainer loop abstraction
+    let trainer = ml::train::Trainer(model, opt, criterion)
+    
+    # Attach EarlyStopping callback to prevent overtraining
+    let early_stop = ml::train::EarlyStopping(5, 0.001)
+    trainer.add_callback(early_stop)
+    
+    return trainer
+}
+
+fn execute_pipeline() {
+    let data = build_dataset()
+    let model = build_model()
+    let trainer = configure_trainer(model)
+    
+    println("[4/4] Commencing AI Training Phase (Autograd Enabled)...")
+    println("=====================================================")
+    
+    # Trigger the Native Autograd backwards engine iteratively for 100 epochs
+    trainer.fit(data.x, data.y, 100, 256)
+    
+    println("=====================================================")
+    println("[SUCCESS] AI Model trained successfully utilizing Nyx ML Tensors and Native Autograd!")
+}
+
+fn main() {
+    println(">>> Initializing Nyx ML Advanced AI Training Pipeline <<<")
+    execute_pipeline()
+}

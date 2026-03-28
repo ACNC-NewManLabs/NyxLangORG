@@ -1,0 +1,376 @@
+// Nyx Web Security - Authentication
+// Authentication and authorization system
+
+// User
+struct User {
+    id: string
+    username: string
+    email: string
+    password_hash: string
+    roles: List<string>
+    permissions: List<string>
+    created_at: u64
+    updated_at: u64
+    last_login: u64
+    metadata: Map<string, any>
+}
+
+// Credentials
+struct Credentials {
+    username: string
+    password: string
+}
+
+// Auth config
+struct AuthConfig {
+    jwt_secret: string
+    jwt_expiry: u64
+    jwt_issuer: string
+    bcrypt_rounds: u32
+    session_timeout: u64
+    max_login_attempts: u32
+    lockout_duration: u64
+}
+
+// Session
+struct Session {
+    id: string
+    user_id: string
+    created_at: u64
+    expires_at: u64
+    ip_address: string
+    user_agent: string
+    data: Map<string, any>
+}
+
+// Permission
+struct Permission {
+    name: string
+    resource: string
+    action: string
+}
+
+// Role
+struct Role {
+    name: string
+    permissions: List<Permission>
+    users: List<string>
+}
+
+// Auth service
+struct AuthService {
+    config: AuthConfig
+    users: Map<string, User>
+    sessions: Map<string, Session>
+    roles: Map<string, Role>
+}
+
+// Create new auth service
+fn new_auth(config: AuthConfig) -> AuthService {
+    return AuthService {
+        config: config
+        users: Map::new()
+        sessions: Map::new()
+        roles: Map::new()
+    }
+}
+
+// Register user
+fn register(auth: AuthService, username: string, email: string, password: string) -> Result<User, Error> {
+    // Check if user exists
+    if auth.users.contains(username) {
+        return Result::err("User already exists")
+    }
+    
+    // Hash password
+    let password_hash = hash_password(password, auth.config.bcrypt_rounds)
+    
+    let user = User {
+        id: generate_id()
+        username: username
+        email: email
+        password_hash: password_hash
+        roles: ["user"]
+        permissions: List::new()
+        created_at: time::now()
+        updated_at: time::now()
+        last_login: 0
+        metadata: Map::new()
+    }
+    
+    auth.users.insert(username, user)
+    
+    return Result::ok(user)
+}
+
+// Login
+fn login(auth: AuthService, username: string, password: string) -> Result<Session, Error> {
+    // Get user
+    let user = auth.users.get(username)
+    
+    match user {
+        Some(u) => {
+            // Verify password
+            if !verify_password(password, u.password_hash) {
+                return Result::err("Invalid credentials")
+            }
+            
+            // Create session
+            let session = Session {
+                id: generate_session_id()
+                user_id: u.id
+                created_at: time::now()
+                expires_at: time::now() + auth.config.session_timeout
+                ip_address: ""
+                user_agent: ""
+                data: Map::new()
+            }
+            
+            auth.sessions.insert(session.id, session)
+            
+            // Update last login
+            u.last_login = time::now()
+            
+            return Result::ok(session)
+        }
+        None => {
+            return Result::err("User not found")
+        }
+    }
+}
+
+// Logout
+fn logout(auth: AuthService, session_id: string) -> Result<(), Error> {
+    if auth.sessions.contains(session_id) {
+        auth.sessions.remove(session_id)
+    }
+    return Result::ok(())
+}
+
+// Get user by session
+fn get_user_by_session(auth: AuthService, session_id: string) -> Option<User> {
+    let session = auth.sessions.get(session_id)
+    
+    match session {
+        Some(s) => {
+            // Check expiry
+            if s.expires_at < time::now() {
+                auth.sessions.remove(session_id)
+                return Option::none()
+            }
+            
+            // Find user
+            for username in auth.users.keys() {
+                let user = auth.users.get(username)
+                match user {
+                    Some(u) => {
+                        if u.id == s.user_id {
+                            return Option::some(u)
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+        None => {}
+    }
+    
+    return Option::none()
+}
+
+// Hash password
+fn hash_password(password: string, rounds: u32) -> string {
+    // In production, use bcrypt
+    // This is a simplified implementation
+    let salt = generate_salt()
+    let hash = sha256(password + salt)
+    return salt + ":" + hash
+}
+
+// Verify password
+fn verify_password(password: string, password_hash: string) -> bool {
+    let parts = password_hash.split(":")
+    
+    if parts.len() != 2 {
+        return false
+    }
+    
+    let salt = parts[0]
+    let hash = parts[1]
+    
+    return sha256(password + salt) == hash
+}
+
+// Generate salt
+fn generate_salt() -> string {
+    // Generate random bytes
+    let salt = ""
+    for i in 0..16 {
+        salt = salt + random_char()
+    }
+    return salt
+}
+
+// Generate session ID
+fn generate_session_id() -> string {
+    return generate_id()
+}
+
+// Check permission
+fn has_permission(user: User, permission: Permission) -> bool {
+    // Check user permissions
+    for p in user.permissions {
+        if p.resource == permission.resource && p.action == permission.action {
+            return true
+        }
+    }
+    
+    // Check role permissions
+    for role_name in user.roles {
+        // Would check roles map
+    }
+    
+    return false
+}
+
+// Check role
+fn has_role(user: User, role: string) -> bool {
+    return user.roles.contains(role)
+}
+
+// Create role
+fn create_role(auth: AuthService, name: string, permissions: List<Permission>) -> Role {
+    let role = Role {
+        name: name
+        permissions: permissions
+        users: List::new()
+    }
+    
+    auth.roles.insert(name, role)
+    
+    return role
+}
+
+// Assign role to user
+fn assign_role(auth: AuthService, username: string, role_name: string) -> Result<(), Error> {
+    let user = auth.users.get(username)
+    let role = auth.roles.get(role_name)
+    
+    match (user, role) {
+        (Some(u), Some(r)) => {
+            if !u.roles.contains(role_name) {
+                u.roles.push(role_name)
+            }
+            r.users.push(u.id)
+            return Result::ok(())
+        }
+        _ => {
+            return Result::err("User or role not found")
+        }
+    }
+}
+
+// Middleware: Require authentication
+fn require_auth() -> Middleware {
+    return fn(ctx: Context) -> Context {
+        let session_id = get_cookie(ctx, "session_id")
+        
+        match session_id {
+            Some(id) => {
+                // Would verify session
+                ctx.state["authenticated"] = true
+                ctx.state["session_id"] = id
+            }
+            None => {
+                return error(ctx, "Authentication required", 401)
+            }
+        }
+        
+        return ctx
+    }
+}
+
+// Middleware: Require role
+fn require_role(role: string) -> Middleware {
+    return fn(ctx: Context) -> Context {
+        if !ctx.state.contains("user") {
+            return error(ctx, "Authentication required", 401)
+        }
+        
+        let user = ctx.state.get("user") as User
+        
+        if !has_role(user, role) {
+            return error(ctx, "Forbidden", 403)
+        }
+        
+        return ctx
+    }
+}
+
+// Middleware: Require permission
+fn require_permission(permission: Permission) -> Middleware {
+    return fn(ctx: Context) -> Context {
+        if !ctx.state.contains("user") {
+            return error(ctx, "Authentication required", 401)
+        }
+        
+        let user = ctx.state.get("user") as User
+        
+        if !has_permission(user, permission) {
+            return error(ctx, "Forbidden", 403)
+        }
+        
+        return ctx
+    }
+}
+
+// Password strength validator
+fn validate_password_strength(password: string) -> Result<(), string> {
+    if password.length() < 8 {
+        return Result::err("Password must be at least 8 characters")
+    }
+    
+    if !password.matches(r"[A-Z]") {
+        return Result::err("Password must contain at least one uppercase letter")
+    }
+    
+    if !password.matches(r"[a-z]") {
+        return Result::err("Password must contain at least one lowercase letter")
+    }
+    
+    if !password.matches(r"[0-9]") {
+        return Result::err("Password must contain at least one number")
+    }
+    
+    if !password.matches(r"[!@#$%^&*(),.?\":{}|<>]") {
+        return Result::err("Password must contain at least one special character")
+    }
+    
+    return Result::ok(())
+}
+
+export User
+export Credentials
+export AuthConfig
+export Session
+export Permission
+export Role
+export AuthService
+export new_auth
+export register
+export login
+export logout
+export get_user_by_session
+export hash_password
+export verify_password
+export generate_salt
+export generate_session_id
+export has_permission
+export has_role
+export create_role
+export assign_role
+export require_auth
+export require_role
+export require_permission
+export validate_password_strength
+

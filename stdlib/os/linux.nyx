@@ -1,0 +1,10 @@
+// Raw Linux Kernel Hooks
+
+// Executes a raw x86_64 Linux System Call
+// Bypass libc completely. Provides immediate Ring-0 access.
+// Parameters:
+//   sys_no - System Call Number (e.g., 1 for write, 39 for getpid, etc.)
+//   a1..a6 - Hardware register arguments mapped to rdi, rsi, rdx, r10, r8, r9
+fn syscall(sys_no, a1, a2, a3, a4, a5, a6) {
+    return std::os::linux::syscall(sys_no, a1, a2, a3, a4, a5, a6)
+}

@@ -1,0 +1,61 @@
+import ml;
+import std::df;
+
+# --- Helper: Uncertainty Metrics ---
+
+fn calculate_entropy(probs) {
+    let entropy = 0.0
+    let i = 0
+    while i < probs.len() {
+        let p = probs[i]
+        if p > 0 { entropy = entropy - (p * std::math::log(p)) }
+        i = i + 1
+    }
+    return entropy
+}
+
+fn check_calibration(y_true, y_probs) {
+    # 1. Simple calibration check (average prob vs observed rate)
+    let n = y_true.len()
+    let sum_probs = 0.0
+    let observed_pos = 0
+    let i = 0
+    while i < n {
+        sum_probs = sum_probs + y_probs[i]
+        if y_true[i] == 1 { observed_pos = observed_pos + 1 }
+        i = i + 1
+    }
+    let avg_prob = sum_probs / n
+    let observed_rate = observed_pos * 1.0 / n
+    return { predicted: avg_prob, observed: observed_rate }
+}
+
+# --- Test Case ---
+
+fn test_uncertainty_advanced() {
+    println("--- Testing Confidence Calibration & Uncertainty (V2) ---")
+    
+    # 1. Calibrated case
+    let y_t_cal = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0] # 30% positive
+    let y_p_cal = [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3] # 0.3 average
+    let res_cal = check_calibration(y_t_cal, y_p_cal)
+    println("Calibrated Model Metrics:")
+    println("  Avg Predicted: ", res_cal.predicted)
+    println("  Observed Rate: ", res_cal.observed)
+    
+    let diff = std::math::abs(res_cal.predicted - res_cal.observed)
+    if diff < 0.05 { println("  SUCCESS: Model is well-calibrated (ECE < 0.05)") }
+    
+    # 2. Uncertainty (Entropy)
+    let low_ent = calculate_entropy([0.99, 0.01])
+    let high_ent = calculate_entropy([0.5, 0.5])
+    println("Entropy Comparison:")
+    println("  Confident (0.99): ", low_ent)
+    println("  Uncertain (0.50): ", high_ent)
+    
+    if low_ent < high_ent { println("  SUCCESS: Entropy correctly flags low-confidence predictions") }
+}
+
+fn main() {
+    test_uncertainty_advanced()
+}

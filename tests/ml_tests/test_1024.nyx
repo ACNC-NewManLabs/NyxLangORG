@@ -1,0 +1,16 @@
+import ml;
+import std;
+
+fn main() {
+    let t_init0 = std::time::now()
+    let a = ml::tensor::ones([1024, 1024], false, "gpu")
+    let b = ml::tensor::ones([1024, 1024], false, "gpu")
+    let t_init1 = std::time::now()
+    println("Initialization Time: ", (t_init1 - t_init0) / 1000.0, "s")
+    
+    println("Starting MatMul 1024x1024 on GPU...")
+    let t0 = std::time::now()
+    let c = a.matmul(b)
+    let t1 = std::time::now()
+    println("MatMul Time: ", (t1 - t0) / 1000.0, "s")
+}

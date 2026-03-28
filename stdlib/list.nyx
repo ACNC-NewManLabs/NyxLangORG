@@ -1,0 +1,22 @@
+// Nyx List/Array Extensions [Layer 2]
+// Functional programming and collection utilities.
+
+export fn push(list, val) {
+    list.push(val);
+}
+
+export fn map(list, f) {
+    return list.map(f);
+}
+
+export fn filter(list, f) {
+    return list.filter(f);
+}
+
+export fn reduce(list, init, f) {
+    return list.reduce(init, f);
+}
+
+export fn len(list) -> int {
+    return list.len();
+}

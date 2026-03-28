@@ -1,0 +1,212 @@
+	.text
+	.file	"main.ll"
+	.globl	build_dashboard_ui              # -- Begin function build_dashboard_ui
+	.p2align	4, 0x90
+	.type	build_dashboard_ui,@function
+build_dashboard_ui:                     # @build_dashboard_ui
+	.cfi_startproc
+# %bb.0:                                # %entry
+	pushq	%rax
+	.cfi_def_cfa_offset 16
+	xorl	%edi, %edi
+	xorl	%esi, %esi
+	callq	ui_engine_container@PLT
+	popq	%rax
+	.cfi_def_cfa_offset 8
+	retq
+.Lfunc_end0:
+	.size	build_dashboard_ui, .Lfunc_end0-build_dashboard_ui
+	.cfi_endproc
+                                        # -- End function
+	.globl	render_component_window         # -- Begin function render_component_window
+	.p2align	4, 0x90
+	.type	render_component_window,@function
+render_component_window:                # @render_component_window
+	.cfi_startproc
+# %bb.0:                                # %entry
+	pushq	%rbx
+	.cfi_def_cfa_offset 16
+	.cfi_offset %rbx, -16
+	xorl	%edi, %edi
+	callq	println@PLT
+	callq	build_dashboard_ui@PLT
+	movq	%rax, %rbx
+	movq	%rax, %rdi
+	callq	ui_engine_bootstrap@PLT
+	xorl	%edi, %edi
+	testq	%rax, %rax
+	je	.LBB1_1
+# %bb.2:                                # %.else_1
+	callq	println@PLT
+	popq	%rbx
+	.cfi_def_cfa_offset 8
+	retq
+.LBB1_1:                                # %.then_2
+	.cfi_def_cfa_offset 16
+	callq	println@PLT
+	movq	%rbx, %rdi
+	callq	count_ui_elements@PLT
+	movq	%rax, %rdi
+	callq	println@PLT
+	callq	render_component_visual@PLT
+	popq	%rbx
+	.cfi_def_cfa_offset 8
+	retq
+.Lfunc_end1:
+	.size	render_component_window, .Lfunc_end1-render_component_window
+	.cfi_endproc
+                                        # -- End function
+	.globl	count_ui_elements               # -- Begin function count_ui_elements
+	.p2align	4, 0x90
+	.type	count_ui_elements,@function
+count_ui_elements:                      # @count_ui_elements
+	.cfi_startproc
+# %bb.0:                                # %entry
+	movl	$1, %eax
+	retq
+.Lfunc_end2:
+	.size	count_ui_elements, .Lfunc_end2-count_ui_elements
+	.cfi_endproc
+                                        # -- End function
+	.globl	render_component_visual         # -- Begin function render_component_visual
+	.p2align	4, 0x90
+	.type	render_component_visual,@function
+render_component_visual:                # @render_component_visual
+	.cfi_startproc
+# %bb.0:                                # %entry
+	pushq	%rax
+	.cfi_def_cfa_offset 16
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	popq	%rax
+	.cfi_def_cfa_offset 8
+	retq
+.Lfunc_end3:
+	.size	render_component_visual, .Lfunc_end3-render_component_visual
+	.cfi_endproc
+                                        # -- End function
+	.globl	main                            # -- Begin function main
+	.p2align	4, 0x90
+	.type	main,@function
+main:                                   # @main
+	.cfi_startproc
+# %bb.0:                                # %entry
+	pushq	%rax
+	.cfi_def_cfa_offset 16
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	callq	println@PLT
+	movl	$1, %esi
+	movl	$1, %edx
+	xorl	%edi, %edi
+	callq	native_renderer_init@PLT
+	xorl	%edi, %edi
+	testq	%rax, %rax
+	je	.LBB4_2
+# %bb.1:                                # %.then_7
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	callq	println@PLT
+	callq	render_component_window@PLT
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	callq	native_renderer_shutdown@PLT
+	jmp	.LBB4_3
+.LBB4_2:                                # %.else_6
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+	xorl	%edi, %edi
+	callq	println@PLT
+.LBB4_3:                                # %.if_end_5
+	xorl	%eax, %eax
+	popq	%rcx
+	.cfi_def_cfa_offset 8
+	retq
+.Lfunc_end4:
+	.size	main, .Lfunc_end4-main
+	.cfi_endproc
+                                        # -- End function
+	.type	.L.fmt,@object                  # @.fmt
+	.section	.rodata.str1.1,"aMS",@progbits,1
+.L.fmt:
+	.asciz	"%d\n"
+	.size	.L.fmt, 4
+
+	.section	".note.GNU-stack","",@progbits

@@ -1,0 +1,93 @@
+# Heap Allocator (Malloc) for Nyx Bare-Metal
+# This provides dynamic memory management on top of physical pages.
+
+import pmm as pmm;
+
+let _HEAP_START = 0
+let _HEAP_SIZE  = 0
+
+# Initialize the heap.
+# Pages: How many 4KB pages to reserve from PMM for the initial heap.
+fn init(pages) {
+    _HEAP_START = pmm::alloc_page()
+    # Reserve additional pages
+    let i = 1
+    while i < pages {
+        pmm::alloc_page()
+        i = i + 1
+    }
+    _HEAP_SIZE = pages * 4096
+    
+    # Initial block header: [Size (8), Free (8), Next (8)] = 24 bytes overhead
+    # Size is the usable data size.
+    std::kernel::memory::write_u64(_HEAP_START, _HEAP_SIZE - 24)
+    std::kernel::memory::write_u64(_HEAP_START + 8, 1) # 1 = Free
+    std::kernel::memory::write_u64(_HEAP_START + 16, 0) # 0 = End of list
+}
+
+# Allocate dynamic memory.
+# Returns a pointer to the usable memory, or 0 if OOM.
+fn malloc(size) {
+    if size <= 0 {
+        return 0
+    }
+    
+    # 8-byte alignment
+    let aligned_size = ((size + 7) / 8) * 8
+    
+    let current = _HEAP_START
+    while current != 0 {
+        let block_size = std::kernel::memory::read_u64(current)
+        let is_free    = std::kernel::memory::read_u64(current + 8)
+        let next       = std::kernel::memory::read_u64(current + 16)
+        
+        if is_free == 1 && block_size >= aligned_size {
+            # Can we split this block? 
+            # Needs enough space for a new header (24) + at least 8 bytes of data.
+            if block_size >= (aligned_size + 24 + 8) {
+                let new_block_addr = current + 24 + aligned_size
+                let new_block_size = block_size - aligned_size - 24
+                
+                # Setup new block
+                std::kernel::memory::write_u64(new_block_addr, new_block_size)
+                std::kernel::memory::write_u64(new_block_addr + 8, 1) # Free
+                std::kernel::memory::write_u64(new_block_addr + 16, next)
+                
+                # Update current block
+                std::kernel::memory::write_u64(current, aligned_size)
+                std::kernel::memory::write_u64(current + 16, new_block_addr)
+            }
+            
+            # Mark current as occupied
+            std::kernel::memory::write_u64(current + 8, 0)
+            return current + 24
+        }
+        current = next
+    }
+    
+    return 0 # Out of Memory
+}
+
+# Free dynamic memory.
+fn free(ptr) {
+    if ptr <= _HEAP_START {
+        return
+    }
+    let header = ptr - 24
+    std::kernel::memory::write_u64(header + 8, 1) # Mark as Free
+    
+    # Simple coalescing: if next is free, merge it.
+    let next = std::kernel::memory::read_u64(header + 16)
+    if next != 0 {
+        let next_is_free = std::kernel::memory::read_u64(next + 8)
+        if next_is_free == 1 {
+            let next_size = std::kernel::memory::read_u64(next)
+            let next_next = std::kernel::memory::read_u64(next + 16)
+            
+            # Merge
+            let new_size = std::kernel::memory::read_u64(header) + 24 + next_size
+            std::kernel::memory::write_u64(header, new_size)
+            std::kernel::memory::write_u64(header + 16, next_next)
+        }
+    }
+}

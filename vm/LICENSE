@@ -1,0 +1,168 @@
+Nyx Virtual Machine Proprietary License (NVPL)
+
+Version 1.0
+
+Copyright (c) 2026 Surya Sekhar Roy
+All rights reserved.
+
+---
+
+1. Definitions
+
+For the purposes of this License:
+
+"Nyx VM" refers to the Nyx Virtual Machine runtime software,
+including all components contained within the `nyx-vm` package.
+
+"Software" refers to the Nyx VM and all associated materials including,
+but not limited to:
+
+• source code
+• compiled binaries
+• runtime implementations
+• bytecode execution engines
+• documentation
+• architecture and internal implementation details
+• build scripts and configuration files
+• test suites and examples
+
+"Author" refers to Surya Sekhar Roy.
+
+---
+
+2. Ownership
+
+The Nyx VM and all intellectual property rights associated with it
+are and shall remain the exclusive property of the Author.
+
+No ownership rights are transferred under this License.
+
+All rights not expressly granted in this License are reserved.
+
+---
+
+3. Permitted Use
+
+The Software may be used for the following purposes:
+
+• personal use
+• academic research
+• evaluation of the Nyx runtime system
+• development of programs intended to run on the Nyx VM
+
+Users may compile and execute the Software for these purposes.
+
+---
+
+4. Distribution Restrictions
+
+The Software may not be redistributed independently without explicit
+written permission from the Author.
+
+Distribution is permitted only when the Nyx VM is included as an
+integral component of the official Nyx platform or runtime environment.
+
+Redistribution of modified or standalone versions of the Nyx VM
+is prohibited.
+
+---
+
+5. Derivative Works
+
+You may not create or distribute derivative works based on the
+Nyx VM implementation.
+
+This includes:
+
+• modified runtime engines
+• reimplemented execution engines derived from the Software
+• repackaged versions of the Nyx VM
+
+Derivative experimentation for personal research may be permitted,
+but such works may not be published or distributed.
+
+---
+
+6. Competing Virtual Machines
+
+The Nyx VM may not be used to develop competing virtual machine
+technologies derived directly from the Software.
+
+This includes but is not limited to:
+
+• bytecode virtual machines
+• runtime execution engines
+• language runtime systems
+
+where the implementation is derived directly from the Nyx VM codebase.
+
+---
+
+7. Artificial Intelligence Use
+
+Artificial intelligence systems may analyze the Software for purposes
+including:
+
+• research and education
+• documentation generation
+• developer assistance
+• generating programs that run on the Nyx VM
+
+However, artificial intelligence systems may NOT:
+
+• reproduce substantial portions of the Nyx VM source code
+• generate a clone or functional reproduction of the Nyx VM
+• distribute models containing significant portions of the Software.
+
+---
+
+8. Commercial Use
+
+Commercial use of the Nyx VM requires a separate written license
+agreement with the Author.
+
+Commercial use includes but is not limited to:
+
+• embedding the Nyx VM in commercial software products
+• enterprise runtime environments
+• hosted runtime services
+• cloud execution platforms.
+
+---
+
+9. Termination
+
+Any violation of this License automatically terminates all rights
+granted under this License.
+
+Upon termination, the user must immediately cease use of the Software
+and destroy all copies in their possession.
+
+---
+
+10. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+AND NONINFRINGEMENT.
+
+---
+
+11. Limitation of Liability
+
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES,
+OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+---
+
+12. Governing Law
+
+This License shall be governed by the laws determined by the Author.
+
+---
+
+13. Entire Agreement
+
+This License constitutes the entire agreement governing the use and
+distribution of the Nyx VM.

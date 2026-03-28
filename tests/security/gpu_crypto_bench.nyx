@@ -1,0 +1,55 @@
+import crypto
+import time
+
+fn main() {
+    print("🚀 Nyx Next-Gen Crypto: GPU vs CPU Benchmark 🚀")
+    let num_blocks = 500000
+    let data_block = std::string::as_bytes("Nyx-Benchmark-Core-Data-Block-64-Bytes-Padding-to-Reach-Length!!")
+    
+    # 1. CPU Sequential Hashing
+    print("Benchmarking CPU (sequential, 500k blocks)...")
+    let start_cpu = std::time::now_nanos()
+    for i in range(0, num_blocks) {
+        let h = crypto::hash_sha256(data_block)
+    }
+    let end_cpu = std::time::now_nanos()
+    let cpu_dur = (end_cpu - start_cpu) / 1000 # us
+    print("CPU Time: " + cpu_dur.to_string() + "us")
+    
+    # 2. GPU Batch Hashing
+    print("Benchmarking GPU (batch, 500k blocks)...")
+    let batch = []
+    for i in range(0, num_blocks) {
+        std::list::push(batch, data_block)
+    }
+    
+    let start_gpu = std::time::now_nanos()
+    let results = crypto::gpu_sha256_batch(batch)
+    let end_gpu = std::time::now_nanos()
+    let gpu_dur = (end_gpu - start_gpu) / 1000 # us
+    print("GPU Time: " + gpu_dur.to_string() + "us")
+    
+    let res_count = std::list::len(results)
+    print("GPU Results count: " + res_count.to_string())
+    
+    # Calculate Speedup
+    if gpu_dur > 0 {
+        let speedup = cpu_dur / gpu_dur
+        print("\n🔥 SPEEDUP: " + speedup.to_string() + "x 🔥")
+    }
+    
+    # Verify correctness
+    if res_count > 0 {
+        let first_gpu = std::list::at(results, 0)
+        let expected = crypto::hash_sha256(data_block)
+        if crypto::to_hex(first_gpu) == crypto::to_hex(expected) {
+            print("✅ Correctness Verified: GPU results match CPU.")
+        } else {
+            print("❌ FAILURE: GPU results mismatch!")
+            print("Expected: " + crypto::to_hex(expected))
+            print("Got:      " + crypto::to_hex(first_gpu))
+        }
+    } else {
+        print("❌ FAILURE: GPU returned no results!")
+    }
+}

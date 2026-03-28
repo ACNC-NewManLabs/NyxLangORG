@@ -1,0 +1,125 @@
+// Nyx Web App - Built purely natively with VNode structures
+
+// --- Native UI Rendering Engine ---
+
+struct VNode {
+    tag: string
+    styles: Map<string, string>
+    children: List<VNode>
+    text: string
+}
+
+fn el(tag: string, styles: Map<string, string>, children: List<VNode>) -> VNode {
+    return VNode {
+        tag: tag,
+        styles: styles,
+        children: children,
+        text: ""
+    }
+}
+
+fn text_node(t: string) -> VNode {
+    return VNode {
+        tag: "",
+        styles: Map::new(),
+        children: List::new(),
+        text: t
+    }
+}
+
+// Semantic Layout Primitives
+fn VStack(styles: Map<string, string>, children: List<VNode>) -> VNode {
+    styles.insert("display", "flex")
+    styles.insert("flex-direction", "column")
+    return el("div", styles, children)
+}
+
+fn Text(t: string, styles: Map<string, string>) -> VNode {
+    return el("p", styles, [text_node(t)])
+}
+
+fn Title(t: string, styles: Map<string, string>) -> VNode {
+    return el("h1", styles, [text_node(t)])
+}
+
+fn Button(t: string, styles: Map<string, string>) -> VNode {
+    return el("button", styles, [text_node(t)])
+}
+
+// Convert Native VNodes to optimized response stream
+fn render_node(node: VNode) -> string {
+    if node.text != "" {
+        return node.text
+    }
+    
+    let style_str = ""
+    for k in node.styles.keys() {
+        style_str = style_str + k + ":" + node.styles.get(k) + ";"
+    }
+    
+    let html = "<" + node.tag
+    if style_str != "" {
+        html = html + " style='" + style_str + "'"
+    }
+    html = html + ">"
+    
+    for child in node.children {
+        html = html + render_node(child)
+    }
+    
+    return html + "</" + node.tag + ">"
+}
+
+// --- Application Logic ---
+
+fn App() {
+    let body_style = Map::new()
+    body_style.insert("margin", "0")
+    body_style.insert("background", "radial-gradient(circle at center, #1a1a2e 0%, #0a0a0a 100%)")
+    body_style.insert("height", "100vh")
+    body_style.insert("align-items", "center")
+    body_style.insert("justify-content", "center")
+    body_style.insert("font-family", "system-ui, sans-serif")
+
+    let card_style = Map::new()
+    card_style.insert("text-align", "center")
+    card_style.insert("padding", "5rem")
+    card_style.insert("background", "rgba(255, 255, 255, 0.03)")
+    card_style.insert("border", "1px solid rgba(255, 255, 255, 0.08)")
+    card_style.insert("border-radius", "32px")
+
+    let h1_style = Map::new()
+    h1_style.insert("color", "white")
+    h1_style.insert("font-size", "3.5rem")
+    h1_style.insert("margin-bottom", "1rem")
+
+    let p_style = Map::new()
+    p_style.insert("color", "#a0a0a0")
+    p_style.insert("font-size", "1.2rem")
+    p_style.insert("margin-bottom", "2.5rem")
+
+    let btn_style = Map::new()
+    btn_style.insert("padding", "1rem 2.5rem")
+    btn_style.insert("font-weight", "800")
+    btn_style.insert("color", "#0a0a0a")
+    btn_style.insert("background", "#00f2ff")
+    btn_style.insert("border-radius", "99px")
+    btn_style.insert("border", "none")
+    btn_style.insert("cursor", "pointer")
+
+    // Constructing the UI tree declaratively (No HTML!)
+    let view = VStack(body_style, [
+        VStack(card_style, [
+            Title("Nyx Native UI 🚀", h1_style),
+            Text("Building web experiences entirely in pure Nyx syntax.", p_style),
+            Button("Launch Server", btn_style)
+        ])
+    ])
+
+    // Mount and render
+    let head = "<!DOCTYPE html><html><head><title>Nyx Native Web</title></head><body style='margin:0;'>"
+    return head + render_node(view) + "</body></html>"
+}
+
+// Instruct the Nyx compiler to bind the DEV SERVER to 9001
+let port = 9001

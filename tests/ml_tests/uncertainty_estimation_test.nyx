@@ -1,0 +1,39 @@
+import ml;
+import std::df;
+
+# --- Helper: Uncertainty Metrics ---
+
+fn calculate_entropy(probs) {
+    let entropy = 0.0
+    let i = 0
+    while i < probs.len() {
+        let p = probs[i]
+        if p > 0 { entropy = entropy - (p * std::math::log(p)) }
+        i = i + 1
+    }
+    return entropy
+}
+
+# --- Test Case ---
+
+fn test_uncertainty() {
+    println("--- Testing Prediction Uncertainty & Entropy ---")
+    
+    # 1. High Confidence Prediction [0.99, 0.01]
+    let h_conf = [0.99, 0.01]
+    let ent_h = calculate_entropy(h_conf)
+    println("High Confidence [0.99, 0.01] Entropy: ", ent_h)
+    
+    # 2. Low Confidence Prediction [0.5, 0.5]
+    let l_conf = [0.5, 0.5]
+    let ent_l = calculate_entropy(l_conf)
+    println("Low Confidence [0.50, 0.50] Entropy: ", ent_l)
+    
+    if ent_h < ent_l {
+        println("SUCCESS: Entropy correctly reflects prediction uncertainty")
+    }
+}
+
+fn main() {
+    test_uncertainty()
+}

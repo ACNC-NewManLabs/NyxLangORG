@@ -1,0 +1,353 @@
+/**
+ * UDP Server Implementation
+ * 
+ * Provides UDP server and client functionality for connectionless datagram communication.
+ * 
+ * @module udp::server
+ */
+
+type UdpServer = {
+    host: string,
+    port: i64,
+    socket: i64,
+    running: bool,
+    on_message_handler: fn(UdpPacket)?,
+    broadcast: bool,
+    reuse_address: bool,
+    reuse_port: bool,
+    buffer_size: i64
+};
+
+type UdpPacket = {
+    data: string,
+    address: string,
+    port: i64,
+    size: i64,
+    received_at: i64
+};
+
+type UdpClient = {
+    socket: i64,
+    bound: bool,
+    remote_address: string,
+    remote_port: i64
+};
+
+/**
+ * Create a new UDP server
+ * 
+ * @param host - Host to bind to
+ * @param port - Port to bind to
+ * @returns A new UDP server
+ */
+fn create(host: string, port: i64) -> UdpServer {
+    return UdpServer {
+        host: host,
+        port: port,
+        socket: 0,
+        running: false,
+        on_message_handler: none,
+        broadcast: false,
+        reuse_address: true,
+        reuse_port: false,
+        buffer_size: 65535
+    };
+}
+
+/**
+ * Set message handler
+ * 
+ * @param server - The UDP server
+ * @param handler - Handler for incoming packets
+ * @returns The same server for chaining
+ */
+fn on_message(server: UdpServer, handler: fn(UdpPacket)) -> UdpServer {
+    server.on_message_handler = some(handler);
+    return server;
+}
+
+/**
+ * Enable broadcast
+ * 
+ * @param server - The UDP server
+ * @param enable - Whether to enable broadcast
+ * @returns The same server for chaining
+ */
+fn broadcast(server: UdpServer, enable: bool) -> UdpServer {
+    server.broadcast = enable;
+    return server;
+}
+
+/**
+ * Enable address reuse
+ * 
+ * @param server - The UDP server
+ * @param reuse - Whether to reuse address
+ * @returns The same server for chaining
+ */
+fn reuse_addr(server: UdpServer, reuse: bool) -> UdpServer {
+    server.reuse_address = reuse;
+    return server;
+}
+
+/**
+ * Enable port reuse
+ * 
+ * @param server - The UDP server
+ * @param reuse - Whether to reuse port
+ * @returns The same server for chaining
+ */
+fn reuse_port(server: UdpServer, reuse: bool) -> UdpServer {
+    server.reuse_port = reuse;
+    return server;
+}
+
+/**
+ * Set buffer size
+ * 
+ * @param server - The UDP server
+ * @param size - Buffer size in bytes
+ * @returns The same server for chaining
+ */
+fn buffer_size(server: UdpServer, size: i64) -> UdpServer {
+    server.buffer_size = size;
+    return server;
+}
+
+/**
+ * Start the UDP server
+ * 
+ * @param server - The UDP server
+ * @returns Whether the server started
+ */
+fn start(server: UdpServer) -> bool {
+    if server.running {
+        return false;
+    }
+    
+    // Create UDP socket
+    server.socket = create_udp_socket();
+    
+    if server.socket < 0 {
+        return false;
+    }
+    
+    // Set socket options
+    if server.reuse_address {
+        set_reuse_address(server.socket, true);
+    }
+    
+    if server.reuse_port {
+        set_reuse_port(server.socket, true);
+    }
+    
+    if server.broadcast {
+        set_broadcast(server.socket, true);
+    }
+    
+    // Bind to address
+    if !bind_socket(server.socket, server.host, server.port) {
+        close_socket(server.socket);
+        return false;
+    }
+    
+    server.running = true;
+    
+    // Start receiving loop
+    receive_loop(server);
+    
+    return true;
+}
+
+/**
+ * Stop the UDP server
+ * 
+ * @param server - The UDP server
+ */
+fn stop(server: UdpServer) {
+    if !server.running {
+        return;
+    }
+    
+    server.running = false;
+    
+    if server.socket > 0 {
+        close_socket(server.socket);
+        server.socket = 0;
+    }
+}
+
+/**
+ * Main receive loop
+ */
+fn receive_loop(server: UdpServer) {
+    while server.running {
+        // Receive datagram
+        let packet = receive_from(server.socket, server.buffer_size);
+        
+        if packet != none {
+            let p = packet as UdpPacket;
+            
+            // Call message handler
+            if server.on_message_handler != none {
+                let handler = server.on_message_handler as fn(UdpPacket);
+                handler(p);
+            }
+        }
+        
+        // Small yield
+        sleep(1);
+    }
+}
+
+/**
+ * Send data to address
+ * 
+ * @param server - The UDP server
+ * @param address - Target address
+ * @param port - Target port
+ * @param data - Data to send
+ * @returns Number of bytes sent
+ */
+fn send_to(server: UdpServer, address: string, port: i64, data: string) -> i64 {
+    if !server.running {
+        return 0;
+    }
+    
+    return send_to_socket(server.socket, address, port, data);
+}
+
+/**
+ * Create a UDP client
+ * 
+ * @returns A new UDP client
+ */
+fn create_client() -> UdpClient {
+    return UdpClient {
+        socket: 0,
+        bound: false,
+        remote_address: "",
+        remote_port: 0
+    };
+}
+
+/**
+ * Connect to remote address
+ * 
+ * @param client - The UDP client
+ * @param address - Remote address
+ * @param port - Remote port
+ * @returns Whether connected successfully
+ */
+fn connect(client: UdpClient, address: string, port: i64) -> bool {
+    // Create socket
+    client.socket = create_udp_socket();
+    
+    if client.socket < 0 {
+        return false;
+    }
+    
+    // Connect
+    if !connect_socket(client.socket, address, port) {
+        close_socket(client.socket);
+        return false;
+    }
+    
+    client.bound = true;
+    client.remote_address = address;
+    client.remote_port = port;
+    
+    return true;
+}
+
+/**
+ * Send data
+ * 
+ * @param client - The UDP client
+ * @param data - Data to send
+ * @returns Number of bytes sent
+ */
+fn send(client: UdpClient, data: string) -> i64 {
+    if !client.bound {
+        return 0;
+    }
+    
+    return send_to_socket(client.socket, "", 0, data);
+}
+
+/**
+ * Receive data
+ * 
+ * @param client - The UDP client
+ * @param max_size - Maximum bytes to receive
+ * @returns Received data
+ */
+fn receive(client: UdpClient, max_size: i64) -> string {
+    if !client.bound {
+        return "";
+    }
+    
+    let packet = receive_from(client.socket, max_size);
+    
+    if packet != none {
+        return (packet as UdpPacket).data;
+    }
+    
+    return "";
+}
+
+/**
+ * Close client
+ * 
+ * @param client - The UDP client
+ */
+fn close(client: UdpClient) {
+    if client.socket > 0 {
+        close_socket(client.socket);
+        client.socket = 0;
+    }
+    
+    client.bound = false;
+}
+
+// Socket functions (would be native)
+
+fn create_udp_socket() -> i64 {
+    return 0;  // Placeholder
+}
+
+fn close_socket(socket: i64) {
+    // Placeholder
+}
+
+fn bind_socket(socket: i64, host: string, port: i64) -> bool {
+    return true;  // Placeholder
+}
+
+fn connect_socket(socket: i64, host: string, port: i64) -> bool {
+    return true;  // Placeholder
+}
+
+fn set_reuse_address(socket: i64, reuse: bool) {
+    // Placeholder
+}
+
+fn set_reuse_port(socket: i64, reuse: bool) {
+    // Placeholder
+}
+
+fn set_broadcast(socket: i64, enable: bool) {
+    // Placeholder
+}
+
+fn send_to_socket(socket: i64, address: string, port: i64, data: string) -> i64 {
+    return 0;  // Placeholder
+}
+
+fn receive_from(socket: i64, max_size: i64) -> UdpPacket? {
+    return none;  // Placeholder
+}
+
+fn sleep(ms: i64) {
+    // Placeholder
+}
