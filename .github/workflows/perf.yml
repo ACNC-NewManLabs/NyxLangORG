@@ -12,4 +12,4 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Run benchmarks
-        run: cargo bench --bench lexer -- --sample-size 10
+        run: cargo bench
