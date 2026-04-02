@@ -11,6 +11,7 @@ use super::devices::{
 use super::hypercall::HypercallHandler;
 #[cfg(feature = "jit")]
 use super::jit::JitEngine;
+#[cfg(target_os = "linux")]
 use super::kvm::KvmContext;
 use super::magic_ring::MagicRingManager;
 use super::memory::{GuestPhysicalAddr, VirtualMemory};
@@ -92,6 +93,7 @@ pub struct VirtualMachine {
     /// Hypercall handler
     pub hypercall_handler: HypercallHandler,
     /// KVM context
+    #[cfg(target_os = "linux")]
     pub kvm_context: Option<KvmContext>,
     /// JIT engine
     #[cfg(feature = "jit")]
@@ -127,7 +129,9 @@ impl VirtualMachine {
             apics.push(LocalApic::new(i as u32));
         }
 
+        #[cfg(target_os = "linux")]
         let mut kvm_context = None;
+        #[cfg(target_os = "linux")]
         if config.accel {
             match KvmContext::new(config.memory, config.num_cpus) {
                 Ok(mut ctx) => {
@@ -174,6 +178,7 @@ impl VirtualMachine {
             devices,
             apics,
             hypercall_handler: HypercallHandler::new(),
+            #[cfg(target_os = "linux")]
             kvm_context,
             #[cfg(feature = "jit")]
             jit_engine,
@@ -341,6 +346,7 @@ impl VirtualMachine {
         self.state = VmState::Running;
 
         // Run via KVM if available
+        #[cfg(target_os = "linux")]
         if self.kvm_context.is_some() {
             return self.run_kvm(max_instructions);
         }
@@ -900,6 +906,7 @@ impl VirtualMachine {
             .collect();
 
         // 3. Get dirty memory if KVM is available
+        #[cfg(target_os = "linux")]
         let memory_delta = if let Some(ref ctx) = self.kvm_context {
             #[cfg(target_os = "linux")]
             {
@@ -929,6 +936,8 @@ impl VirtualMachine {
         } else {
             None
         };
+        #[cfg(not(target_os = "linux"))]
+        let memory_delta: Option<HashMap<u64, Vec<u8>>> = None;
 
         let freeze_packet = (cpu_states, memory_delta);
         bincode::serialize_into(&mut snapshot_data, &freeze_packet).map_err(|e| e.to_string())?;
