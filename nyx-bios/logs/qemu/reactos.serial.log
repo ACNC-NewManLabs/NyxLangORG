@@ -1,0 +1,15 @@
+Nyx BIOS v1.0
+[OK] PIC initialized
+[OK] A20 line verified enabled
+[OK] IVT OK
+PCI: scanning stub
+[OK] PCI stub OK
+[  ] ATA detect...
+[OK] ATA detect done
+[OK] Keyboard initialized
+[OK] ACPI initialized
+[OK] SMBIOS initialized
+[OK] DMA initialized
+[OK] RTC initialized
+[  ] Starting boot...
+Boot sequence starting...

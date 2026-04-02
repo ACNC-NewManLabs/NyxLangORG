@@ -1,0 +1,14 @@
+Nyx BIOS v1.0
+[OK] PIC initialized
+[OK] A20 line verified enabled
+[OK] IVT OK
+PCI: scanning stub
+[OK] PCI stub OK
+[  ] ATA detect...
+[OK] ATA detect done
+[OK] Keyboard initialized
+ACPI: init...
+ACPI: RSDP done
+ACPI: RSDT done
+ACPI: XSDT done
+ACPI: FADT start
