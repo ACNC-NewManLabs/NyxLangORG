@@ -1,16 +1,16 @@
 //! NYX Concurrent Layer
-//! 
+//!
 //! Concurrency primitives: Thread, Mutex, RwLock, Channels, etc.
 
-pub mod thread;
-pub mod mutex;
-pub mod rwlock;
-pub mod condvar;
+pub mod actor;
 pub mod atomic;
 pub mod channels;
-pub mod task;
+pub mod condvar;
 pub mod executor;
-pub mod actor;
+pub mod mutex;
+pub mod rwlock;
+pub mod task;
+pub mod thread;
 
 /// Initialize concurrent runtime
 pub fn init() {
@@ -18,11 +18,11 @@ pub fn init() {
 }
 
 // Re-exports
-pub use thread::Thread;
+pub use actor::Actor;
+pub use channels::Channel;
+pub use condvar::Condvar;
+pub use executor::Executor;
 pub use mutex::Mutex;
 pub use rwlock::RwLock;
-pub use condvar::Condvar;
-pub use channels::Channel;
 pub use task::Task;
-pub use executor::Executor;
-pub use actor::Actor;
+pub use thread::Thread;

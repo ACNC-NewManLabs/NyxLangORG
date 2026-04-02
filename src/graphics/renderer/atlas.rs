@@ -24,7 +24,12 @@ pub struct TextureAtlas {
 }
 
 impl TextureAtlas {
-    pub fn new(device: &Device, queue: &Queue, width: u32, height: u32) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        device: &Device,
+        queue: &Queue,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let texture = device.create_texture(&TextureDescriptor {
             label: Some("Texture Atlas"),
             size: Extent3d {
@@ -87,7 +92,14 @@ impl TextureAtlas {
         })
     }
 
-    pub fn add_texture(&mut self, _device: &Device, queue: &Queue, data: &[u8], width: u32, height: u32) -> Result<AtlasRegion, Box<dyn std::error::Error>> {
+    pub fn add_texture(
+        &mut self,
+        _device: &Device,
+        queue: &Queue,
+        data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<AtlasRegion, Box<dyn std::error::Error>> {
         // Check if texture fits in current row
         if self.cursor_x + width > self.width {
             // Move to next row

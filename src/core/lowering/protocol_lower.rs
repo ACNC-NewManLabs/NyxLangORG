@@ -75,7 +75,10 @@ impl ProtocolLowerer {
                     expr: Some(Expr::StructLiteral {
                         name: struct_name.clone(),
                         fields: vec![
-                            FieldInit { name: "state".to_string(), value: Expr::int(0) },
+                            FieldInit {
+                                name: "state".to_string(),
+                                value: Expr::int(0),
+                            },
                             FieldInit {
                                 name: "transcript".to_string(),
                                 value: Expr::Call {
@@ -91,7 +94,10 @@ impl ProtocolLowerer {
                                 name: "session_key".to_string(),
                                 value: Expr::Call {
                                     callee: Box::new(Expr::Path {
-                                        segments: vec!["crypto".to_string(), "random_bytes".to_string()],
+                                        segments: vec![
+                                            "crypto".to_string(),
+                                            "random_bytes".to_string(),
+                                        ],
                                         span,
                                     }),
                                     args: vec![Expr::int(32)],
@@ -109,7 +115,12 @@ impl ProtocolLowerer {
             if let Some(handshake) = &proto.handshake {
                 for (i, step) in handshake.steps.iter().enumerate() {
                     match step {
-                        HandshakeStep::Message { from, to, name, fields } => {
+                        HandshakeStep::Message {
+                            from,
+                            to,
+                            name,
+                            fields,
+                        } => {
                             if from == role {
                                 impl_items.push(ImplItem::Method(Self::generate_send_method(
                                     name, to, fields, i as i32, span,
@@ -122,7 +133,9 @@ impl ProtocolLowerer {
                         }
                         HandshakeStep::Derive { assignments } => {
                             impl_items.push(ImplItem::Method(Self::generate_derive_method(
-                                assignments, i as i32, span,
+                                assignments,
+                                i as i32,
+                                span,
                             )));
                         }
                         HandshakeStep::Finish { actions } => {

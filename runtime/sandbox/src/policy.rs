@@ -1,5 +1,5 @@
 //! Sandbox Policy
-//! 
+//!
 //! This module defines the security policies for sandbox execution.
 
 use serde::{Deserialize, Serialize};
@@ -57,8 +57,8 @@ pub struct MemoryPolicy {
 impl Default for MemoryPolicy {
     fn default() -> Self {
         Self {
-            max_heap: 128 * 1024 * 1024, // 128 MB
-            max_stack: 8 * 1024 * 1024,  // 8 MB
+            max_heap: 128 * 1024 * 1024,  // 128 MB
+            max_stack: 8 * 1024 * 1024,   // 8 MB
             max_total: 256 * 1024 * 1024, // 256 MB
             enable_protection: true,
         }
@@ -204,7 +204,7 @@ impl Default for SyscallPolicy {
         allowed.insert("mmap".to_string());
         allowed.insert("mprotect".to_string());
         allowed.insert("munmap".to_string());
-        
+
         Self {
             mode: SyscallMode::Whitelist,
             allowed_syscalls: allowed,
@@ -375,10 +375,9 @@ mod tests {
             .network(NetworkMode::None)
             .time_limit(120)
             .build();
-        
+
         assert_eq!(policy.name, "test");
         assert_eq!(policy.memory.max_heap, 64 * 1024 * 1024);
         assert_eq!(policy.cpu.max_cpu_time, 60);
     }
 }
-

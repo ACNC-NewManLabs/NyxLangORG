@@ -7,6 +7,9 @@ pub struct FontDb {
 
 impl FontDb {
     pub fn register(&mut self, family: impl Into<String>, face: impl Into<String>) {
-        self.families.entry(family.into()).or_default().push(face.into());
+        self.families
+            .entry(family.into())
+            .or_default()
+            .push(face.into());
     }
 }

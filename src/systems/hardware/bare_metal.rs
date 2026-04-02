@@ -1,7 +1,11 @@
 //! Bare-Metal Runtime Module
 
 #[macro_export]
-macro_rules! no_std { () => { #![no_std] }; }
+macro_rules! no_std {
+    () => {
+        #![no_std]
+    };
+}
 
 pub trait KernelInterface {
     fn init(&mut self);

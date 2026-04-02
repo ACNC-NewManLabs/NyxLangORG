@@ -1,7 +1,7 @@
-use crate::runtime::execution::nyx_vm::{Value as AstValue};
 use crate::runtime::execution::bytecode_compiler::BytecodeCompiler;
-use nyx_vm::bytecode::{Value as VmValue};
-use nyx_vm::runtime::{NyxVm as Vm, Frame};
+use crate::runtime::execution::nyx_vm::Value as AstValue;
+use nyx_vm::bytecode::Value as VmValue;
+use nyx_vm::runtime::{Frame, NyxVm as Vm};
 use nyx_vm::VmConfig;
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ impl AeroJit {
         let mut name_to_idx = HashMap::new();
         let mut idx_to_name = HashMap::new();
         let mut initial_vms = Vec::new();
-        
+
         // Ensure deterministic order for stack mapping
         let mut sorted_keys: Vec<_> = ast_locals.keys().collect();
         sorted_keys.sort();
@@ -47,8 +47,11 @@ impl AeroJit {
         vm.load(module.clone());
 
         // 4. Force compilation and direct invocation
-        let func = module.functions.first().ok_or("Failed to find JIT function")?;
-        
+        let func = module
+            .functions
+            .first()
+            .ok_or("Failed to find JIT function")?;
+
         {
             let runtime = vm.runtime_mut();
             for val in initial_vms {
@@ -71,13 +74,14 @@ impl AeroJit {
             let runtime_ptr = vm.runtime_mut() as *mut nyx_vm::runtime::VmRuntime;
             if let Some(jit_engine) = vm.runtime_mut().jit_engine.as_mut() {
                 println!("Aero-JIT: Compiling Loop Fragment...");
-                let jit_res = jit_engine.compile_vm("main", 0, func)
+                let jit_res = jit_engine
+                    .compile_vm("main", 0, func)
                     .map_err(|e| format!("Cranelift Compilation Failed: {}", e))?;
-                
+
                 println!("Aero-JIT: Entering Native execution...");
-                let native_fn: unsafe extern "C" fn(*mut nyx_vm::runtime::VmRuntime, i32) -> i64 = 
+                let native_fn: unsafe extern "C" fn(*mut nyx_vm::runtime::VmRuntime, i32) -> i64 =
                     unsafe { std::mem::transmute(jit_res.func_ptr) };
-                
+
                 let res = unsafe { native_fn(runtime_ptr, 0) };
                 println!("Aero-JIT: Native execution finished with code {}.", res);
                 if res == -1 {
@@ -85,12 +89,14 @@ impl AeroJit {
                 }
             } else {
                 println!("Aero-JIT: Falling back to Bytecode VM (JIT engine missing)...");
-                vm.run_function("main", 0, Vec::new()).map_err(|e| format!("{:?}", e))?;
+                vm.run_function("main", 0, Vec::new())
+                    .map_err(|e| format!("{:?}", e))?;
             }
         }
         #[cfg(not(feature = "jit"))]
         {
-            vm.run_function("main", 0, Vec::new()).map_err(|e| format!("{:?}", e))?;
+            vm.run_function("main", 0, Vec::new())
+                .map_err(|e| format!("{:?}", e))?;
         }
 
         // 6. Synchronize state back to AST interpreter

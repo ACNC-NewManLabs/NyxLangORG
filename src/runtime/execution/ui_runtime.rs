@@ -45,7 +45,7 @@ pub struct AstRuntimeSession {
 impl AstRuntimeSession {
     pub fn new(entry_file: &Path, runtime: NativeRuntime) -> Result<Self, RuntimeError> {
         let mut engine_roots = Vec::new();
-        
+
         let ui_root = ui_engine_root();
         if ui_root.exists() {
             if let Err(e) = preflight_engine(&ui_root) {
@@ -60,7 +60,11 @@ impl AstRuntimeSession {
             engine_roots.extend(discover_engines(&std_root));
         }
 
-        let ai_root = std_root.parent().unwrap_or_else(|| Path::new(".")).join("engines").join("ai");
+        let ai_root = std_root
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("engines")
+            .join("ai");
         if ai_root.exists() {
             if let Err(e) = preflight_engine(&ai_root) {
                 eprintln!("AI Engine preflight failed: {e}");
@@ -101,7 +105,11 @@ impl RuntimeSession for AstRuntimeSession {
         self.loader.load_package(package.clone());
         for root in &self.engine_roots {
             if let Err(e) = self.vm.load_engine_from_manifest(root, "engine.json") {
-                eprintln!("Failed to load engine from {}: {}", root.display(), e.message);
+                eprintln!(
+                    "Failed to load engine from {}: {}",
+                    root.display(),
+                    e.message
+                );
                 return Err(RuntimeError::from(e));
             }
         }
@@ -192,38 +200,41 @@ pub fn execute_bytecode_app(input: &Path) -> Result<Value, EvalError> {
 }
 
 pub fn execute_jit_app(input: &Path) -> Result<Value, EvalError> {
-    use crate::runtime::execution::nyx_vm::{parse_program};
     use crate::runtime::execution::bytecode_compiler::BytecodeCompiler;
-    use nyx_vm::{VmConfig, runtime::NyxVm};
-    
+    use crate::runtime::execution::nyx_vm::parse_program;
+    use nyx_vm::{runtime::NyxVm, VmConfig};
+
     // 1. Parse
     let program = parse_program(input).map_err(EvalError::new)?;
-    
+
     // 2. Compile to Bytecode
     let compiler = BytecodeCompiler::new();
     let module = compiler.compile_program(&program).map_err(EvalError::new)?;
-    
+
     // 3. Setup High-Performance VM with JIT
     let mut config = VmConfig::default();
     config.enable_jit = true;
     let mut vm = NyxVm::new(config);
-    
+
     // Register basic natives for benchmark
     vm.register("print", 1, |args| {
         println!("{:?}", args[0]);
         Ok(nyx_vm::bytecode::Value::Null)
     });
-    
+
     vm.register("__native_time_ms", 0, |_| {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
         Ok(nyx_vm::bytecode::Value::Int(now as i64))
     });
-    
+
     // 4. Load and Run
     vm.load(module);
     let result = vm.run("main").map_err(|e| EvalError::new(e.to_string()))?;
-    
+
     // 5. Convert back to RuntimeValue
     Ok(vm_to_rt_value(result))
 }

@@ -63,15 +63,27 @@ mod tests {
     fn test_compliance_window_enforcement() {
         let policy = RetentionPolicyManager::new();
         assert!(!policy.evaluate_row_retention(6)); // Over 5 years
-        assert!(policy.evaluate_row_retention(4));  // Under 5 years
+        assert!(policy.evaluate_row_retention(4)); // Under 5 years
     }
 
     #[test]
     fn test_lifecycle_transitions() {
         let policy = RetentionPolicyManager::new();
-        assert_eq!(policy.trigger_lifecycle_action(6), RetentionAction::PurgeCompletely);
-        assert_eq!(policy.trigger_lifecycle_action(4), RetentionAction::MoveToGlacier);
-        assert_eq!(policy.trigger_lifecycle_action(2), RetentionAction::MoveToWarmDisk);
-        assert_eq!(policy.trigger_lifecycle_action(0), RetentionAction::RetainActive);
+        assert_eq!(
+            policy.trigger_lifecycle_action(6),
+            RetentionAction::PurgeCompletely
+        );
+        assert_eq!(
+            policy.trigger_lifecycle_action(4),
+            RetentionAction::MoveToGlacier
+        );
+        assert_eq!(
+            policy.trigger_lifecycle_action(2),
+            RetentionAction::MoveToWarmDisk
+        );
+        assert_eq!(
+            policy.trigger_lifecycle_action(0),
+            RetentionAction::RetainActive
+        );
     }
 }

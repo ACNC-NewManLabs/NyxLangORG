@@ -1,5 +1,5 @@
 //! Resource Limits
-//! 
+//!
 //! This module defines resource limits for sandbox execution.
 
 use std::time::Instant;
@@ -20,10 +20,10 @@ pub struct MemoryLimit {
 impl Default for MemoryLimit {
     fn default() -> Self {
         Self {
-            max_heap: 128 * 1024 * 1024,    // 128 MB
-            max_stack: 8 * 1024 * 1024,     // 8 MB
-            max_total: 256 * 1024 * 1024,   // 256 MB
-            page_size: 4096,                 // 4 KB pages
+            max_heap: 128 * 1024 * 1024,  // 128 MB
+            max_stack: 8 * 1024 * 1024,   // 8 MB
+            max_total: 256 * 1024 * 1024, // 256 MB
+            page_size: 4096,              // 4 KB pages
         }
     }
 }
@@ -130,7 +130,7 @@ impl ResourceLimits {
         Self {
             memory,
             cpu,
-            max_file_size: 10 * 1024 * 1024,  // 10 MB
+            max_file_size: 10 * 1024 * 1024, // 10 MB
             max_open_files: 64,
             max_processes: 1,
         }
@@ -140,12 +140,12 @@ impl ResourceLimits {
     pub fn restrictive() -> Self {
         Self {
             memory: MemoryLimit::new(
-                64 * 1024 * 1024,   // 64 MB heap
-                4 * 1024 * 1024,    // 4 MB stack
-                128 * 1024 * 1024,  // 128 MB total
+                64 * 1024 * 1024,  // 64 MB heap
+                4 * 1024 * 1024,   // 4 MB stack
+                128 * 1024 * 1024, // 128 MB total
             ),
-            cpu: CpuLimit::new(10), // 10 seconds
-            max_file_size: 1024 * 1024,  // 1 MB
+            cpu: CpuLimit::new(10),     // 10 seconds
+            max_file_size: 1024 * 1024, // 1 MB
             max_open_files: 16,
             max_processes: 1,
         }
@@ -155,11 +155,11 @@ impl ResourceLimits {
     pub fn moderate() -> Self {
         Self {
             memory: MemoryLimit::new(
-                128 * 1024 * 1024,  // 128 MB heap
-                8 * 1024 * 1024,    // 8 MB stack
-                256 * 1024 * 1024,  // 256 MB total
+                128 * 1024 * 1024, // 128 MB heap
+                8 * 1024 * 1024,   // 8 MB stack
+                256 * 1024 * 1024, // 256 MB total
             ),
-            cpu: CpuLimit::new(30), // 30 seconds
+            cpu: CpuLimit::new(30),          // 30 seconds
             max_file_size: 10 * 1024 * 1024, // 10 MB
             max_open_files: 64,
             max_processes: 1,
@@ -174,7 +174,7 @@ impl ResourceLimits {
                 16 * 1024 * 1024,   // 16 MB stack
                 1024 * 1024 * 1024, // 1 GB total
             ),
-            cpu: CpuLimit::new(300), // 5 minutes
+            cpu: CpuLimit::new(300),          // 5 minutes
             max_file_size: 100 * 1024 * 1024, // 100 MB
             max_open_files: 256,
             max_processes: 4,
@@ -279,7 +279,7 @@ mod tests {
     fn test_cpu_limit() {
         let mut limit = CpuLimit::new(10);
         assert!(!limit.is_exceeded());
-        
+
         limit.add_time(11);
         assert!(limit.is_exceeded());
     }
@@ -287,13 +287,13 @@ mod tests {
     #[test]
     fn test_resource_usage() {
         let mut usage = ResourceUsage::new();
-        
+
         usage.record_alloc(1000);
         assert_eq!(usage.memory_used, 1000);
-        
+
         usage.record_dealloc(500);
         assert_eq!(usage.memory_used, 500);
-        
+
         usage.record_alloc(1000);
         assert_eq!(usage.memory_peak, 1500);
     }
@@ -302,9 +302,8 @@ mod tests {
     fn test_resource_limits_presets() {
         let restrictive = ResourceLimits::restrictive();
         assert!(restrictive.memory.max_heap < 128 * 1024 * 1024);
-        
+
         let permissive = ResourceLimits::permissive();
         assert!(permissive.memory.max_heap > 256 * 1024 * 1024);
     }
 }
-

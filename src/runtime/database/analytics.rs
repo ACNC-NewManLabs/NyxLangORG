@@ -20,7 +20,12 @@ impl AnalyticsProcessing {
     }
 
     /// O(1) Streaming Aggregation update logic.
-    pub fn compute_sliding_window_delta(&self, current_agg: f64, dropped_val: f64, new_val: f64) -> f64 {
+    pub fn compute_sliding_window_delta(
+        &self,
+        current_agg: f64,
+        dropped_val: f64,
+        new_val: f64,
+    ) -> f64 {
         current_agg - dropped_val + new_val
     }
 
@@ -44,7 +49,9 @@ impl AnalyticsProcessing {
 
     /// Fast random selection based on block index with actual jittering.
     pub fn random_sample_block(&self, total_blocks: usize) -> usize {
-        if total_blocks == 0 { return 0; }
+        if total_blocks == 0 {
+            return 0;
+        }
         let mut rng = rand::thread_rng();
         rng.gen_range(0..total_blocks)
     }
@@ -68,7 +75,9 @@ impl AnalyticsProcessing {
 
     /// SIMD-Accelerated mean for f64 arrays.
     pub fn simd_mean_f64(&self, data: &[f64]) -> f64 {
-        if data.is_empty() { return 0.0; }
+        if data.is_empty() {
+            return 0.0;
+        }
         self.simd_sum_f64(data) / data.len() as f64
     }
 }
@@ -104,7 +113,7 @@ mod tests {
         let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
         let sum = ana.simd_sum_f64(&data);
         let mean = ana.simd_mean_f64(&data);
-        
+
         assert_eq!(sum, 55.0);
         assert_eq!(mean, 5.5);
     }

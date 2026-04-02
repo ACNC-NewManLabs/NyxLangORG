@@ -1,10 +1,9 @@
 //! NYX Core Pointer Module
-//! 
+//!
 //! Raw pointer utilities for the core library.
 //! Provides pointer operations that work without an OS.
 
 use core::fmt;
-
 
 // =============================================================================
 // Raw Pointer Types
@@ -69,8 +68,13 @@ impl<T: ?Sized> NonNull<T> {
     /// Creates a NonNull that points to invalid memory.
     ///
     /// This is also called a "dangling" pointer.
-    pub const fn dangling() -> NonNull<T> where T: Sized {
-        NonNull { ptr: core::ptr::null_mut::<T>().wrapping_add(1) }
+    pub const fn dangling() -> NonNull<T>
+    where
+        T: Sized,
+    {
+        NonNull {
+            ptr: core::ptr::null_mut::<T>().wrapping_add(1),
+        }
     }
 }
 
@@ -81,7 +85,9 @@ impl<T> NonNull<[T]> {
         if ptr.is_null() && len != 0 {
             None
         } else {
-            Some(NonNull { ptr: core::ptr::slice_from_raw_parts_mut(ptr, len) })
+            Some(NonNull {
+                ptr: core::ptr::slice_from_raw_parts_mut(ptr, len),
+            })
         }
     }
 
@@ -89,7 +95,9 @@ impl<T> NonNull<[T]> {
     #[inline]
     pub const fn dangling_slice(n: usize) -> NonNull<[T]> {
         let ptr = core::mem::align_of::<T>() as *mut T;
-        NonNull { ptr: core::ptr::slice_from_raw_parts_mut(ptr, n) }
+        NonNull {
+            ptr: core::ptr::slice_from_raw_parts_mut(ptr, n),
+        }
     }
 }
 
@@ -113,7 +121,7 @@ impl<T: ?Sized> fmt::Debug for NonNull<T> {
 // =============================================================================
 
 /// Represents a borrow of some data.
-/// 
+///
 /// This is a marker type for documentation purposes, representing
 /// the concept of an immutable reference.
 #[repr(transparent)]
@@ -156,7 +164,7 @@ impl<'a, T: ?Sized> Clone for Ref<'a, T> {
 // =============================================================================
 
 /// Represents an exclusive borrow of some data.
-/// 
+///
 /// This is a marker type for documentation purposes, representing
 /// the concept of a mutable reference.
 #[repr(transparent)]
@@ -321,7 +329,6 @@ impl<T: ?Sized> fmt::Debug for Weak<T> {
 
 // =============================================================================
 
-
 // =============================================================================
 // Tests
 // =============================================================================
@@ -356,7 +363,7 @@ mod tests {
     fn test_is_null() {
         let ptr: *const i32 = core::ptr::null();
         assert!(is_null(ptr));
-        
+
         let value = 42;
         let ptr = &value as *const i32;
         assert!(!is_null(ptr));
@@ -386,4 +393,3 @@ mod tests {
         assert!(!casted.is_null());
     }
 }
-

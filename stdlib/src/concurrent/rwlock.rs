@@ -8,7 +8,9 @@ pub struct RwLock<T> {
 
 impl<T> RwLock<T> {
     pub fn new(value: T) -> RwLock<T> {
-        RwLock { inner: StdRwLock::new(value) }
+        RwLock {
+            inner: StdRwLock::new(value),
+        }
     }
 
     pub fn read(&self) -> RwLockReadGuard<'_, T> {

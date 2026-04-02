@@ -1,5 +1,5 @@
 //! NYX Core Iterator Module
-//! 
+//!
 //! Zero-allocation iterator traits and implementations for the core library.
 //! This module provides the foundational iterator protocol.
 
@@ -100,7 +100,10 @@ pub trait Iterator {
         Self: Sized,
         P: FnMut(&Self::Item) -> bool,
     {
-        Filter { iter: self, predicate }
+        Filter {
+            iter: self,
+            predicate,
+        }
     }
 
     /// Creates an iterator which maps values using a closure.
@@ -126,7 +129,10 @@ pub trait Iterator {
     where
         Self: Sized,
     {
-        Enumerate { iter: self, index: 0 }
+        Enumerate {
+            iter: self,
+            index: 0,
+        }
     }
 
     /// Creates an iterator which can peek at the next element without
@@ -135,7 +141,10 @@ pub trait Iterator {
     where
         Self: Sized,
     {
-        Peekable { iter: self, cache: None }
+        Peekable {
+            iter: self,
+            cache: None,
+        }
     }
 
     /// Creates an iterator which skips the first n elements.
@@ -167,7 +176,10 @@ pub trait Iterator {
     }
 
     /// Creates an iterator that chains two iterators.
-    fn chain(self, other: impl IntoIterator<Item = Self::Item>) -> Chain<Self, impl Iterator<Item = Self::Item>>
+    fn chain(
+        self,
+        other: impl IntoIterator<Item = Self::Item>,
+    ) -> Chain<Self, impl Iterator<Item = Self::Item>>
     where
         Self: Sized,
     {
@@ -669,7 +681,10 @@ impl<'a, T> IntoIterator for &'a [T] {
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        SliceIter { slice: self, index: 0 }
+        SliceIter {
+            slice: self,
+            index: 0,
+        }
     }
 }
 
@@ -829,4 +844,3 @@ mod tests {
         assert!(!v.iter().all(|x| *x > 3));
     }
 }
-

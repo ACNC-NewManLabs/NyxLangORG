@@ -45,7 +45,9 @@ impl CoreEngineExtensions {
     }
 
     pub fn is_column_needed(&self, name: &str) -> bool {
-        !self.pushdown_enabled || self.active_predicates.is_empty() || self.active_predicates.contains(name)
+        !self.pushdown_enabled
+            || self.active_predicates.is_empty()
+            || self.active_predicates.contains(name)
     }
 }
 
@@ -64,7 +66,7 @@ mod tests {
     fn test_predicate_pushdown_pruning() {
         let mut core = CoreEngineExtensions::new();
         core.pushdown_predicate(&["age".to_string(), "name".to_string()]);
-        
+
         assert!(core.is_column_needed("age"));
         assert!(!core.is_column_needed("salary"));
     }

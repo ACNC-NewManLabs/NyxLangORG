@@ -1,11 +1,11 @@
 //! Global Symbol Index for Nyx LSP
-//! 
+//!
 //! Stores top-level symbols across the entire workspace to enable
 //! cross-file navigation and completions.
 
-use std::collections::HashMap;
 pub use lsp_types::{Location, SymbolKind, Url};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Symbol {
@@ -47,7 +47,10 @@ impl GlobalIndex {
         let mut names = Vec::new();
         for symbol in new_symbols {
             names.push(symbol.name.clone());
-            self.symbols.entry(symbol.name.clone()).or_default().push(symbol);
+            self.symbols
+                .entry(symbol.name.clone())
+                .or_default()
+                .push(symbol);
         }
         self.file_to_symbols.insert(uri, names);
     }
@@ -61,11 +64,11 @@ impl GlobalIndex {
     pub fn all_symbols(&self) -> Vec<Symbol> {
         self.symbols.values().flatten().cloned().collect()
     }
-    
+
     /// Clear index for a specific URI
     #[allow(dead_code)]
     pub fn clear_file(&mut self, uri: &Url) {
-         if let Some(names) = self.file_to_symbols.remove(uri) {
+        if let Some(names) = self.file_to_symbols.remove(uri) {
             for name in names {
                 if let Some(symbol_list) = self.symbols.get_mut(&name) {
                     symbol_list.retain(|s| s.location.uri != *uri);

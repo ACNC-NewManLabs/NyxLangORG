@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use serde::{Serialize, Deserialize};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bitmap {
@@ -18,7 +18,9 @@ impl Bitmap {
     }
 
     pub fn get(&self, i: usize) -> bool {
-        if i >= self.len { return false; }
+        if i >= self.len {
+            return false;
+        }
         let byte_idx = i / 8;
         let bit_idx = i % 8;
         (self.data[byte_idx] & (1 << bit_idx)) != 0
@@ -32,7 +34,10 @@ impl Bitmap {
                 new_data[new_idx / 8] |= 1 << (new_idx % 8);
             }
         }
-        Self { data: Arc::new(new_data), len: indices.len() }
+        Self {
+            data: Arc::new(new_data),
+            len: indices.len(),
+        }
     }
 }
 
@@ -77,17 +82,25 @@ impl ColumnData {
         match self {
             ColumnData::F64(v) => {
                 let vec = Arc::make_mut(v);
-                if let Value::Float(f) = val { vec[i] = f; }
-                else if let Value::Int(m) = val { vec[i] = m as f64; }
+                if let Value::Float(f) = val {
+                    vec[i] = f;
+                } else if let Value::Int(m) = val {
+                    vec[i] = m as f64;
+                }
             }
             ColumnData::I64(v) => {
                 let vec = Arc::make_mut(v);
-                if let Value::Int(m) = val { vec[i] = m; }
-                else if let Value::Float(f) = val { vec[i] = f as i64; }
+                if let Value::Int(m) = val {
+                    vec[i] = m;
+                } else if let Value::Float(f) = val {
+                    vec[i] = f as i64;
+                }
             }
             ColumnData::Bool(v) => {
                 let vec = Arc::make_mut(v);
-                if let Value::Bool(b) = val { vec[i] = b; }
+                if let Value::Bool(b) = val {
+                    vec[i] = b;
+                }
             }
             ColumnData::Str { data, offsets } => {
                 let arc_data = Arc::make_mut(data);
@@ -98,11 +111,12 @@ impl ColumnData {
                     let old_end = arc_offsets[i + 1];
                     let old_len = old_end - old_start;
                     let new_len = new_bytes.len();
-                    
+
                     if old_len != new_len {
                         let diff = new_len as isize - old_len as isize;
                         if diff > 0 {
-                            arc_data.splice(old_end..old_end, std::iter::repeat_n(0, diff as usize));
+                            arc_data
+                                .splice(old_end..old_end, std::iter::repeat_n(0, diff as usize));
                             arc_data[old_start..old_start + new_len].copy_from_slice(new_bytes);
                         } else {
                             arc_data.drain(old_start..old_start + (-diff) as usize);
@@ -112,7 +126,7 @@ impl ColumnData {
                             *offset = (*offset as isize + diff) as usize;
                         }
                     } else {
-                         arc_data[old_start..old_end].copy_from_slice(new_bytes);
+                        arc_data[old_start..old_end].copy_from_slice(new_bytes);
                     }
                 }
             }
@@ -139,33 +153,48 @@ impl ColumnData {
     pub fn take(&self, indices: &[usize]) -> Self {
         match self {
             ColumnData::F64(v) => {
-                let res: Vec<f64> = indices.par_iter().map(|&i| if i == usize::MAX { 0.0 } else { v[i] }).collect();
+                let res: Vec<f64> = indices
+                    .par_iter()
+                    .map(|&i| if i == usize::MAX { 0.0 } else { v[i] })
+                    .collect();
                 ColumnData::F64(Arc::new(res))
             }
             ColumnData::I64(v) => {
-                let res: Vec<i64> = indices.par_iter().map(|&i| if i == usize::MAX { 0 } else { v[i] }).collect();
+                let res: Vec<i64> = indices
+                    .par_iter()
+                    .map(|&i| if i == usize::MAX { 0 } else { v[i] })
+                    .collect();
                 ColumnData::I64(Arc::new(res))
             }
             ColumnData::Bool(v) => {
-                let res: Vec<bool> = indices.par_iter().map(|&i| if i == usize::MAX { false } else { v[i] }).collect();
+                let res: Vec<bool> = indices
+                    .par_iter()
+                    .map(|&i| if i == usize::MAX { false } else { v[i] })
+                    .collect();
                 ColumnData::Bool(Arc::new(res))
             }
             ColumnData::Bitmap(bm) => {
                 let byte_len = indices.len().div_ceil(8);
-                let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
-                    let mut byte = 0u8;
-                    for bit in 0..8 {
-                        let i = byte_idx * 8 + bit;
-                        if i < indices.len() {
-                            let idx = indices[i];
-                            if idx != usize::MAX && bm.get(idx) {
-                                byte |= 1 << bit;
+                let data: Vec<u8> = (0..byte_len)
+                    .into_par_iter()
+                    .map(|byte_idx| {
+                        let mut byte = 0u8;
+                        for bit in 0..8 {
+                            let i = byte_idx * 8 + bit;
+                            if i < indices.len() {
+                                let idx = indices[i];
+                                if idx != usize::MAX && bm.get(idx) {
+                                    byte |= 1 << bit;
+                                }
                             }
                         }
-                    }
-                    byte
-                }).collect();
-                ColumnData::Bitmap(Bitmap { data: Arc::new(data), len: indices.len() })
+                        byte
+                    })
+                    .collect();
+                ColumnData::Bitmap(Bitmap {
+                    data: Arc::new(data),
+                    len: indices.len(),
+                })
             }
             ColumnData::Str { data, offsets } => {
                 let mut new_data = Vec::new();
@@ -174,16 +203,29 @@ impl ColumnData {
                     new_offsets.push(new_data.len());
                     if i != usize::MAX {
                         let start = offsets[i];
-                        let end = if i + 1 < offsets.len() { offsets[i+1] } else { data.len() };
+                        let end = if i + 1 < offsets.len() {
+                            offsets[i + 1]
+                        } else {
+                            data.len()
+                        };
                         new_data.extend_from_slice(&data[start..end]);
                     }
                 }
                 new_offsets.push(new_data.len());
-                ColumnData::Str { data: Arc::new(new_data), offsets: Arc::new(new_offsets) }
+                ColumnData::Str {
+                    data: Arc::new(new_data),
+                    offsets: Arc::new(new_offsets),
+                }
             }
             ColumnData::Categorical { codes, dict } => {
-                let res_codes: Vec<u32> = indices.par_iter().map(|&i| if i == usize::MAX { u32::MAX } else { codes[i] }).collect();
-                ColumnData::Categorical { codes: Arc::new(res_codes), dict: dict.clone() }
+                let res_codes: Vec<u32> = indices
+                    .par_iter()
+                    .map(|&i| if i == usize::MAX { u32::MAX } else { codes[i] })
+                    .collect();
+                ColumnData::Categorical {
+                    codes: Arc::new(res_codes),
+                    dict: dict.clone(),
+                }
             }
         }
     }
@@ -212,21 +254,39 @@ impl Column {
             metadata: ColumnMetadata::default(),
         }
     }
-    pub fn from_values(name: String, values: Vec<crate::runtime::execution::nyx_vm::Value>) -> Self {
+    pub fn from_values(
+        name: String,
+        values: Vec<crate::runtime::execution::nyx_vm::Value>,
+    ) -> Self {
         use crate::runtime::execution::nyx_vm::Value;
         if values.is_empty() {
-             return Self::new(name, ColumnData::F64(Arc::new(vec![])), None);
+            return Self::new(name, ColumnData::F64(Arc::new(vec![])), None);
         }
-        
+
         // Detect type from first non-null
-        let first = values.iter().find(|v| !matches!(v, Value::Null)).unwrap_or(&Value::Null);
+        let first = values
+            .iter()
+            .find(|v| !matches!(v, Value::Null))
+            .unwrap_or(&Value::Null);
         match first {
             Value::Int(_) => {
-                let data: Vec<i64> = values.iter().map(|v| match v { Value::Int(i) => *i, _ => 0 }).collect();
+                let data: Vec<i64> = values
+                    .iter()
+                    .map(|v| match v {
+                        Value::Int(i) => *i,
+                        _ => 0,
+                    })
+                    .collect();
                 Self::new(name, ColumnData::I64(Arc::new(data)), None)
             }
             Value::Float(_) => {
-                let data: Vec<f64> = values.iter().map(|v| match v { Value::Float(f) => *f, _ => 0.0 }).collect();
+                let data: Vec<f64> = values
+                    .iter()
+                    .map(|v| match v {
+                        Value::Float(f) => *f,
+                        _ => 0.0,
+                    })
+                    .collect();
                 Self::new(name, ColumnData::F64(Arc::new(data)), None)
             }
             Value::Str(_) => {
@@ -238,17 +298,34 @@ impl Column {
                     }
                     offsets.push(data.len());
                 }
-                Self::new(name, ColumnData::Str { data: Arc::new(data), offsets: Arc::new(offsets) }, None)
+                Self::new(
+                    name,
+                    ColumnData::Str {
+                        data: Arc::new(data),
+                        offsets: Arc::new(offsets),
+                    },
+                    None,
+                )
             }
             _ => {
-                let data: Vec<f64> = values.iter().map(|v| match v { Value::Float(f) => *f, _ => 0.0 }).collect();
+                let data: Vec<f64> = values
+                    .iter()
+                    .map(|v| match v {
+                        Value::Float(f) => *f,
+                        _ => 0.0,
+                    })
+                    .collect();
                 Self::new(name, ColumnData::F64(Arc::new(data)), None)
             }
         }
     }
 
     pub fn new_dummy(len: usize) -> Self {
-        Self::new("dummy".to_string(), ColumnData::F64(Arc::new(vec![0.0; len])), None)
+        Self::new(
+            "dummy".to_string(),
+            ColumnData::F64(Arc::new(vec![0.0; len])),
+            None,
+        )
     }
 
     pub fn len(&self) -> usize {
@@ -258,7 +335,11 @@ impl Column {
             ColumnData::Bool(v) => v.len(),
             ColumnData::Bitmap(bm) => bm.len,
             ColumnData::Str { offsets, .. } => {
-                if offsets.is_empty() { 0 } else { offsets.len() - 1 }
+                if offsets.is_empty() {
+                    0
+                } else {
+                    offsets.len() - 1
+                }
             }
             ColumnData::Categorical { codes, .. } => codes.len(),
         }
@@ -272,7 +353,9 @@ impl Column {
             ColumnData::Bool(v) => v.len(),
             ColumnData::Bitmap(bm) => bm.len.div_ceil(8),
             ColumnData::Str { data, offsets } => data.len() + offsets.len() * 8,
-            ColumnData::Categorical { codes, dict } => codes.len() * 4 + dict.iter().map(|s| s.len()).sum::<usize>(),
+            ColumnData::Categorical { codes, dict } => {
+                codes.len() * 4 + dict.iter().map(|s| s.len()).sum::<usize>()
+            }
         };
         let valid_size = self.validity.as_ref().map(|b| b.len / 8).unwrap_or(0);
         base + data_size + valid_size
@@ -280,7 +363,7 @@ impl Column {
 
     pub fn get_value(&self, row: usize) -> crate::runtime::execution::nyx_vm::Value {
         use crate::runtime::execution::nyx_vm::Value;
-        
+
         // Check validity first
         if let Some(validity) = &self.validity {
             if !validity.get(row) {
@@ -324,7 +407,14 @@ impl Schema {
     }
     pub fn from_tuples(tuples: Vec<(String, String)>) -> Self {
         Self {
-            fields: tuples.into_iter().map(|(name, dtype)| Field { name, dtype, nullable: true }).collect()
+            fields: tuples
+                .into_iter()
+                .map(|(name, dtype)| Field {
+                    name,
+                    dtype,
+                    nullable: true,
+                })
+                .collect(),
         }
     }
 }
@@ -338,8 +428,8 @@ pub struct DataChunk {
 
 impl DataChunk {
     pub fn new(columns: Vec<Column>, size: usize) -> Self {
-        Self { 
-            columns, 
+        Self {
+            columns,
             size,
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

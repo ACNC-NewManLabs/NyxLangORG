@@ -28,11 +28,18 @@ pub mod log {
     pub fn log(level: &str, msg: &str) {
         println!("[{}] {}", level, msg);
     }
-    pub fn info(msg: &str) { log("INFO", msg); }
-    pub fn warn(msg: &str) { log("WARN", msg); }
-    pub fn error(msg: &str) { log("ERROR", msg); }
-    pub fn debug(msg: &str) { log("DEBUG", msg); }
+    pub fn info(msg: &str) {
+        log("INFO", msg);
+    }
+    pub fn warn(msg: &str) {
+        log("WARN", msg);
+    }
+    pub fn error(msg: &str) {
+        log("ERROR", msg);
+    }
+    pub fn debug(msg: &str) {
+        log("DEBUG", msg);
+    }
 }
 
 pub use format::*;
-

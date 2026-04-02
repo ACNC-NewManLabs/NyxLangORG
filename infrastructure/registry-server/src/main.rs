@@ -140,13 +140,18 @@ async fn main() {
 }
 
 async fn run() -> Result<(), String> {
-    let db_path = std::env::var("NYX_REGISTRY_DB").unwrap_or_else(|_| "infrastructure/schemas/registry.db".to_string());
-    let bind_addr = std::env::var("NYX_REGISTRY_BIND").unwrap_or_else(|_| "127.0.0.1:8090".to_string());
-    let package_cdn_base = std::env::var("NYX_PACKAGE_CDN_BASE").unwrap_or_else(|_| "https://cdn.nyxlang.org".to_string());
-    let docs_base = std::env::var("NYX_DOCS_BASE").unwrap_or_else(|_| "https://docs.nyxlang.org".to_string());
+    let db_path = std::env::var("NYX_REGISTRY_DB")
+        .unwrap_or_else(|_| "infrastructure/schemas/registry.db".to_string());
+    let bind_addr =
+        std::env::var("NYX_REGISTRY_BIND").unwrap_or_else(|_| "127.0.0.1:8090".to_string());
+    let package_cdn_base = std::env::var("NYX_PACKAGE_CDN_BASE")
+        .unwrap_or_else(|_| "https://cdn.nyxlang.org".to_string());
+    let docs_base =
+        std::env::var("NYX_DOCS_BASE").unwrap_or_else(|_| "https://docs.nyxlang.org".to_string());
 
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
-    let schema = std::fs::read_to_string("infrastructure/registry-server/schema.sql").map_err(|e| e.to_string())?;
+    let schema = std::fs::read_to_string("infrastructure/registry-server/schema.sql")
+        .map_err(|e| e.to_string())?;
     conn.execute_batch(&schema).map_err(|e| e.to_string())?;
 
     let state = AppState {
@@ -161,7 +166,10 @@ async fn run() -> Result<(), String> {
         .route("/api/v1/packages/publish", post(publish_package))
         .route("/api/v1/packages/search", get(search_packages))
         .route("/api/v1/packages/:name", get(package_info))
-        .route("/api/v1/packages/:name/download/:version", get(download_package))
+        .route(
+            "/api/v1/packages/:name/download/:version",
+            get(download_package),
+        )
         .route("/api/v1/docs/:name/:version", get(package_docs))
         .route("/api/v1/mirrors/register", post(register_mirror))
         .route("/api/v1/mirrors/snapshot", get(mirror_snapshot))
@@ -172,9 +180,7 @@ async fn run() -> Result<(), String> {
         .map_err(|e| format!("failed to bind {bind_addr}: {e}"))?;
     println!("nyx registry listening on http://{bind_addr}");
 
-    axum::serve(listener, app)
-        .await
-        .map_err(|e| e.to_string())
+    axum::serve(listener, app).await.map_err(|e| e.to_string())
 }
 
 async fn healthz() -> impl IntoResponse {
@@ -185,14 +191,23 @@ async fn register_developer(
     State(state): State<AppState>,
     Json(req): Json<RegisterDeveloperRequest>,
 ) -> Result<Json<RegisterDeveloperResponse>, (StatusCode, Json<ApiError>)> {
-    if req.username.trim().is_empty() || req.email.trim().is_empty() || req.signing_public_key.trim().is_empty() {
-        return Err(api_err(StatusCode::BAD_REQUEST, "username/email/signing_public_key are required"));
+    if req.username.trim().is_empty()
+        || req.email.trim().is_empty()
+        || req.signing_public_key.trim().is_empty()
+    {
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "username/email/signing_public_key are required",
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
     let api_key = format!("nyx_{}", Uuid::new_v4().simple());
 
-    let mut conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let mut conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
     let tx = conn.transaction().map_err(internal_sql)?;
     tx.execute(
         "INSERT INTO developers (username, email, signing_public_key, created_at) VALUES (?, ?, ?, ?)",
@@ -208,7 +223,10 @@ async fn register_developer(
     .map_err(internal_sql)?;
     tx.commit().map_err(internal_sql)?;
 
-    Ok(Json(RegisterDeveloperResponse { developer_id, api_key }))
+    Ok(Json(RegisterDeveloperResponse {
+        developer_id,
+        api_key,
+    }))
 }
 
 async fn publish_package(
@@ -224,7 +242,10 @@ async fn publish_package(
         .ok_or_else(|| api_err(StatusCode::UNAUTHORIZED, "missing x-api-key header"))?;
 
     let now = Utc::now().to_rfc3339();
-    let mut conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let mut conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let (developer_id, signing_public_key): (i64, String) = conn
         .query_row(
@@ -242,7 +263,10 @@ async fn publish_package(
         &req.signature,
     );
     if !signature_ok {
-        return Err(api_err(StatusCode::UNAUTHORIZED, "signature verification failed"));
+        return Err(api_err(
+            StatusCode::UNAUTHORIZED,
+            "signature verification failed",
+        ));
     }
 
     validate_dependencies(&conn, &req.dependencies)?;
@@ -286,7 +310,8 @@ async fn publish_package(
     }
 
     for target in BUILD_TARGETS {
-        let artifact = deterministic_artifact_hash(&req.name, &req.version, target, &req.source_sha256);
+        let artifact =
+            deterministic_artifact_hash(&req.name, &req.version, target, &req.source_sha256);
         tx.execute(
             "INSERT INTO build_artifacts (package_version_id, target, artifact_sha256, build_status, created_at)
              VALUES (?, ?, ?, 'verified', ?)",
@@ -299,7 +324,8 @@ async fn publish_package(
 
     Ok(Json(PublishPackageResponse {
         accepted: true,
-        verification_report: "published and verified across x86_64/aarch64/riscv64/wasm32".to_string(),
+        verification_report: "published and verified across x86_64/aarch64/riscv64/wasm32"
+            .to_string(),
     }))
 }
 
@@ -311,7 +337,10 @@ async fn search_packages(
     let tag = q.tag.unwrap_or_default();
     let like = format!("%{}%", query_str);
 
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
     let mut stmt = conn
         .prepare(
             "SELECT p.name,
@@ -357,7 +386,10 @@ async fn package_info(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<PackageInfoResponse>, (StatusCode, Json<ApiError>)> {
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let (package_id, description): (i64, String) = conn
         .query_row(
@@ -369,7 +401,9 @@ async fn package_info(
 
     let mut versions = Vec::new();
     let mut version_stmt = conn
-        .prepare("SELECT version FROM package_versions WHERE package_id = ? ORDER BY published_at DESC")
+        .prepare(
+            "SELECT version FROM package_versions WHERE package_id = ? ORDER BY published_at DESC",
+        )
         .map_err(internal_sql)?;
     let version_rows = version_stmt
         .query_map(params![package_id], |r| r.get::<_, String>(0))
@@ -389,7 +423,9 @@ async fn package_info(
             )
             .map_err(internal_sql)?;
         let dep_rows = dep_stmt
-            .query_map(params![package_id, latest], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+            .query_map(params![package_id, latest], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })
             .map_err(internal_sql)?;
         for row in dep_rows {
             let (dep_name, dep_req) = row.map_err(internal_sql)?;
@@ -411,7 +447,12 @@ async fn package_info(
         versions: versions.clone(),
         dependencies: deps,
         popularity,
-        docs_url: format!("{}/{}/{}", state.docs_base, name, versions.first().cloned().unwrap_or_default()),
+        docs_url: format!(
+            "{}/{}/{}",
+            state.docs_base,
+            name,
+            versions.first().cloned().unwrap_or_default()
+        ),
     }))
 }
 
@@ -420,7 +461,10 @@ async fn download_package(
     Path((name, version)): Path<(String, String)>,
 ) -> Result<Json<DownloadResponse>, (StatusCode, Json<ApiError>)> {
     let now = Utc::now().to_rfc3339();
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let (package_id, source_sha): (i64, String) = conn
         .query_row(
@@ -441,7 +485,10 @@ async fn download_package(
     Ok(Json(DownloadResponse {
         package: name.clone(),
         version: version.clone(),
-        url: format!("{}/{}/{}/package.tar.zst", state.package_cdn_base, name, version),
+        url: format!(
+            "{}/{}/{}/package.tar.zst",
+            state.package_cdn_base, name, version
+        ),
         sha256: source_sha,
     }))
 }
@@ -462,7 +509,10 @@ async fn register_mirror(
     Json(req): Json<RegisterMirrorRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let now = Utc::now().to_rfc3339();
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
     conn.execute(
         "INSERT INTO mirrors (region, endpoint, health, last_sync_at) VALUES (?, ?, 'healthy', ?)",
         params![req.region, req.endpoint, now],
@@ -475,7 +525,10 @@ async fn register_mirror(
 async fn mirror_snapshot(
     State(state): State<AppState>,
 ) -> Result<Json<SnapshotResponse>, (StatusCode, Json<ApiError>)> {
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let mut pkg_stmt = conn
         .prepare("SELECT id, name FROM packages ORDER BY name")
@@ -506,7 +559,10 @@ async fn mirror_snapshot(
     }))
 }
 
-fn latest_tags_for_package(conn: &Connection, name: &str) -> Result<Vec<String>, (StatusCode, Json<ApiError>)> {
+fn latest_tags_for_package(
+    conn: &Connection,
+    name: &str,
+) -> Result<Vec<String>, (StatusCode, Json<ApiError>)> {
     let mut stmt = conn
         .prepare(
             "SELECT t.tag FROM package_tags t
@@ -545,7 +601,10 @@ fn upsert_package(
     match existing {
         Ok((id, owner)) => {
             if owner != developer_id {
-                return Err(api_err(StatusCode::FORBIDDEN, "package is owned by another developer"));
+                return Err(api_err(
+                    StatusCode::FORBIDDEN,
+                    "package is owned by another developer",
+                ));
             }
             Ok(id)
         }
@@ -561,18 +620,33 @@ fn upsert_package(
     }
 }
 
-fn validate_publish_request(req: &PublishPackageRequest) -> Result<(), (StatusCode, Json<ApiError>)> {
-    let semver_re = Regex::new(r"^\d+\.\d+\.\d+$")
-        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "semver regex init failed"))?;
+fn validate_publish_request(
+    req: &PublishPackageRequest,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    let semver_re = Regex::new(r"^\d+\.\d+\.\d+$").map_err(|_| {
+        api_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "semver regex init failed",
+        )
+    })?;
 
     if req.name.trim().is_empty() || req.description.trim().is_empty() {
-        return Err(api_err(StatusCode::BAD_REQUEST, "name/description required"));
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "name/description required",
+        ));
     }
     if !semver_re.is_match(&req.version) {
-        return Err(api_err(StatusCode::BAD_REQUEST, "version must be semantic (x.y.z)"));
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "version must be semantic (x.y.z)",
+        ));
     }
     if !is_hex_64(&req.source_sha256) || !is_hex_64(&req.signature) {
-        return Err(api_err(StatusCode::BAD_REQUEST, "source_sha256 and signature must be 64-char hex"));
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "source_sha256 and signature must be 64-char hex",
+        ));
     }
     Ok(())
 }
@@ -581,14 +655,21 @@ fn validate_dependencies(
     conn: &Connection,
     deps: &HashMap<String, String>,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
-    let semver_req = Regex::new(r"^(\^|~)?\d+(\.\d+){0,2}$")
-        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "dependency regex init failed"))?;
+    let semver_req = Regex::new(r"^(\^|~)?\d+(\.\d+){0,2}$").map_err(|_| {
+        api_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "dependency regex init failed",
+        )
+    })?;
 
     for (dep_name, dep_req) in deps {
         if !semver_req.is_match(dep_req) {
             return Err(api_err(
                 StatusCode::BAD_REQUEST,
-                &format!("dependency '{}' has invalid semver requirement '{}'", dep_name, dep_req),
+                &format!(
+                    "dependency '{}' has invalid semver requirement '{}'",
+                    dep_name, dep_req
+                ),
             ));
         }
         let exists: Result<i64, _> = conn.query_row(
@@ -642,7 +723,12 @@ fn verify_signature(
     expected == signature
 }
 
-fn deterministic_artifact_hash(name: &str, version: &str, target: &str, source_sha: &str) -> String {
+fn deterministic_artifact_hash(
+    name: &str,
+    version: &str,
+    target: &str,
+    source_sha: &str,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(name.as_bytes());
     hasher.update(b":");
@@ -659,9 +745,17 @@ fn is_hex_64(value: &str) -> bool {
 }
 
 fn api_err(code: StatusCode, msg: &str) -> (StatusCode, Json<ApiError>) {
-    (code, Json(ApiError { error: msg.to_string() }))
+    (
+        code,
+        Json(ApiError {
+            error: msg.to_string(),
+        }),
+    )
 }
 
 fn internal_sql(err: rusqlite::Error) -> (StatusCode, Json<ApiError>) {
-    api_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("db error: {err}"))
+    api_err(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        &format!("db error: {err}"),
+    )
 }

@@ -3,8 +3,8 @@
 //! Strongly-typed, immutable-after-construction AST nodes for every Nyx
 //! language construct.  The root type is [`Program`].
 
-use serde::Serialize;
 use crate::core::lexer::token::Span;
+use serde::Serialize;
 
 // ─── Program ─────────────────────────────────────────────────────────────────
 
@@ -453,10 +453,7 @@ pub enum Stmt {
     /// Expression used as statement
     Expr(Expr),
     /// `defer stmt`
-    Defer {
-        stmt: Box<Stmt>,
-        span: Span,
-    },
+    Defer { stmt: Box<Stmt>, span: Span },
     /// `print(…)` — special built-in kept for backward compat
     Print { expr: Expr },
     /// `yield expr`
@@ -482,7 +479,18 @@ impl Stmt {
             Stmt::InlineAsm { span, .. } => span,
             Stmt::Yield { span, .. } => span,
             Stmt::Defer { span, .. } => span,
-            Stmt::Print { .. } => &Span { start: crate::core::lexer::token::Position { line: 0, column: 0, offset: 0 }, end: crate::core::lexer::token::Position { line: 0, column: 0, offset: 0 } },
+            Stmt::Print { .. } => &Span {
+                start: crate::core::lexer::token::Position {
+                    line: 0,
+                    column: 0,
+                    offset: 0,
+                },
+                end: crate::core::lexer::token::Position {
+                    line: 0,
+                    column: 0,
+                    offset: 0,
+                },
+            },
         }
     }
 }
@@ -504,26 +512,58 @@ pub struct IfBranch {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Expr {
     // Literals
-    IntLiteral { value: i64, span: Span },
-    FloatLiteral { value: f64, span: Span },
-    StringLiteral { value: String, span: Span },
-    CharLiteral { value: char, span: Span },
-    BoolLiteral { value: bool, span: Span },
-    NullLiteral { span: Span },
+    IntLiteral {
+        value: i64,
+        span: Span,
+    },
+    FloatLiteral {
+        value: f64,
+        span: Span,
+    },
+    StringLiteral {
+        value: String,
+        span: Span,
+    },
+    CharLiteral {
+        value: char,
+        span: Span,
+    },
+    BoolLiteral {
+        value: bool,
+        span: Span,
+    },
+    NullLiteral {
+        span: Span,
+    },
 
     // Composite literals
-    ArrayLiteral { elements: Vec<Expr>, span: Span },
+    ArrayLiteral {
+        elements: Vec<Expr>,
+        span: Span,
+    },
     ArrayRepeat {
         value: Box<Expr>,
         len: Box<Expr>,
         span: Span,
     },
-    TupleLiteral { elements: Vec<Expr>, span: Span },
-    BigIntLiteral { value: String, span: Span },
+    TupleLiteral {
+        elements: Vec<Expr>,
+        span: Span,
+    },
+    BigIntLiteral {
+        value: String,
+        span: Span,
+    },
 
     // Named reference
-    Identifier { name: String, span: Span },
-    Path { segments: Vec<String>, span: Span },
+    Identifier {
+        name: String,
+        span: Span,
+    },
+    Path {
+        segments: Vec<String>,
+        span: Span,
+    },
 
     // Operators
     Binary {
@@ -561,7 +601,10 @@ pub enum Expr {
         end: Option<Box<Expr>>,
         span: Span,
     },
-    TryOp { expr: Box<Expr>, span: Span },
+    TryOp {
+        expr: Box<Expr>,
+        span: Span,
+    },
 
     // Calls
     Call {
@@ -578,7 +621,10 @@ pub enum Expr {
     },
 
     // Block struct literal
-    BlockLiteral { items: Vec<BlockItem>, span: Span },
+    BlockLiteral {
+        items: Vec<BlockItem>,
+        span: Span,
+    },
 
     // Type cast
     Cast {
@@ -588,7 +634,10 @@ pub enum Expr {
     },
 
     // Async
-    Await { expr: Box<Expr>, span: Span },
+    Await {
+        expr: Box<Expr>,
+        span: Span,
+    },
 
     // Range
     Range {
@@ -614,10 +663,16 @@ pub enum Expr {
     },
 
     // Dereference
-    Deref { expr: Box<Expr>, span: Span },
+    Deref {
+        expr: Box<Expr>,
+        span: Span,
+    },
 
     // Move
-    Move { expr: Box<Expr>, span: Span },
+    Move {
+        expr: Box<Expr>,
+        span: Span,
+    },
 
     // Block expression
     Block {
@@ -649,13 +704,22 @@ pub enum Expr {
     },
 
     // Async block
-    AsyncBlock { body: Vec<Stmt>, span: Span },
+    AsyncBlock {
+        body: Vec<Stmt>,
+        span: Span,
+    },
 
     // Css template literal
-    CssLiteral { value: String, span: Span },
+    CssLiteral {
+        value: String,
+        span: Span,
+    },
 
     /// `loop expr` as expression
-    Loop { expr: Box<Expr>, span: Span },
+    Loop {
+        expr: Box<Expr>,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -704,19 +768,34 @@ impl Expr {
 // Keep old names for backward compat with IR builder / tests
 impl Expr {
     pub fn int(n: i64) -> Self {
-        Expr::IntLiteral { value: n, span: Span::default() }
+        Expr::IntLiteral {
+            value: n,
+            span: Span::default(),
+        }
     }
     pub fn float(f: f64) -> Self {
-        Expr::FloatLiteral { value: f, span: Span::default() }
+        Expr::FloatLiteral {
+            value: f,
+            span: Span::default(),
+        }
     }
     pub fn string(s: impl Into<String>) -> Self {
-        Expr::StringLiteral { value: s.into(), span: Span::default() }
+        Expr::StringLiteral {
+            value: s.into(),
+            span: Span::default(),
+        }
     }
     pub fn bool(b: bool) -> Self {
-        Expr::BoolLiteral { value: b, span: Span::default() }
+        Expr::BoolLiteral {
+            value: b,
+            span: Span::default(),
+        }
     }
     pub fn ident(s: impl Into<String>) -> Self {
-        Expr::Identifier { name: s.into(), span: Span::default() }
+        Expr::Identifier {
+            name: s.into(),
+            span: Span::default(),
+        }
     }
 }
 

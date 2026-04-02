@@ -2,13 +2,19 @@
 //! Consensus and RPC primitives.
 
 pub mod rpc {
-    use crate::error::NyxError;
-    use crate::collections::vec::Vec as NyxVec;
     use crate::collections::string::String as NyxString;
+    use crate::collections::vec::Vec as NyxVec;
+    use crate::error::NyxError;
 
     pub enum Message {
-        Request { method: NyxString, params: NyxVec<u8> },
-        Response { result: NyxVec<u8>, error: Option<NyxString> },
+        Request {
+            method: NyxString,
+            params: NyxVec<u8>,
+        },
+        Response {
+            result: NyxVec<u8>,
+            error: Option<NyxString>,
+        },
     }
 
     pub struct Client {
@@ -16,8 +22,12 @@ pub mod rpc {
     }
 
     impl Client {
-        pub fn new(addr: &str) -> Self { Self { server_addr: addr.to_string() } }
-        
+        pub fn new(addr: &str) -> Self {
+            Self {
+                server_addr: addr.to_string(),
+            }
+        }
+
         pub fn call(&self, _method: &str, _params: &[u8]) -> Result<Vec<u8>, NyxError> {
             // Stub for real networking
             Ok(Vec::new())
@@ -25,10 +35,13 @@ pub mod rpc {
     }
 
     pub struct Server;
-    
+
     impl Server {
         pub fn handle(&self, _msg: Message) -> Message {
-            Message::Response { result: NyxVec::new(), error: None }
+            Message::Response {
+                result: NyxVec::new(),
+                error: None,
+            }
         }
     }
 }
@@ -61,7 +74,7 @@ pub mod consensus {
                 log: Vec::new(),
             }
         }
-        
+
         pub fn request_vote(&mut self, term: u64, _candidate_id: u64) -> bool {
             if term > self.term {
                 self.term = term;

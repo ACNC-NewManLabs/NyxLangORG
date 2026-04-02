@@ -59,7 +59,10 @@ pub mod layout {
         /// Pad the layout to meet alignment requirements
         pub fn pad_to_align(&self) -> Layout {
             let size = (self.size + self.align - 1) & !(self.align - 1);
-            Layout { size, align: self.align }
+            Layout {
+                size,
+                align: self.align,
+            }
         }
     }
 
@@ -71,7 +74,10 @@ pub mod layout {
 
     /// Create zeroed memory
     #[inline]
-    pub fn zeroed<T>() -> MaybeUninit<T> where T: Copy {
+    pub fn zeroed<T>() -> MaybeUninit<T>
+    where
+        T: Copy,
+    {
         MaybeUninit::zeroed()
     }
 }

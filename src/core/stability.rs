@@ -41,9 +41,15 @@ impl StabilityLevel {
     pub fn description(&self) -> &'static str {
         match self {
             StabilityLevel::Stable => "This API is stable and guaranteed to be supported.",
-            StabilityLevel::Beta => "This API is in beta and may have minor changes before stable release.",
-            StabilityLevel::Experimental => "This API is experimental and subject to breaking changes.",
-            StabilityLevel::Deprecated => "This API is deprecated and will be removed in a future version.",
+            StabilityLevel::Beta => {
+                "This API is in beta and may have minor changes before stable release."
+            }
+            StabilityLevel::Experimental => {
+                "This API is experimental and subject to breaking changes."
+            }
+            StabilityLevel::Deprecated => {
+                "This API is deprecated and will be removed in a future version."
+            }
         }
     }
 
@@ -163,15 +169,15 @@ impl StabilityReport {
 impl fmt::Display for StabilityReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} (since v{})", self.level, self.introduced_in)?;
-        
+
         if let Some(deprecated_in) = &self.deprecated_in {
             write!(f, ", deprecated in v{}", deprecated_in)?;
         }
-        
+
         if let Some(removed_in) = &self.removed_in {
             write!(f, ", removed in v{}", removed_in)?;
         }
-        
+
         Ok(())
     }
 }
@@ -218,15 +224,15 @@ impl DeprecationWarning {
             "API '{}' is deprecated since version {}",
             self.api_name, self.deprecated_in
         );
-        
+
         if let Some(removed_in) = &self.removed_in {
             msg.push_str(&format!(" and will be removed in version {}", removed_in));
         }
-        
+
         if let Some(suggestion) = &self.suggestion {
             msg.push_str(&format!(". Use {} instead", suggestion));
         }
-        
+
         msg
     }
 }
@@ -290,10 +296,10 @@ impl StabilityPolicy {
 
 impl fmt::Display for StabilityPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "minimum: {}, experimental: {}, policy: {}",
-            self.minimum_stability,
-            self.allow_experimental,
-            self.compatibility_policy
+        write!(
+            f,
+            "minimum: {}, experimental: {}, policy: {}",
+            self.minimum_stability, self.allow_experimental, self.compatibility_policy
         )
     }
 }
@@ -349,10 +355,7 @@ impl<T, E> ResultStabilityExt<T, E> for Result<T, E> {
         self.map_err(|_| {
             NyxError::new(
                 codes::API_STABILITY_ERROR,
-                format!(
-                    "API '{}' is not available in version {}",
-                    api_name, version
-                ),
+                format!("API '{}' is not available in version {}", api_name, version),
                 ErrorCategory::Internal,
             )
         })
@@ -373,10 +376,19 @@ mod tests {
 
     #[test]
     fn test_stability_level_parse() {
-        assert_eq!(StabilityLevel::from_str("stable"), Some(StabilityLevel::Stable));
+        assert_eq!(
+            StabilityLevel::from_str("stable"),
+            Some(StabilityLevel::Stable)
+        );
         assert_eq!(StabilityLevel::from_str("beta"), Some(StabilityLevel::Beta));
-        assert_eq!(StabilityLevel::from_str("experimental"), Some(StabilityLevel::Experimental));
-        assert_eq!(StabilityLevel::from_str("deprecated"), Some(StabilityLevel::Deprecated));
+        assert_eq!(
+            StabilityLevel::from_str("experimental"),
+            Some(StabilityLevel::Experimental)
+        );
+        assert_eq!(
+            StabilityLevel::from_str("deprecated"),
+            Some(StabilityLevel::Deprecated)
+        );
         assert_eq!(StabilityLevel::from_str("unknown"), None);
     }
 
@@ -385,7 +397,7 @@ mod tests {
         assert!(StabilityLevel::Stable.is_stable());
         assert!(!StabilityLevel::Beta.is_stable());
         assert!(!StabilityLevel::Experimental.is_stable());
-        
+
         assert!(StabilityLevel::Stable.is_supported());
         assert!(StabilityLevel::Beta.is_supported());
         assert!(StabilityLevel::Experimental.is_supported());
@@ -394,10 +406,7 @@ mod tests {
 
     #[test]
     fn test_stability_report() {
-        let report = StabilityReport::new(
-            StabilityLevel::Beta,
-            Version::new(1, 2, 0)
-        );
+        let report = StabilityReport::new(StabilityLevel::Beta, Version::new(1, 2, 0));
 
         assert_eq!(report.level, StabilityLevel::Beta);
         assert_eq!(report.introduced_in, Version::new(1, 2, 0));
@@ -419,16 +428,14 @@ mod tests {
 
     #[test]
     fn test_deprecation_warning() {
-        let warning = DeprecationWarning::new(
-            "old_api".to_string(),
-            Version::new(1, 5, 0)
-        ).with_suggestion("new_api")
-         .with_removal_version(Version::new(2, 0, 0));
+        let warning = DeprecationWarning::new("old_api".to_string(), Version::new(1, 5, 0))
+            .with_suggestion("new_api")
+            .with_removal_version(Version::new(2, 0, 0));
 
         assert_eq!(warning.api_name, "old_api");
         assert!(warning.suggestion.is_some());
         assert!(warning.removed_in.is_some());
-        
+
         let msg = warning.message();
         assert!(msg.contains("deprecated"));
         assert!(msg.contains("old_api"));

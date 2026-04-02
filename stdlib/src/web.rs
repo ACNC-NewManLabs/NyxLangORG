@@ -2,16 +2,22 @@
 //! Industrial HTTP/1.1, HTTP/2, and WebSocket protocols.
 
 pub mod http {
-    use std::io::{Read, Write, BufReader, BufRead};
-    use std::net::{TcpListener, TcpStream};
-    use crate::error::{NyxError, ErrorCategory};
     use crate::collections::hash_map::HashMap as NyxHashMap;
     use crate::collections::string::String as NyxString;
     use crate::collections::vec::Vec as NyxVec;
+    use crate::error::{ErrorCategory, NyxError};
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::{TcpListener, TcpStream};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Method {
-        Get, Post, Put, Delete, Patch, Head, Options,
+        Get,
+        Post,
+        Put,
+        Delete,
+        Patch,
+        Head,
+        Options,
     }
 
     impl Method {
@@ -45,8 +51,14 @@ pub mod http {
     impl Response {
         pub fn ok(body: NyxVec<u8>) -> Self {
             let mut headers = NyxHashMap::new();
-            headers.insert(NyxString::from("Content-Length"), NyxString::from(&body.len().to_string()));
-            headers.insert(NyxString::from("Content-Type"), NyxString::from("text/plain"));
+            headers.insert(
+                NyxString::from("Content-Length"),
+                NyxString::from(&body.len().to_string()),
+            );
+            headers.insert(
+                NyxString::from("Content-Type"),
+                NyxString::from("text/plain"),
+            );
             Self {
                 status: 200,
                 headers,
@@ -89,14 +101,21 @@ pub mod http {
 
     impl HttpServer {
         pub fn new(addr: &str) -> Self {
-            Self { addr: addr.to_string() }
+            Self {
+                addr: addr.to_string(),
+            }
         }
 
-        pub fn run<F>(&self, handler: F) -> Result<(), NyxError> 
-        where F: Fn(Request) -> Response + Send + Sync + 'static 
+        pub fn run<F>(&self, handler: F) -> Result<(), NyxError>
+        where
+            F: Fn(Request) -> Response + Send + Sync + 'static,
         {
             let listener = TcpListener::bind(&self.addr).map_err(|e| {
-                NyxError::new("WEB001", format!("Failed to bind to {}: {}", self.addr, e), ErrorCategory::Io)
+                NyxError::new(
+                    "WEB001",
+                    format!("Failed to bind to {}: {}", self.addr, e),
+                    ErrorCategory::Io,
+                )
             })?;
 
             println!("NYX HTTP Server running on {}", self.addr);
@@ -115,8 +134,10 @@ pub mod http {
                                 let headers = NyxHashMap::new();
                                 let body_bytes = e.to_string().into_bytes();
                                 let mut nyx_body = NyxVec::new();
-                                for b in body_bytes { nyx_body.push(b); }
-                                
+                                for b in body_bytes {
+                                    nyx_body.push(b);
+                                }
+
                                 let err_resp = Response {
                                     status: 400,
                                     headers,
@@ -135,15 +156,25 @@ pub mod http {
         fn parse_request(&self, stream: &mut TcpStream) -> Result<Request, NyxError> {
             let mut reader = BufReader::new(stream);
             let mut line = String::new();
-            reader.read_line(&mut line).map_err(|e| NyxError::new("WEB002", e.to_string(), ErrorCategory::Io))?;
+            reader
+                .read_line(&mut line)
+                .map_err(|e| NyxError::new("WEB002", e.to_string(), ErrorCategory::Io))?;
 
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() < 3 {
-                return Err(NyxError::new("WEB003", "Invalid request line", ErrorCategory::Runtime));
+                return Err(NyxError::new(
+                    "WEB003",
+                    "Invalid request line",
+                    ErrorCategory::Runtime,
+                ));
             }
 
             let method = Method::from_str(parts[0]).ok_or_else(|| {
-                NyxError::new("WEB004", format!("Unsupported method: {}", parts[0]), ErrorCategory::Runtime)
+                NyxError::new(
+                    "WEB004",
+                    format!("Unsupported method: {}", parts[0]),
+                    ErrorCategory::Runtime,
+                )
             })?;
 
             let uri = NyxString::from(parts[1]);
@@ -151,7 +182,9 @@ pub mod http {
 
             loop {
                 line.clear();
-                reader.read_line(&mut line).map_err(|e| NyxError::new("WEB005", e.to_string(), ErrorCategory::Io))?;
+                reader
+                    .read_line(&mut line)
+                    .map_err(|e| NyxError::new("WEB005", e.to_string(), ErrorCategory::Io))?;
                 if line == "\r\n" || line == "\n" {
                     break;
                 }
@@ -162,17 +195,22 @@ pub mod http {
                 }
             }
 
-            let content_length = headers.get(&NyxString::from("Content-Length"))
+            let content_length = headers
+                .get(&NyxString::from("Content-Length"))
                 .and_then(|v| v.as_str().parse::<usize>().ok())
                 .unwrap_or(0);
 
             let mut body_vec = vec![0u8; content_length];
             if content_length > 0 {
-                reader.read_exact(&mut body_vec).map_err(|e| NyxError::new("WEB006", e.to_string(), ErrorCategory::Io))?;
+                reader
+                    .read_exact(&mut body_vec)
+                    .map_err(|e| NyxError::new("WEB006", e.to_string(), ErrorCategory::Io))?;
             }
-            
+
             let mut nyx_body = NyxVec::new();
-            for b in body_vec { nyx_body.push(b); }
+            for b in body_vec {
+                nyx_body.push(b);
+            }
 
             Ok(Request {
                 method,
@@ -205,14 +243,16 @@ mod tests {
     #[test]
     fn test_http_response_serialization() {
         let mut body = NyxVec::new();
-        for b in b"Hello Nyx" { body.push(*b); }
-        
+        for b in b"Hello Nyx" {
+            body.push(*b);
+        }
+
         let resp = Response::ok(body);
         assert_eq!(resp.status, 200);
-        
+
         let serialized = resp.serialize();
         let s = String::from_utf8_lossy(serialized.as_slice());
-        
+
         assert!(s.contains("HTTP/1.1 200 OK"));
         assert!(s.contains("Content-Length: 9"));
         assert!(s.contains("Content-Type: text/plain"));

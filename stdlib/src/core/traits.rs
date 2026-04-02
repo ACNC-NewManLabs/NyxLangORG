@@ -1,5 +1,5 @@
 //! NYX Core Traits Module
-//! 
+//!
 //! Core traits that form the foundation of the NYX type system.
 //! These traits work without an OS and provide the basis for polymorphism.
 
@@ -97,13 +97,19 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// Returns true if self <= other.
     #[inline]
     fn le(&self, other: &Rhs) -> bool {
-        matches!(self.partial_cmp(other), Option::Some(Ordering::Less | Ordering::Equal))
+        matches!(
+            self.partial_cmp(other),
+            Option::Some(Ordering::Less | Ordering::Equal)
+        )
     }
 
     /// Returns true if self >= other.
     #[inline]
     fn ge(&self, other: &Rhs) -> bool {
-        matches!(self.partial_cmp(other), Option::Some(Ordering::Greater | Ordering::Equal))
+        matches!(
+            self.partial_cmp(other),
+            Option::Some(Ordering::Greater | Ordering::Equal)
+        )
     }
 }
 
@@ -132,13 +138,21 @@ impl Ordering {
     /// Returns the lesser of two orderings.
     #[inline]
     pub fn min(a: Ordering, b: Ordering) -> Ordering {
-        if a < b { a } else { b }
+        if a < b {
+            a
+        } else {
+            b
+        }
     }
 
     /// Returns the greater of two orderings.
     #[inline]
     pub fn max(a: Ordering, b: Ordering) -> Ordering {
-        if a > b { a } else { b }
+        if a > b {
+            a
+        } else {
+            b
+        }
     }
 }
 
@@ -237,7 +251,9 @@ impl SimpleHasher {
     /// Creates a new SimpleHasher.
     #[inline]
     pub fn new() -> SimpleHasher {
-        SimpleHasher { state: 0xcbf29ce484222325 }
+        SimpleHasher {
+            state: 0xcbf29ce484222325,
+        }
     }
 }
 
@@ -343,10 +359,6 @@ pub trait Extend<A> {
 // Default Implementations
 // =============================================================================
 
-
-
-
-
 // =============================================================================
 // Ordering Implementation
 // =============================================================================
@@ -380,8 +392,6 @@ impl PartialOrd for Ordering {
         std::option::Option::Some(crate::core::traits::Ord::cmp(self, other))
     }
 }
-
-
 
 impl Debug for Ordering {
     #[inline]
@@ -437,18 +447,18 @@ macro_rules! impl_traits_for_primitives {
                     *self
                 }
             }
-            
+
             impl Copy for $ty {}
-            
+
             impl PartialEq for $ty {
                 #[inline]
                 fn eq(&self, other: &$ty) -> bool {
                     *self == *other
                 }
             }
-            
+
             impl Eq for $ty {}
-            
+
             impl PartialOrd for $ty {
                 #[inline]
                 fn partial_cmp(&self, other: &$ty) -> Option<Ordering> {
@@ -461,7 +471,7 @@ macro_rules! impl_traits_for_primitives {
                     }
                 }
             }
-            
+
             impl Ord for $ty {
                 #[inline]
                 fn cmp(&self, other: &$ty) -> Ordering {
@@ -474,7 +484,7 @@ macro_rules! impl_traits_for_primitives {
                     }
                 }
             }
-            
+
             impl Default for $ty {
                 #[inline]
                 fn default() -> $ty {
@@ -486,15 +496,27 @@ macro_rules! impl_traits_for_primitives {
 }
 
 impl_traits_for_primitives!(
-    u8 = 0, u16 = 0, u32 = 0, u64 = 0, u128 = 0, usize = 0,
-    i8 = 0, i16 = 0, i32 = 0, i64 = 0, i128 = 0, isize = 0,
-    f32 = 0.0, f64 = 0.0, bool = false, char = '\0'
+    u8 = 0,
+    u16 = 0,
+    u32 = 0,
+    u64 = 0,
+    u128 = 0,
+    usize = 0,
+    i8 = 0,
+    i16 = 0,
+    i32 = 0,
+    i64 = 0,
+    i128 = 0,
+    isize = 0,
+    f32 = 0.0,
+    f64 = 0.0,
+    bool = false,
+    char = '\0'
 );
 
 // =============================================================================
 // Standard implementations for slices
 // =============================================================================
-
 
 // =============================================================================
 // Vec type for internal use
@@ -544,7 +566,13 @@ impl<T> Vec<T> {
         if self.len >= self.cap {
             let new_cap = if self.cap == 0 { 1 } else { self.cap * 2 };
             let new_layout = core::alloc::Layout::array::<T>(new_cap).unwrap();
-            let new_ptr = unsafe { std::alloc::realloc(self.ptr as *mut u8, core::alloc::Layout::array::<T>(self.cap).unwrap(), new_layout.size()) } as *mut T;
+            let new_ptr = unsafe {
+                std::alloc::realloc(
+                    self.ptr as *mut u8,
+                    core::alloc::Layout::array::<T>(self.cap).unwrap(),
+                    new_layout.size(),
+                )
+            } as *mut T;
             self.ptr = new_ptr;
             self.cap = new_cap;
         }
@@ -575,9 +603,18 @@ mod tests {
 
     #[test]
     fn test_ordering_cmp() {
-        assert_eq!(crate::core::traits::Ord::cmp(&Ordering::Less, &Ordering::Less), Ordering::Equal);
-        assert_eq!(crate::core::traits::Ord::cmp(&Ordering::Less, &Ordering::Greater), Ordering::Less);
-        assert_eq!(crate::core::traits::Ord::cmp(&Ordering::Greater, &Ordering::Less), Ordering::Greater);
+        assert_eq!(
+            crate::core::traits::Ord::cmp(&Ordering::Less, &Ordering::Less),
+            Ordering::Equal
+        );
+        assert_eq!(
+            crate::core::traits::Ord::cmp(&Ordering::Less, &Ordering::Greater),
+            Ordering::Less
+        );
+        assert_eq!(
+            crate::core::traits::Ord::cmp(&Ordering::Greater, &Ordering::Less),
+            Ordering::Greater
+        );
     }
 
     #[test]
@@ -593,7 +630,7 @@ mod tests {
         let a: i32 = 5;
         let b = crate::core::traits::Clone::clone(&a);
         assert_eq!(a, b);
-        
+
         let c: i32 = Default::default();
         assert_eq!(c, 0);
     }
@@ -607,4 +644,3 @@ mod tests {
         assert_eq!(v.len(), 3);
     }
 }
-

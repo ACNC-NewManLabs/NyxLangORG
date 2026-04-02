@@ -1,12 +1,11 @@
 //! Option type implementation
-//! 
+//!
 //! A type that represents an optional value: either Some(T) or None.
 
-use crate::core::{Iterator, IntoIterator};
+use crate::core::{IntoIterator, Iterator};
 
 /// Option type - represents an optional value
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-#[derive(Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Option<T> {
     /// Some value
     Some(T),
@@ -32,7 +31,7 @@ impl<T> Option<T> {
     }
 
     /// Returns the contained Some value
-    /// 
+    ///
     /// # Panics
     /// Panics if the value is None
     #[inline]
@@ -190,8 +189,12 @@ impl<T> IntoIterator for Option<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Option::Some(v) => crate::core::option::IntoIter { inner: Option::Some(v) },
-            Option::None => crate::core::option::IntoIter { inner: Option::None },
+            Option::Some(v) => crate::core::option::IntoIter {
+                inner: Option::Some(v),
+            },
+            Option::None => crate::core::option::IntoIter {
+                inner: Option::None,
+            },
         }
     }
 }
@@ -237,7 +240,6 @@ impl<T> crate::core::traits::Extend<T> for Option<T> {
         }
     }
 }
-
 
 /// Trait for types that can be converted to Option
 pub trait IntoOption {

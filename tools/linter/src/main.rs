@@ -3,10 +3,10 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+use nyx::core::ast::ast_nodes::{Expr, ItemKind, Stmt};
 use nyx::core::lexer::lexer::Lexer;
 use nyx::core::parser::grammar_engine::GrammarEngine;
 use nyx::core::parser::neuro_parser::NeuroParser;
-use nyx::core::ast::ast_nodes::{ItemKind, Expr, Stmt};
 use nyx::core::registry::language_registry::LanguageRegistry;
 
 #[derive(Debug, Parser)]
@@ -30,7 +30,7 @@ fn run() -> Result<(), String> {
 
     let registry = LanguageRegistry::default();
     let grammar = GrammarEngine::from_registry(&registry);
-    
+
     // 1. Structural Audit via Bridge
     use nyx::devtools::bridge::Bridge;
     let bridge_issues = Bridge::audit_file(&args.input);
@@ -47,21 +47,47 @@ fn run() -> Result<(), String> {
     for (idx, line) in source.lines().enumerate() {
         let ln = idx + 1;
         if line.len() > 100 {
-            issues.push(format!("{}:{} line exceeds 100 chars", args.input.display(), ln));
+            issues.push(format!(
+                "{}:{} line exceeds 100 chars",
+                args.input.display(),
+                ln
+            ));
         }
     }
 
     for item in &ast.items {
         match &item.kind {
             ItemKind::Function(func) => {
-                if func.name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
-                     issues.push(format!("{}:{} function name '{}' should be snake_case", args.input.display(), item.span.start.line, func.name));
+                if func
+                    .name
+                    .chars()
+                    .next()
+                    .map(|c| c.is_uppercase())
+                    .unwrap_or(false)
+                {
+                    issues.push(format!(
+                        "{}:{} function name '{}' should be snake_case",
+                        args.input.display(),
+                        item.span.start.line,
+                        func.name
+                    ));
                 }
                 lint_stmts(&func.body, &args.input, &mut issues);
             }
             ItemKind::Struct(strct) => {
-                 if strct.name.chars().next().map(|c| c.is_lowercase()).unwrap_or(false) {
-                     issues.push(format!("{}:{} struct name '{}' should be PascalCase", args.input.display(), item.span.start.line, strct.name));
+                if strct
+                    .name
+                    .chars()
+                    .next()
+                    .map(|c| c.is_lowercase())
+                    .unwrap_or(false)
+                {
+                    issues.push(format!(
+                        "{}:{} struct name '{}' should be PascalCase",
+                        args.input.display(),
+                        item.span.start.line,
+                        strct.name
+                    ));
                 }
             }
             _ => {}
@@ -82,16 +108,20 @@ fn run() -> Result<(), String> {
 fn lint_stmts(stmts: &[Stmt], file: &PathBuf, issues: &mut Vec<String>) {
     for stmt in stmts {
         match stmt {
-            Stmt::If { branches, else_body, .. } => {
+            Stmt::If {
+                branches,
+                else_body,
+                ..
+            } => {
                 for branch in branches {
                     if branch.body.is_empty() {
-                         issues.push(format!("{}: empty if branch detected", file.display()));
+                        issues.push(format!("{}: empty if branch detected", file.display()));
                     }
                     lint_stmts(&branch.body, file, issues);
                 }
                 if let Some(eb) = else_body {
                     if eb.is_empty() {
-                         issues.push(format!("{}: empty else branch detected", file.display()));
+                        issues.push(format!("{}: empty else branch detected", file.display()));
                     }
                     lint_stmts(eb, file, issues);
                 }
@@ -109,7 +139,10 @@ fn lint_stmts(stmts: &[Stmt], file: &PathBuf, issues: &mut Vec<String>) {
                 let mut has_break = false;
                 check_for_break(body, &mut has_break);
                 if !has_break {
-                    issues.push(format!("{}: loop might be infinite (no break found)", file.display()));
+                    issues.push(format!(
+                        "{}: loop might be infinite (no break found)",
+                        file.display()
+                    ));
                 }
                 lint_stmts(body, file, issues);
             }
@@ -119,13 +152,23 @@ fn lint_stmts(stmts: &[Stmt], file: &PathBuf, issues: &mut Vec<String>) {
 }
 
 fn check_for_break(stmts: &[Stmt], has_break: &mut bool) {
-    if *has_break { return; }
+    if *has_break {
+        return;
+    }
     for stmt in stmts {
         match stmt {
             Stmt::Break { .. } => *has_break = true,
-            Stmt::If { branches, else_body, .. } => {
-                 for branch in branches { check_for_break(&branch.body, has_break); }
-                 if let Some(eb) = else_body { check_for_break(eb, has_break); }
+            Stmt::If {
+                branches,
+                else_body,
+                ..
+            } => {
+                for branch in branches {
+                    check_for_break(&branch.body, has_break);
+                }
+                if let Some(eb) = else_body {
+                    check_for_break(eb, has_break);
+                }
             }
             Stmt::Expr(Expr::Block { stmts: body, .. }) => check_for_break(body, has_break),
             _ => {}

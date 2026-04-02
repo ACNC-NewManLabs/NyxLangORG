@@ -1,5 +1,5 @@
 //! Hypercall Interface Module
-//! 
+//!
 //! Provides hypercall (paravirtualization) interface between guest and hypervisor.
 //! Hypercalls allow the guest OS to request services from the host.
 
@@ -141,9 +141,9 @@ impl HypercallHandler {
         // For x86_64: typically RAX
         // For ARM64: typically X0
         // For RISC-V: typically A0
-        
+
         let hypercall_num = cpu.state.read_gpr(Register::Rax);
-        
+
         match hypercall_num {
             0 => self.handle_shutdown(cpu),
             1 => self.handle_reboot(cpu),
@@ -183,7 +183,7 @@ impl HypercallHandler {
         // Get exit reason from RBX
         let reason = cpu.state.read_gpr(Register::Rbx);
         log::info!("VM exit requested: reason={}", reason);
-        
+
         cpu.state.write_gpr(Register::Rax, 0);
         Ok(0)
     }
@@ -192,7 +192,7 @@ impl HypercallHandler {
     fn handle_get_info(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // Get info type from RBX
         let info_type = cpu.state.read_gpr(Register::Rbx);
-        
+
         match info_type {
             0 => {
                 // Hypervisor version
@@ -219,11 +219,11 @@ impl HypercallHandler {
     fn handle_alloc_mem(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: size
         let size = cpu.state.read_gpr(Register::Rbx);
-        
+
         // In a real implementation, this would allocate memory in the VM
         // For now, return a fake address
         let addr = 0x10000000 + size;
-        
+
         cpu.state.write_gpr(Register::Rax, addr);
         Ok(addr)
     }
@@ -232,7 +232,7 @@ impl HypercallHandler {
     fn handle_free_mem(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: address to free
         let _addr = cpu.state.read_gpr(Register::Rbx);
-        
+
         // In a real implementation, this would free the memory
         cpu.state.write_gpr(Register::Rax, 0);
         Ok(0)
@@ -244,12 +244,12 @@ impl HypercallHandler {
         // RCX: length
         let addr = cpu.state.read_gpr(Register::Rbx) as usize;
         let len = cpu.state.read_gpr(Register::Rcx) as usize;
-        
+
         // Read string from memory (simplified - assumes direct access)
         // In reality, would use memory management system
         let message = format!("[hypercall console write: {} bytes at 0x{:x}]", len, addr);
         println!("{}", message);
-        
+
         cpu.state.write_gpr(Register::Rax, len as u64);
         Ok(len as u64)
     }
@@ -260,7 +260,7 @@ impl HypercallHandler {
         // RCX: max length
         let _addr = cpu.state.read_gpr(Register::Rbx) as usize;
         let _max_len = cpu.state.read_gpr(Register::Rcx) as usize;
-        
+
         // In a real implementation, would read from console
         // For now, return 0 (no data)
         cpu.state.write_gpr(Register::Rax, 0);
@@ -277,9 +277,14 @@ impl HypercallHandler {
         let sector = cpu.state.read_gpr(Register::Rcx);
         let _addr = cpu.state.read_gpr(Register::Rdx);
         let count = cpu.state.read_gpr(Register::R8);
-        
-        log::debug!("Block read: device={}, sector={}, count={}", device, sector, count);
-        
+
+        log::debug!(
+            "Block read: device={}, sector={}, count={}",
+            device,
+            sector,
+            count
+        );
+
         // Return number of sectors read
         cpu.state.write_gpr(Register::Rax, count);
         Ok(count)
@@ -295,9 +300,14 @@ impl HypercallHandler {
         let sector = cpu.state.read_gpr(Register::Rcx);
         let _addr = cpu.state.read_gpr(Register::Rdx);
         let count = cpu.state.read_gpr(Register::R8);
-        
-        log::debug!("Block write: device={}, sector={}, count={}", device, sector, count);
-        
+
+        log::debug!(
+            "Block write: device={}, sector={}, count={}",
+            device,
+            sector,
+            count
+        );
+
         cpu.state.write_gpr(Register::Rax, count);
         Ok(count)
     }
@@ -308,9 +318,9 @@ impl HypercallHandler {
         // RCX: length
         let _addr = cpu.state.read_gpr(Register::Rbx) as usize;
         let len = cpu.state.read_gpr(Register::Rcx) as usize;
-        
+
         log::debug!("Network send: {} bytes", len);
-        
+
         cpu.state.write_gpr(Register::Rax, len as u64);
         Ok(len as u64)
     }
@@ -321,7 +331,7 @@ impl HypercallHandler {
         // RCX: max length
         let _addr = cpu.state.read_gpr(Register::Rbx) as usize;
         let _max_len = cpu.state.read_gpr(Register::Rcx) as usize;
-        
+
         // Return 0 (no data available)
         cpu.state.write_gpr(Register::Rax, 0);
         Ok(0)
@@ -331,11 +341,11 @@ impl HypercallHandler {
     fn handle_set_timer(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: timer interval in microseconds
         let interval = cpu.state.read_gpr(Register::Rbx);
-        
+
         self.timer_interval = interval;
-        
+
         log::debug!("Timer set: {} microseconds", interval);
-        
+
         cpu.state.write_gpr(Register::Rax, 0);
         Ok(0)
     }
@@ -344,9 +354,9 @@ impl HypercallHandler {
     fn handle_inject_interrupt(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: interrupt number
         let irq = cpu.state.read_gpr(Register::Rbx) as u8;
-        
+
         log::debug!("Inject interrupt: {}", irq);
-        
+
         cpu.state.write_gpr(Register::Rax, 0);
         Ok(0)
     }
@@ -409,4 +419,3 @@ mod tests {
         assert_eq!(HypercallNumber::ConsoleWrite.to_u32(), 10);
     }
 }
-

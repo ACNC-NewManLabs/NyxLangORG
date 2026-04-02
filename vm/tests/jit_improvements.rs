@@ -1,15 +1,15 @@
-use nyx_vm::{BytecodeModule, Function, Instruction, OpCode, Value, NyxVm, VmConfig};
+use nyx_vm::{BytecodeModule, Function, Instruction, NyxVm, OpCode, Value, VmConfig};
 
 #[test]
 fn test_jit_ic_get_field() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     // Create an object { "a": 42 }, then access "a" in a loop.
     let mut main_instrs = Vec::new();
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 0, 0)); // "a"
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 1, 0)); // 42
     main_instrs.push(Instruction::with_operand(OpCode::NewObj, 1, 0));
-    
+
     // Loop 100 times accessing "a"
     for _ in 0..100 {
         main_instrs.push(Instruction::new(OpCode::DUP, vec![], 0));
@@ -17,11 +17,11 @@ fn test_jit_ic_get_field() {
         main_instrs.push(Instruction::new(OpCode::GetField, vec![], 0));
         main_instrs.push(Instruction::new(OpCode::POP, vec![], 0));
     }
-    
+
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 0, 0)); // "a"
     main_instrs.push(Instruction::new(OpCode::GetField, vec![], 0));
     main_instrs.push(Instruction::new(OpCode::RET, vec![], 0));
-    
+
     let main_fn = Function {
         name: "main".to_string(),
         arity: 0,
@@ -32,18 +32,17 @@ fn test_jit_ic_get_field() {
         line_info: vec![],
     };
     module.add_function(main_fn);
-    
+
     let mut vm = NyxVm::new(VmConfig::default());
     vm.load(module);
     let result = vm.run("main").unwrap();
     assert_eq!(result, Value::Int(42));
 }
 
-
 #[test]
 fn test_jit_high_arity() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     // Function with 8 arguments: returns sum of all.
     let mut instrs = Vec::new();
     for i in 0..8 {
@@ -82,8 +81,14 @@ fn test_jit_high_arity() {
             Instruction::new(OpCode::RET, vec![], 0),
         ],
         constants: vec![
-            Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4),
-            Value::Int(5), Value::Int(6), Value::Int(7), Value::Int(8),
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+            Value::Int(4),
+            Value::Int(5),
+            Value::Int(6),
+            Value::Int(7),
+            Value::Int(8),
         ],
         upvalues: vec![],
         line_info: vec![],
@@ -102,7 +107,7 @@ fn test_jit_high_arity() {
 #[test]
 fn test_vm_jit_with_closures() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     // Inner function: captures 'x' (local 0 in outer) and adds 'y' (arg 0).
     let inner_fn = Function {
         name: "inner".to_string(),
@@ -154,7 +159,10 @@ fn test_vm_jit_with_closures() {
     };
     module.add_function(main_fn);
 
-    let config = VmConfig { enable_jit: true, ..Default::default() };
+    let config = VmConfig {
+        enable_jit: true,
+        ..Default::default()
+    };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();
@@ -165,18 +173,18 @@ fn test_vm_jit_with_closures() {
 #[test]
 fn test_vm_jit_mid_entry() {
     let mut module = BytecodeModule::new("main".to_string());
-    
-    // Function that starts with some interpreter-only ops (e.g. print/dbg?) 
+
+    // Function that starts with some interpreter-only ops (e.g. print/dbg?)
     // but then enters JIT. Actually any supported opcode will trigger JIT.
-    // We'll use a loop to force repeated entry if it drops out, 
+    // We'll use a loop to force repeated entry if it drops out,
     // but here we want to test entry from ip > 0.
-    
+
     let main_fn = Function {
         name: "main".to_string(),
         arity: 0,
         num_locals: 1,
         instructions: vec![
-            Instruction::with_operand(OpCode::PUSH, 0, 0), // 0
+            Instruction::with_operand(OpCode::PUSH, 0, 0),  // 0
             Instruction::with_operand(OpCode::STORE, 0, 0), // 1: x = 0
             Instruction::with_operand(OpCode::LOAD, 0, 0),  // 2
             Instruction::with_operand(OpCode::PUSH, 1, 0),  // 3
@@ -189,12 +197,15 @@ fn test_vm_jit_mid_entry() {
     };
     module.add_function(main_fn);
 
-    let config = VmConfig { enable_jit: true, ..Default::default() };
+    let config = VmConfig {
+        enable_jit: true,
+        ..Default::default()
+    };
     // Force JIT entry after 2 instructions.
     // We can't easily force it, but if we run with JIT enabled, it will try to enter at every step now.
     let mut vm = NyxVm::new(config);
     vm.load(module);
-    
+
     let result = vm.run("main").unwrap();
     assert_eq!(result, Value::Int(15));
 }
@@ -202,12 +213,12 @@ fn test_vm_jit_mid_entry() {
 #[test]
 fn test_jit_arity_16() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     let mut instrs = Vec::new();
     for i in 0..16 {
         instrs.push(Instruction::with_operand(OpCode::LOAD, i, 0));
     }
-    for _ in 0..(16-1) {
+    for _ in 0..(16 - 1) {
         instrs.push(Instruction::new(OpCode::ADD, vec![], 0));
     }
     instrs.push(Instruction::new(OpCode::RET, vec![], 0));
@@ -247,13 +258,33 @@ fn test_jit_arity_16() {
             Instruction::new(OpCode::CALL, vec![sum_idx as i32, 16], 0),
             Instruction::new(OpCode::RET, vec![], 0),
         ],
-        constants: vec![Value::Int(0), Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4), Value::Int(5), Value::Int(6), Value::Int(7), Value::Int(8), Value::Int(9), Value::Int(10), Value::Int(11), Value::Int(12), Value::Int(13), Value::Int(14), Value::Int(15)],
+        constants: vec![
+            Value::Int(0),
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+            Value::Int(4),
+            Value::Int(5),
+            Value::Int(6),
+            Value::Int(7),
+            Value::Int(8),
+            Value::Int(9),
+            Value::Int(10),
+            Value::Int(11),
+            Value::Int(12),
+            Value::Int(13),
+            Value::Int(14),
+            Value::Int(15),
+        ],
         upvalues: vec![],
         line_info: vec![],
     };
     module.add_function(main_fn);
 
-    let config = VmConfig { enable_jit: true, ..Default::default() };
+    let config = VmConfig {
+        enable_jit: true,
+        ..Default::default()
+    };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();
@@ -261,16 +292,15 @@ fn test_jit_arity_16() {
     assert_eq!(result, Value::Int(expected));
 }
 
-
 #[test]
 fn test_jit_arity_32() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     let mut instrs = Vec::new();
     for i in 0..32 {
         instrs.push(Instruction::with_operand(OpCode::LOAD, i, 0));
     }
-    for _ in 0..(32-1) {
+    for _ in 0..(32 - 1) {
         instrs.push(Instruction::new(OpCode::ADD, vec![], 0));
     }
     instrs.push(Instruction::new(OpCode::RET, vec![], 0));
@@ -326,13 +356,49 @@ fn test_jit_arity_32() {
             Instruction::new(OpCode::CALL, vec![sum_idx as i32, 32], 0),
             Instruction::new(OpCode::RET, vec![], 0),
         ],
-        constants: vec![Value::Int(0), Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4), Value::Int(5), Value::Int(6), Value::Int(7), Value::Int(8), Value::Int(9), Value::Int(10), Value::Int(11), Value::Int(12), Value::Int(13), Value::Int(14), Value::Int(15), Value::Int(16), Value::Int(17), Value::Int(18), Value::Int(19), Value::Int(20), Value::Int(21), Value::Int(22), Value::Int(23), Value::Int(24), Value::Int(25), Value::Int(26), Value::Int(27), Value::Int(28), Value::Int(29), Value::Int(30), Value::Int(31)],
+        constants: vec![
+            Value::Int(0),
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+            Value::Int(4),
+            Value::Int(5),
+            Value::Int(6),
+            Value::Int(7),
+            Value::Int(8),
+            Value::Int(9),
+            Value::Int(10),
+            Value::Int(11),
+            Value::Int(12),
+            Value::Int(13),
+            Value::Int(14),
+            Value::Int(15),
+            Value::Int(16),
+            Value::Int(17),
+            Value::Int(18),
+            Value::Int(19),
+            Value::Int(20),
+            Value::Int(21),
+            Value::Int(22),
+            Value::Int(23),
+            Value::Int(24),
+            Value::Int(25),
+            Value::Int(26),
+            Value::Int(27),
+            Value::Int(28),
+            Value::Int(29),
+            Value::Int(30),
+            Value::Int(31),
+        ],
         upvalues: vec![],
         line_info: vec![],
     };
     module.add_function(main_fn);
 
-    let config = VmConfig { enable_jit: true, ..Default::default() };
+    let config = VmConfig {
+        enable_jit: true,
+        ..Default::default()
+    };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();
@@ -343,59 +409,62 @@ fn test_jit_arity_32() {
 #[test]
 fn test_jit_hardening_mutation() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     // SetField test: by-value object -> autobox -> IC hit
     let mut main_instrs = Vec::new();
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 0, 0)); // "a"
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 1, 0)); // 1
     main_instrs.push(Instruction::with_operand(OpCode::NewObj, 1, 0)); // Value::Object
-    
+
     // Mutate it: should autobox to Value::Pointer
     main_instrs.push(Instruction::new(OpCode::DUP, vec![], 0));
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 0, 0)); // "a"
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 2, 0)); // 2
     main_instrs.push(Instruction::new(OpCode::SetField, vec![], 0)); // SetField returns Target (Pointer)
-    
+
     // Check if it's now a pointer and has correct value
     main_instrs.push(Instruction::new(OpCode::DUP, vec![], 0));
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 0, 0)); // "a"
     main_instrs.push(Instruction::new(OpCode::GetField, vec![], 0)); // Should be 2
-    
+
     // SetIndex test: by-value array -> autobox -> IC hit
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 3, 0)); // 10
     main_instrs.push(Instruction::with_operand(OpCode::NewArray, 1, 0)); // Value::Array
-    
+
     // Mutate it
     main_instrs.push(Instruction::new(OpCode::DUP, vec![], 0));
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 4, 0)); // index 0
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 5, 0)); // 20
     main_instrs.push(Instruction::new(OpCode::SetIndex, vec![], 0)); // SetIndex returns Target (Pointer)
-    
+
     main_instrs.push(Instruction::new(OpCode::DUP, vec![], 0));
     main_instrs.push(Instruction::with_operand(OpCode::PUSH, 4, 0)); // index 0
     main_instrs.push(Instruction::new(OpCode::GetIndex, vec![], 0)); // Should be 20
-    
+
     main_instrs.push(Instruction::new(OpCode::RET, vec![], 0));
-    
+
     let main_fn = Function {
         name: "main".to_string(),
         arity: 0,
         num_locals: 0,
         instructions: main_instrs,
         constants: vec![
-            Value::String("a".to_string()), 
-            Value::Int(1), 
+            Value::String("a".to_string()),
+            Value::Int(1),
             Value::Int(2),
             Value::Int(10),
             Value::Int(0),
-            Value::Int(20)
+            Value::Int(20),
         ],
         upvalues: vec![],
         line_info: vec![],
     };
     module.add_function(main_fn);
-    
-    let config = VmConfig { enable_jit: true, ..Default::default() };
+
+    let config = VmConfig {
+        enable_jit: true,
+        ..Default::default()
+    };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();

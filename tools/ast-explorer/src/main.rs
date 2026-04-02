@@ -1,8 +1,8 @@
 use clap::Parser;
 use colored::*;
+use nyx::core::ast::ast_nodes::{ItemKind, Program};
 use nyx::core::lexer::lexer::Lexer;
 use nyx::core::parser::neuro_parser::NeuroParser;
-use nyx::core::ast::ast_nodes::{Program, ItemKind};
 use std::fs;
 use std::path::PathBuf;
 
@@ -31,7 +31,9 @@ fn main() {
         std::process::exit(1);
     });
 
-    let registry = nyx::core::registry::language_registry::LanguageRegistry::load("registry/language.json").unwrap_or_default();
+    let registry =
+        nyx::core::registry::language_registry::LanguageRegistry::load("registry/language.json")
+            .unwrap_or_default();
 
     let mut lexer = Lexer::from_source(source);
     let tokens = match lexer.tokenize() {
@@ -41,7 +43,7 @@ fn main() {
             return;
         }
     };
-    
+
     let grammar = nyx::core::parser::grammar_engine::GrammarEngine::from_registry(&registry);
     let mut parser = NeuroParser::new(grammar);
     let program = match parser.parse(&tokens) {
@@ -58,10 +60,16 @@ fn main() {
             Err(e) => eprintln!("JSON Error: {}", e),
         }
     } else {
-        println!("{}", "============================================================".magenta());
+        println!(
+            "{}",
+            "============================================================".magenta()
+        );
         println!("{} {}", "AST Explorer:".bold(), args.file.display());
-        println!("{}", "============================================================".magenta());
-        
+        println!(
+            "{}",
+            "============================================================".magenta()
+        );
+
         // Basic indentation-based tree printer
         print_program(&program);
     }

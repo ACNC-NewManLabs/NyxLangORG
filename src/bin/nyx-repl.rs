@@ -20,7 +20,7 @@ fn main() {
         if line == "exit" {
             break;
         }
-        
+
         if line.is_empty() {
             continue;
         }

@@ -8,18 +8,34 @@ pub struct Deque<T> {
 
 impl<T> Deque<T> {
     pub fn new() -> Deque<T> {
-        Deque { inner: StdVecDeque::new() }
+        Deque {
+            inner: StdVecDeque::new(),
+        }
     }
-    pub fn push_back(&mut self, value: T) { self.inner.push_back(value); }
-    pub fn push_front(&mut self, value: T) { self.inner.push_front(value); }
-    pub fn pop_back(&mut self) -> Option<T> { self.inner.pop_back() }
-    pub fn pop_front(&mut self) -> Option<T> { self.inner.pop_front() }
-    pub fn len(&self) -> usize { self.inner.len() }
-    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn push_back(&mut self, value: T) {
+        self.inner.push_back(value);
+    }
+    pub fn push_front(&mut self, value: T) {
+        self.inner.push_front(value);
+    }
+    pub fn pop_back(&mut self) -> Option<T> {
+        self.inner.pop_back()
+    }
+    pub fn pop_front(&mut self) -> Option<T> {
+        self.inner.pop_front()
+    }
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 impl<T> Default for Deque<T> {
-    fn default() -> Deque<T> { Deque::new() }
+    fn default() -> Deque<T> {
+        Deque::new()
+    }
 }
 
 #[cfg(test)]

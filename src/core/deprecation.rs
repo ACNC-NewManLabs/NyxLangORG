@@ -67,15 +67,15 @@ impl DeprecationNotice {
 impl fmt::Display for DeprecationNotice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Deprecated in v{}: {}", self.deprecated_in, self.message)?;
-        
+
         if let Some(removed_in) = &self.removed_in {
             write!(f, " (will be removed in v{})", removed_in)?;
         }
-        
+
         if let Some(suggestion) = &self.suggestion {
             write!(f, ". Use {} instead", suggestion)?;
         }
-        
+
         Ok(())
     }
 }
@@ -154,15 +154,14 @@ impl DeprecationTracker {
         message: impl Into<String>,
         suggestion: Option<String>,
     ) {
-        let notice = DeprecationNotice::new(deprecated_in, message)
-            .with_removal(removed_in);
-        
+        let notice = DeprecationNotice::new(deprecated_in, message).with_removal(removed_in);
+
         let notice = if let Some(suggestion) = suggestion {
             notice.with_suggestion(suggestion)
         } else {
             notice
         };
-        
+
         self.notices.insert(api_name, notice);
     }
 
@@ -196,9 +195,13 @@ impl DeprecationTracker {
     }
 
     /// Warn about using a deprecated API and record in history
-    pub fn warn_with_history(&mut self, api_name: &str, current_version: Version) -> Option<DeprecationNotice> {
+    pub fn warn_with_history(
+        &mut self,
+        api_name: &str,
+        current_version: Version,
+    ) -> Option<DeprecationNotice> {
         let notice = self.warn(api_name)?;
-        
+
         if self.track_history {
             self.warning_history.push(DeprecationWarningRecord {
                 api_name: api_name.to_string(),
@@ -206,7 +209,7 @@ impl DeprecationTracker {
                 notice: notice.clone(),
             });
         }
-        
+
         Some(notice)
     }
 
@@ -233,8 +236,8 @@ impl DeprecationTracker {
     /// Check if any deprecations have critical warnings (will be removed soon)
     pub fn has_critical_warnings(&self, current_version: &Version) -> bool {
         self.notices.values().any(|n| {
-            n.warning_level() == DeprecationWarningLevel::Critical && 
-            n.should_remove(current_version)
+            n.warning_level() == DeprecationWarningLevel::Critical
+                && n.should_remove(current_version)
         })
     }
 
@@ -283,13 +286,12 @@ pub struct DeprecationWarningRecord {
 ///
 /// Use this for tracking deprecations across the entire codebase.
 /// Note: This is a placeholder - in production, you'd use a lazy_static or similar
-pub static GLOBAL_DEPRECATION_TRACKER: std::sync::OnceLock<DeprecationTracker> = std::sync::OnceLock::new();
+pub static GLOBAL_DEPRECATION_TRACKER: std::sync::OnceLock<DeprecationTracker> =
+    std::sync::OnceLock::new();
 
 /// Initialize the global deprecation tracker with known deprecations
 pub fn init_global_tracker() -> &'static DeprecationTracker {
     GLOBAL_DEPRECATION_TRACKER.get_or_init(|| {
-        
-        
         // Register known deprecations here
         // Example:
         // tracker.register_full(
@@ -299,7 +301,7 @@ pub fn init_global_tracker() -> &'static DeprecationTracker {
         //     "Use the new neuro_parser instead",
         //     Some("nyx::core::parser::neuro_parser".to_string())
         // );
-        
+
         DeprecationTracker::new()
     })
 }
@@ -308,7 +310,7 @@ pub fn init_global_tracker() -> &'static DeprecationTracker {
 pub trait Deprecatable {
     /// Get the deprecation notice for this type
     fn deprecation_notice(&self) -> Option<DeprecationNotice>;
-    
+
     /// Check if this type is deprecated
     fn is_deprecated(&self) -> bool {
         self.deprecation_notice().is_some()
@@ -324,7 +326,7 @@ macro_rules! deprecated {
     ($msg:expr) => {
         #[deprecated(since = "0.1.0", note = $msg)]
     };
-    
+
     ($msg:expr, $removed:expr) => {
         #[deprecated(since = $removed, note = $msg)]
     };
@@ -346,11 +348,11 @@ macro_rules! stability {
     (stable, $version:expr) => {
         #[stable(since = $version)]
     };
-    
+
     (beta, $version:expr) => {
         #[unstable(feature = "beta_api", issue = "none")]
     };
-    
+
     (experimental, $version:expr) => {
         #[unstable(feature = "experimental_api", issue = "none")]
     };
@@ -367,7 +369,8 @@ macro_rules! stability {
 /// ```
 pub fn check_deprecated(api_name: &str, current_version: &Version) -> Option<DeprecationNotice> {
     let tracker = init_global_tracker();
-    tracker.warn(api_name)
+    tracker
+        .warn(api_name)
         .filter(|notice| current_version >= &notice.deprecated_in)
 }
 
@@ -384,11 +387,8 @@ mod tests {
 
     #[test]
     fn test_deprecation_notice_creation() {
-        let notice = DeprecationNotice::new(
-            Version::new(1, 5, 0),
-            "This API is deprecated"
-        );
-        
+        let notice = DeprecationNotice::new(Version::new(1, 5, 0), "This API is deprecated");
+
         assert_eq!(notice.deprecated_in, Version::new(1, 5, 0));
         assert!(notice.removed_in.is_none());
         assert!(notice.suggestion.is_none());
@@ -399,7 +399,7 @@ mod tests {
         let notice = DeprecationNotice::new(Version::new(1, 5, 0), "Old API")
             .with_removal(Version::new(2, 0, 0))
             .with_suggestion("new_api");
-        
+
         assert_eq!(notice.removed_in, Some(Version::new(2, 0, 0)));
         assert_eq!(notice.suggestion, Some("new_api".to_string()));
         assert_eq!(notice.warning_level(), DeprecationWarningLevel::Critical);
@@ -408,12 +408,12 @@ mod tests {
     #[test]
     fn test_deprecation_tracker_register() {
         let mut tracker = DeprecationTracker::new();
-        
+
         tracker.register(
             "old_api".to_string(),
-            DeprecationNotice::new(Version::new(1, 0, 0), "Use new_api")
+            DeprecationNotice::new(Version::new(1, 0, 0), "Use new_api"),
         );
-        
+
         assert!(tracker.is_deprecated("old_api"));
         assert!(!tracker.is_deprecated("new_api"));
     }
@@ -421,15 +421,15 @@ mod tests {
     #[test]
     fn test_deprecation_tracker_warn() {
         let mut tracker = DeprecationTracker::new();
-        
+
         tracker.register(
             "old_api".to_string(),
-            DeprecationNotice::new(Version::new(1, 0, 0), "Use new_api")
+            DeprecationNotice::new(Version::new(1, 0, 0), "Use new_api"),
         );
-        
+
         let notice = tracker.warn("old_api");
         assert!(notice.is_some());
-        
+
         let notice = tracker.warn("new_api");
         assert!(notice.is_none());
     }
@@ -437,18 +437,18 @@ mod tests {
     #[test]
     fn test_deprecation_tracker_warning_history() {
         let mut tracker = DeprecationTracker::with_history();
-        
+
         tracker.register(
             "old_api".to_string(),
-            DeprecationNotice::new(Version::new(1, 0, 0), "Use new_api")
+            DeprecationNotice::new(Version::new(1, 0, 0), "Use new_api"),
         );
-        
+
         tracker.warn_with_history("old_api", Version::new(1, 5, 0));
-        
+
         assert_eq!(tracker.warning_history().len(), 1);
-        
+
         tracker.warn_with_history("old_api", Version::new(1, 6, 0));
-        
+
         assert_eq!(tracker.warning_history().len(), 2);
     }
 
@@ -457,7 +457,7 @@ mod tests {
         let notice = DeprecationNotice::new(Version::new(1, 5, 0), "Old API")
             .with_removal(Version::new(2, 0, 0))
             .with_suggestion("new_api");
-        
+
         let display = notice.to_string();
         assert!(display.contains("Deprecated"));
         assert!(display.contains("1.5.0"));
@@ -469,7 +469,7 @@ mod tests {
     fn test_should_remove() {
         let notice = DeprecationNotice::new(Version::new(1, 0, 0), "Old API")
             .with_removal(Version::new(2, 0, 0));
-        
+
         assert!(!notice.should_remove(&Version::new(1, 5, 0)));
         assert!(!notice.should_remove(&Version::new(1, 9, 0)));
         assert!(notice.should_remove(&Version::new(2, 0, 0)));
@@ -479,22 +479,22 @@ mod tests {
     #[test]
     fn test_deprecated_in_query() {
         let mut tracker = DeprecationTracker::new();
-        
+
         tracker.register(
             "api1".to_string(),
-            DeprecationNotice::new(Version::new(1, 0, 0), "API 1")
+            DeprecationNotice::new(Version::new(1, 0, 0), "API 1"),
         );
-        
+
         tracker.register(
             "api2".to_string(),
-            DeprecationNotice::new(Version::new(1, 0, 0), "API 2")
+            DeprecationNotice::new(Version::new(1, 0, 0), "API 2"),
         );
-        
+
         tracker.register(
             "api3".to_string(),
-            DeprecationNotice::new(Version::new(2, 0, 0), "API 3")
+            DeprecationNotice::new(Version::new(2, 0, 0), "API 3"),
         );
-        
+
         let deprecated_in_v1 = tracker.deprecated_in(&Version::new(1, 0, 0));
         assert_eq!(deprecated_in_v1.len(), 2);
     }

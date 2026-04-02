@@ -44,7 +44,12 @@ fn main() {
                 .iter()
                 .map(|target| BuildArtifact {
                     target: (*target).to_string(),
-                    artifact_sha256: deterministic_artifact_hash(&package, &version, target, &source_sha256),
+                    artifact_sha256: deterministic_artifact_hash(
+                        &package,
+                        &version,
+                        target,
+                        &source_sha256,
+                    ),
                     status: "verified".to_string(),
                 })
                 .collect();
@@ -57,7 +62,12 @@ fn main() {
     }
 }
 
-fn deterministic_artifact_hash(name: &str, version: &str, target: &str, source_sha: &str) -> String {
+fn deterministic_artifact_hash(
+    name: &str,
+    version: &str,
+    target: &str,
+    source_sha: &str,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(name.as_bytes());
     hasher.update(b":");

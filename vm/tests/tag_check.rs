@@ -11,12 +11,15 @@ fn test_value_tags() {
 
     unsafe {
         println!("Value size: {}", std::mem::size_of::<Value>());
-        println!("Null tag: {:X}", *( &v_null as *const _ as *const u64));
-        println!("Bool tag: {:X}", *( &v_bool as *const _ as *const u64));
-        println!("Int tag: {:X}", *( &v_int as *const _ as *const u64));
-        println!("Float tag: {:X}", *( &v_float as *const _ as *const u64));
-        println!("Pointer tag: {:X}", *( &v_pointer as *const _ as *const u64));
-        println!("Pointer value at offset 8: {}", *( (&v_pointer as *const _ as *const u64).add(1)));
-        println!("Unit tag: {:X}", *( &v_unit as *const _ as *const u64));
+        println!("Null tag: {:X}", *(&v_null as *const _ as *const u64));
+        println!("Bool tag: {:X}", *(&v_bool as *const _ as *const u64));
+        println!("Int tag: {:X}", *(&v_int as *const _ as *const u64));
+        println!("Float tag: {:X}", *(&v_float as *const _ as *const u64));
+        println!("Pointer tag: {:X}", *(&v_pointer as *const _ as *const u64));
+        println!(
+            "Pointer value at offset 8: {}",
+            *((&v_pointer as *const _ as *const u64).add(1))
+        );
+        println!("Unit tag: {:X}", *(&v_unit as *const _ as *const u64));
     }
 }

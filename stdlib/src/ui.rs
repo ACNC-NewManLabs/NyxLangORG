@@ -7,11 +7,11 @@ pub mod widgets {
     pub struct Window {
         pub title: NyxString,
     }
-    
+
     pub struct Button {
         pub label: NyxString,
     }
-    
+
     pub struct Label {
         pub text: NyxString,
     }

@@ -93,9 +93,9 @@ pub enum TokenKind {
     KwAsm,
     KwIn,
     KwAs,
-    KwAnd, // `and` — logical AND alias
-    KwOr,  // `or`  — logical OR  alias
-    KwNot, // `not` — logical NOT alias
+    KwAnd,      // `and` — logical AND alias
+    KwOr,       // `or`  — logical OR  alias
+    KwNot,      // `not` — logical NOT alias
     KwSecure,   // `secure`
     KwProtocol, // `protocol`
     KwYield,    // `yield`
@@ -156,7 +156,7 @@ pub enum TokenKind {
     Semicolon,
     Question,
     QuestionQuestion, // ??
-    At, // @  (pattern binding  `name @ pattern`)
+    At,               // @  (pattern binding  `name @ pattern`)
 
     // ── Compound tokens ───────────────────────────────────────────────────
     Arrow,     // ->

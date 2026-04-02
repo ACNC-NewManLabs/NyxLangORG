@@ -149,7 +149,10 @@ fn run() -> Result<(), String> {
             let out = root.join(".nyx-autotune/reports/analysis_latest.json");
             write_json(&out, &report)?;
             println!("analysis written {}", out.display());
-            println!("{} files, {} total lines", report.analyzed_files, report.total_lines);
+            println!(
+                "{} files, {} total lines",
+                report.analyzed_files, report.total_lines
+            );
             for s in report.suggestions.iter().take(8) {
                 println!("- {s}");
             }
@@ -157,7 +160,12 @@ fn run() -> Result<(), String> {
         CommandKind::OptimizeAuto { path, apply } => {
             let report = analyze_project(&root.join(path), &root)?;
             let mut actions = Vec::new();
-            actions.extend(report.suggestions.iter().map(|s| format!("suggestion: {s}")));
+            actions.extend(
+                report
+                    .suggestions
+                    .iter()
+                    .map(|s| format!("suggestion: {s}")),
+            );
             actions.extend(
                 report
                     .dependency_findings
@@ -205,7 +213,10 @@ fn run() -> Result<(), String> {
                 Utc::now().format("%Y%m%d_%H%M%S")
             ));
             write_json(&out, &report)?;
-            append_jsonl(&root.join(".nyx-autotune/data/profile_history.jsonl"), &report)?;
+            append_jsonl(
+                &root.join(".nyx-autotune/data/profile_history.jsonl"),
+                &report,
+            )?;
             println!("profile written {}", out.display());
             println!("wall={}ms exit={}", report.wall_time_ms, report.exit_code);
         }
@@ -213,7 +224,10 @@ fn run() -> Result<(), String> {
             let report = build_optimize(&root, execute, cmd)?;
             let out = root.join(".nyx-autotune/reports/build_optimize_latest.json");
             write_json(&out, &report)?;
-            append_jsonl(&root.join(".nyx-autotune/data/build_history.jsonl"), &report)?;
+            append_jsonl(
+                &root.join(".nyx-autotune/data/build_history.jsonl"),
+                &report,
+            )?;
             println!("build optimization report {}", out.display());
             println!(
                 "changed_files={} recommended_jobs={} executed={}",
@@ -279,7 +293,8 @@ fn analyze_project(path: &Path, root: &Path) -> Result<AnalysisReport, String> {
         suggestions.push("extract duplicated module logic into shared library files".to_string());
     }
     if avg > 120.0 {
-        suggestions.push("reduce average file size to improve incremental build performance".to_string());
+        suggestions
+            .push("reduce average file size to improve incremental build performance".to_string());
     }
     if suggestions.is_empty() {
         suggestions.push("no major structural issues detected".to_string());
@@ -304,8 +319,14 @@ fn analyze_project(path: &Path, root: &Path) -> Result<AnalysisReport, String> {
 fn analyze_file(path: &Path) -> Result<FileMetrics, String> {
     let src = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let lines = src.lines().count();
-    let functions = src.lines().filter(|l| l.trim_start().starts_with("fn ")).count();
-    let lets = src.lines().filter(|l| l.trim_start().starts_with("let ")).count();
+    let functions = src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("fn "))
+        .count();
+    let lets = src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("let "))
+        .count();
 
     let mut depth = 0usize;
     let mut max_depth = 0usize;
@@ -352,7 +373,10 @@ fn analyze_dependencies(root: &Path) -> Result<Vec<String>, String> {
             findings.push(format!("duplicate package entry: {}", p.name));
         }
         if p.dependencies.is_empty() && p.version.starts_with("0.") {
-            findings.push(format!("{} is pre-1.0 and dependency-light; validate stability guarantees", p.name));
+            findings.push(format!(
+                "{} is pre-1.0 and dependency-light; validate stability guarantees",
+                p.name
+            ));
         }
     }
 
@@ -389,7 +413,11 @@ fn compatibility_risks(root: &Path, files: &[PathBuf]) -> Result<Vec<String>, St
         let src = fs::read_to_string(f).map_err(|e| e.to_string())?;
         for api in &deprecated {
             if src.contains(api) {
-                risks.push(format!("{} uses deprecated API token '{}', recommend migration", f.display(), api));
+                risks.push(format!(
+                    "{} uses deprecated API token '{}', recommend migration",
+                    f.display(),
+                    api
+                ));
             }
         }
     }
@@ -400,7 +428,10 @@ fn compatibility_risks(root: &Path, files: &[PathBuf]) -> Result<Vec<String>, St
         let reg: PackageRegistry = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
         for p in reg.packages {
             if p.version.starts_with("0.") {
-                risks.push(format!("package '{}' is pre-1.0; monitor breaking-change risk", p.name));
+                risks.push(format!(
+                    "package '{}' is pre-1.0; monitor breaking-change risk",
+                    p.name
+                ));
             }
         }
     }
@@ -457,7 +488,15 @@ fn profile_command(cmd: &[String]) -> Result<ProfileReport, String> {
 }
 
 #[cfg(target_os = "linux")]
-fn sample_linux_process(pid: u32) -> (Option<f64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>) {
+fn sample_linux_process(
+    pid: u32,
+) -> (
+    Option<f64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+) {
     let mut peak_rss_kb = 0u64;
     let mut peak_threads = 0u64;
     let mut start_cpu_ticks: Option<u64> = None;
@@ -503,8 +542,16 @@ fn sample_linux_process(pid: u32) -> (Option<f64>, Option<u64>, Option<u64>, Opt
 
     (
         cpu_time_seconds,
-        if peak_rss_kb > 0 { Some(peak_rss_kb) } else { None },
-        if peak_threads > 0 { Some(peak_threads) } else { None },
+        if peak_rss_kb > 0 {
+            Some(peak_rss_kb)
+        } else {
+            None
+        },
+        if peak_threads > 0 {
+            Some(peak_threads)
+        } else {
+            None
+        },
         io_read_bytes,
         io_write_bytes,
     )
@@ -517,7 +564,12 @@ fn read_proc_status(pid: u32) -> Result<(u64, u64), String> {
     let mut threads = 0u64;
     for line in text.lines() {
         if let Some(v) = line.strip_prefix("VmRSS:") {
-            rss = v.split_whitespace().next().unwrap_or("0").parse().unwrap_or(0);
+            rss = v
+                .split_whitespace()
+                .next()
+                .unwrap_or("0")
+                .parse()
+                .unwrap_or(0);
         }
         if let Some(v) = line.strip_prefix("Threads:") {
             threads = v.trim().parse().unwrap_or(0);
@@ -554,7 +606,11 @@ fn read_proc_io(pid: u32) -> Result<(u64, u64), String> {
     Ok((read_bytes, write_bytes))
 }
 
-fn build_optimize(root: &Path, execute: bool, cmd: Vec<String>) -> Result<BuildOptimizationReport, String> {
+fn build_optimize(
+    root: &Path,
+    execute: bool,
+    cmd: Vec<String>,
+) -> Result<BuildOptimizationReport, String> {
     let mut files = Vec::new();
     collect_nyx_files(&root.join("engines"), &mut files)?;
 
@@ -608,7 +664,9 @@ fn build_optimize(root: &Path, execute: bool, cmd: Vec<String>) -> Result<BuildO
         duration_ms = Some(start.elapsed().as_millis());
     }
 
-    let cache = BuildCache { file_hashes: new_hashes };
+    let cache = BuildCache {
+        file_hashes: new_hashes,
+    };
     write_json(&cache_path, &cache)?;
 
     Ok(BuildOptimizationReport {

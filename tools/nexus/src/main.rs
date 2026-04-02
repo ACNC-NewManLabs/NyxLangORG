@@ -7,7 +7,10 @@
 //!   - State-based architecture with Arc<AppState>
 
 use axum::{
-    extract::{ws::{WebSocket, WebSocketUpgrade, Message}, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
+    },
     routing::get,
     Json, Router,
 };
@@ -18,7 +21,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use sysinfo::{System, Disks};
+use sysinfo::{Disks, System};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -29,7 +32,11 @@ use which::which;
 // ── CLI Arguments ──────────────────────────────────────────────────────────
 
 #[derive(Parser, Debug)]
-#[command(name = "nyx-nexus", about = "Nyx Executive Dashboard", version = "1.0.0")]
+#[command(
+    name = "nyx-nexus",
+    about = "Nyx Executive Dashboard",
+    version = "1.0.0"
+)]
 struct Args {
     #[arg(short, long, default_value = "3000", help = "Port to serve on")]
     port: u16,
@@ -203,11 +210,7 @@ async fn main() {
     });
 
     // Determine the UI path robustly (works from both workspace root and tool dir)
-    let possible_ui_paths = [
-        "tools/nexus/src/ui",
-        "src/ui",
-        "nexus/src/ui",
-    ];
+    let possible_ui_paths = ["tools/nexus/src/ui", "src/ui", "nexus/src/ui"];
     let ui_path = possible_ui_paths
         .iter()
         .find(|p| Path::new(p).exists())
@@ -215,25 +218,44 @@ async fn main() {
         .unwrap_or("tools/nexus/src/ui");
 
     let app = Router::new()
-        .route("/api/status",      get(get_status))
-        .route("/api/health",      get(get_health))
-        .route("/api/files",       get(get_files))
-        .route("/api/vitals",      get(get_vitals))
+        .route("/api/status", get(get_status))
+        .route("/api/health", get(get_health))
+        .route("/api/files", get(get_files))
+        .route("/api/vitals", get(get_vitals))
         .route("/api/diagnostics", get(get_diagnostics))
-        .route("/api/modules",     get(get_modules))
-        .route("/ws",              get(ws_handler))
+        .route("/api/modules", get(get_modules))
+        .route("/ws", get(ws_handler))
         .fallback_service(ServeDir::new(ui_path).append_index_html_on_directories(true))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
     println!();
-    println!("{}", "  ╔══════════════════════════════════════════╗".magenta());
-    println!("{}", "  ║   🌌  Nyx Nexus  v1.0  [PRODUCTION]    ║".bold().magenta());
-    println!("{}", "  ╚══════════════════════════════════════════╝".magenta());
+    println!(
+        "{}",
+        "  ╔══════════════════════════════════════════╗".magenta()
+    );
+    println!(
+        "{}",
+        "  ║   🌌  Nyx Nexus  v1.0  [PRODUCTION]    ║"
+            .bold()
+            .magenta()
+    );
+    println!(
+        "{}",
+        "  ╚══════════════════════════════════════════╝".magenta()
+    );
     println!();
-    println!("  {} Server → {}", "▶".green().bold(), format!("http://{}", addr).cyan().bold());
+    println!(
+        "  {} Server → {}",
+        "▶".green().bold(),
+        format!("http://{}", addr).cyan().bold()
+    );
     println!("  {} Project  → {}", "📂".cyan(), args.root.display());
-    println!("  {} WebSocket → {}", "🔌".yellow(), format!("ws://{}/ws", addr).cyan());
+    println!(
+        "  {} WebSocket → {}",
+        "🔌".yellow(),
+        format!("ws://{}/ws", addr).cyan()
+    );
     println!();
 
     if !args.no_open {
@@ -242,10 +264,15 @@ async fn main() {
 
     info!("Nyx Nexus listening on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await
-        .unwrap_or_else(|e| { eprintln!("{} Failed to bind: {}", "ERROR".red(), e); std::process::exit(1); });
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("{} Failed to bind: {}", "ERROR".red(), e);
+            std::process::exit(1);
+        });
 
-    axum::serve(listener, app).await
+    axum::serve(listener, app)
+        .await
         .unwrap_or_else(|e| eprintln!("{} Server crashed: {}", "ERROR".red(), e));
 }
 
@@ -263,10 +290,20 @@ async fn get_status(State(state): State<Arc<AppState>>) -> Json<ProjectStatus> {
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
     {
-        let ext = entry.path().extension().and_then(|s| s.to_str()).unwrap_or("");
+        let ext = entry
+            .path()
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
         match ext {
-            "nyx" => { nyx_count += 1; file_count += 1; }
-            "rs"  => { rs_count += 1; file_count += 1; }
+            "nyx" => {
+                nyx_count += 1;
+                file_count += 1;
+            }
+            "rs" => {
+                rs_count += 1;
+                file_count += 1;
+            }
             _ => {}
         }
         if ext == "nyx" || ext == "rs" {
@@ -282,7 +319,9 @@ async fn get_status(State(state): State<Arc<AppState>>) -> Json<ProjectStatus> {
     info!("Status polled: {} files, {} lines", file_count, total_lines);
 
     Json(ProjectStatus {
-        name: state.root.file_name()
+        name: state
+            .root
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("Nyx Workspace")
             .to_string(),
@@ -298,11 +337,16 @@ async fn get_status(State(state): State<Arc<AppState>>) -> Json<ProjectStatus> {
 async fn get_health() -> Json<HealthAudit> {
     let mut checks: Vec<HealthCheck> = Vec::new();
 
-    let toolchain_ok = which("nyx").is_ok() || Path::new("nyx").exists() || Path::new("./tools/nyx").exists();
+    let toolchain_ok =
+        which("nyx").is_ok() || Path::new("nyx").exists() || Path::new("./tools/nyx").exists();
     checks.push(HealthCheck {
         name: "Nyx Toolchain".into(),
         status: toolchain_ok,
-        message: if toolchain_ok { "CLI binary available".into() } else { "Binary not found in PATH".into() },
+        message: if toolchain_ok {
+            "CLI binary available".into()
+        } else {
+            "Binary not found in PATH".into()
+        },
         critical: true,
         category: "Environment".into(),
     });
@@ -311,16 +355,25 @@ async fn get_health() -> Json<HealthAudit> {
     checks.push(HealthCheck {
         name: "Rust / Cargo".into(),
         status: cargo_ok,
-        message: if cargo_ok { "Cargo found".into() } else { "Cargo not in PATH".into() },
+        message: if cargo_ok {
+            "Cargo found".into()
+        } else {
+            "Cargo not in PATH".into()
+        },
         critical: true,
         category: "Environment".into(),
     });
 
-    let registry_ok = Path::new("registry/language.json").exists() || Path::new("../../registry/language.json").exists();
+    let registry_ok = Path::new("registry/language.json").exists()
+        || Path::new("../../registry/language.json").exists();
     checks.push(HealthCheck {
         name: "Language Registry".into(),
         status: registry_ok,
-        message: if registry_ok { "Registry files present".into() } else { "Missing registry/language.json".into() },
+        message: if registry_ok {
+            "Registry files present".into()
+        } else {
+            "Missing registry/language.json".into()
+        },
         critical: true,
         category: "Config".into(),
     });
@@ -329,7 +382,11 @@ async fn get_health() -> Json<HealthAudit> {
     checks.push(HealthCheck {
         name: "KVM Hypervisor".into(),
         status: kvm_ok,
-        message: if kvm_ok { "Hardware acceleration ready".into() } else { "KVM not available".into() },
+        message: if kvm_ok {
+            "Hardware acceleration ready".into()
+        } else {
+            "KVM not available".into()
+        },
         critical: false,
         category: "Runtime".into(),
     });
@@ -338,7 +395,11 @@ async fn get_health() -> Json<HealthAudit> {
     checks.push(HealthCheck {
         name: "Standard Library".into(),
         status: stdlib_ok,
-        message: if stdlib_ok { "stdlib directory found".into() } else { "stdlib not found".into() },
+        message: if stdlib_ok {
+            "stdlib directory found".into()
+        } else {
+            "stdlib not found".into()
+        },
         critical: false,
         category: "Config".into(),
     });
@@ -347,7 +408,11 @@ async fn get_health() -> Json<HealthAudit> {
     checks.push(HealthCheck {
         name: "Nyx VM".into(),
         status: vm_ok,
-        message: if vm_ok { "VM crate found".into() } else { "VM crate missing".into() },
+        message: if vm_ok {
+            "VM crate found".into()
+        } else {
+            "VM crate missing".into()
+        },
         critical: true,
         category: "Runtime".into(),
     });
@@ -356,7 +421,11 @@ async fn get_health() -> Json<HealthAudit> {
     let total = checks.len();
     let score = ((pass * 100) / total) as u32;
 
-    Json(HealthAudit { checks, overall_score: score, timestamp: now_secs() })
+    Json(HealthAudit {
+        checks,
+        overall_score: score,
+        timestamp: now_secs(),
+    })
 }
 
 async fn get_files(State(state): State<Arc<AppState>>) -> Json<Vec<ProjectFile>> {
@@ -371,7 +440,8 @@ async fn get_files(State(state): State<Arc<AppState>>) -> Json<Vec<ProjectFile>>
         })
         .take(50)
         .map(|e| {
-            let modified = e.metadata()
+            let modified = e
+                .metadata()
                 .map_err(|_| ())
                 .and_then(|m| m.modified().map_err(|_| ()))
                 .ok()
@@ -382,7 +452,12 @@ async fn get_files(State(state): State<Arc<AppState>>) -> Json<Vec<ProjectFile>>
                 name: e.file_name().to_string_lossy().into_owned(),
                 path: e.path().to_string_lossy().into_owned(),
                 size: e.metadata().map(|m| m.len()).unwrap_or(0),
-                extension: e.path().extension().and_then(|s| s.to_str()).unwrap_or("").to_string(),
+                extension: e
+                    .path()
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string(),
                 modified_secs: modified,
             }
         })
@@ -401,11 +476,18 @@ async fn get_vitals() -> Json<Vitals> {
 
     let mem_used = sys.used_memory() / 1024 / 1024;
     let mem_total = sys.total_memory() / 1024 / 1024;
-    let mem_pct = if mem_total > 0 { (mem_used as f32 / mem_total as f32) * 100.0 } else { 0.0 };
+    let mem_pct = if mem_total > 0 {
+        (mem_used as f32 / mem_total as f32) * 100.0
+    } else {
+        0.0
+    };
 
     let disks = Disks::new_with_refreshed_list();
     let (disk_used, disk_total) = disks.iter().fold((0u64, 0u64), |(u, t), d| {
-        (u + (d.total_space() - d.available_space()), t + d.total_space())
+        (
+            u + (d.total_space() - d.available_space()),
+            t + d.total_space(),
+        )
     });
 
     let load = System::load_average();
@@ -430,8 +512,7 @@ async fn get_diagnostics(State(state): State<Arc<AppState>>) -> Json<Vec<Diagnos
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_type().is_file()
-                && e.path().extension().and_then(|s| s.to_str()) == Some("nyx")
+            e.file_type().is_file() && e.path().extension().and_then(|s| s.to_str()) == Some("nyx")
         })
         .take(100)
     {
@@ -440,7 +521,9 @@ async fn get_diagnostics(State(state): State<Arc<AppState>>) -> Json<Vec<Diagnos
             for (i, line) in content.lines().enumerate() {
                 let lnum = i + 1;
 
-                if line.trim_start().starts_with("// TODO") || line.trim_start().starts_with("// FIXME") {
+                if line.trim_start().starts_with("// TODO")
+                    || line.trim_start().starts_with("// FIXME")
+                {
                     diagnostics.push(Diagnostic {
                         id: format!("D{:04}", id_counter),
                         kind: "Maintenance".into(),
@@ -468,7 +551,9 @@ async fn get_diagnostics(State(state): State<Arc<AppState>>) -> Json<Vec<Diagnos
                 }
             }
         }
-        if id_counter > 50 { break; }
+        if id_counter > 50 {
+            break;
+        }
     }
 
     // If no nyx files found, show placeholder diagnostics to demonstrate UI
@@ -478,7 +563,8 @@ async fn get_diagnostics(State(state): State<Arc<AppState>>) -> Json<Vec<Diagnos
             id: "D0001".into(),
             kind: "System".into(),
             severity: "info".into(),
-            message: "No .nyx source files found in workspace root. Try running from project root.".into(),
+            message: "No .nyx source files found in workspace root. Try running from project root."
+                .into(),
             file: "workspace".into(),
             line: None,
             confidence: 1.0,
@@ -498,8 +584,14 @@ async fn get_modules(State(state): State<Arc<AppState>>) -> Json<ModuleGraph> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-                if name.starts_with('.') || name == "target" { continue; }
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                if name.starts_with('.') || name == "target" {
+                    continue;
+                }
 
                 let file_count = WalkDir::new(&path)
                     .max_depth(3)
@@ -508,10 +600,15 @@ async fn get_modules(State(state): State<Arc<AppState>>) -> Json<ModuleGraph> {
                     .filter(|e| e.file_type().is_file())
                     .count();
 
-                let group = if path.join("Cargo.toml").exists() { 1 }
-                    else if name.contains("tool") { 2 }
-                    else if name.contains("lib") || name.contains("std") { 3 }
-                    else { 4 };
+                let group = if path.join("Cargo.toml").exists() {
+                    1
+                } else if name.contains("tool") {
+                    2
+                } else if name.contains("lib") || name.contains("std") {
+                    3
+                } else {
+                    4
+                };
 
                 nodes.push(ModuleNode {
                     id: name.clone(),

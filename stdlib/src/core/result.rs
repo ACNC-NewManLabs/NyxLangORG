@@ -1,5 +1,5 @@
 //! Result type implementation
-//! 
+//!
 //! A type that represents either success (Ok(T)) or failure (Err(E)).
 
 // Internal traits already in scope
@@ -30,7 +30,7 @@ impl<T, E> Result<T, E> {
     }
 
     /// Returns the contained Ok value
-    /// 
+    ///
     /// # Panics
     /// Panics if the value is Err
     #[inline]
@@ -215,7 +215,7 @@ impl<T, E> Result<T, E> {
     }
 
     /// Returns the contained Ok value, without checking if the result is Ok
-    /// 
+    ///
     /// # Safety
     /// Calling this method on Err is undefined behavior
     #[inline]
@@ -228,7 +228,7 @@ impl<T, E> Result<T, E> {
     }
 
     /// Returns the contained Err value, without checking if the result is Err
-    /// 
+    ///
     /// # Safety
     /// Calling this method on Ok is undefined behavior
     #[inline]
@@ -279,8 +279,12 @@ impl<T, E> IntoIterator for Result<T, E> {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Result::Ok(v) => crate::core::result::IntoIter { inner: Option::Some(v) },
-            Result::Err(_) => crate::core::result::IntoIter { inner: Option::None },
+            Result::Ok(v) => crate::core::result::IntoIter {
+                inner: Option::Some(v),
+            },
+            Result::Err(_) => crate::core::result::IntoIter {
+                inner: Option::None,
+            },
         }
     }
 }

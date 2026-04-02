@@ -7,5 +7,7 @@ pub mod linalg {
 }
 
 pub mod stats {
-    pub fn mean(_data: &[f64]) -> f64 { 0.0 }
+    pub fn mean(_data: &[f64]) -> f64 {
+        0.0
+    }
 }

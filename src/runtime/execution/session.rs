@@ -11,7 +11,9 @@ use crate::runtime::compiler_bridge::package::package_entry;
 use crate::runtime::execution::module_loader::{ModuleHandle, ModuleLoader, NyxPackage};
 use crate::runtime::execution::native_bridge::{register_host_natives, NativeBridgeConfig};
 use crate::runtime::execution::nyx_vm::{EvalError, NyxVm, Value, VmConfig};
-use crate::runtime::execution::reload::{ModulePatch, PatchReport, ReloadSnapshot, RuntimeStateSnapshot};
+use crate::runtime::execution::reload::{
+    ModulePatch, PatchReport, ReloadSnapshot, RuntimeStateSnapshot,
+};
 
 /// Runtime session configuration
 #[derive(Debug, Clone)]
@@ -37,7 +39,9 @@ pub struct SessionError {
 
 impl SessionError {
     pub fn new(msg: impl Into<String>) -> Self {
-        Self { message: msg.into() }
+        Self {
+            message: msg.into(),
+        }
     }
 }
 
@@ -95,7 +99,9 @@ impl RuntimeSession {
         let std_root = crate::runtime::execution::ui_runtime::stdlib_root();
         if std_root.exists() {
             vm.set_stdlib_path(std_root.clone());
-            engine_roots.extend(crate::runtime::execution::ui_runtime::discover_engines(&std_root));
+            engine_roots.extend(crate::runtime::execution::ui_runtime::discover_engines(
+                &std_root,
+            ));
         }
 
         for root in engine_roots {
@@ -125,7 +131,7 @@ impl RuntimeSession {
     /// Create a new runtime session
     pub fn new(config: SessionConfig) -> Result<Self, SessionError> {
         let vm = NyxVm::new(VmConfig::default());
-        
+
         Ok(Self {
             vm: Arc::new(Mutex::new(vm)),
             module_loader: ModuleLoader::new(),
@@ -198,33 +204,44 @@ impl RuntimeSession {
 
         // Get the module's exports (in practice, would inspect module exports)
         let exports = BTreeMap::new();
-        
+
         let instance = ModuleInstance {
             handle: ModuleHandle(self.module_instances.len()),
             module_id: module_id.to_string(),
             exports,
         };
-        
-        self.module_instances.insert(module_id.to_string(), instance.clone());
+
+        self.module_instances
+            .insert(module_id.to_string(), instance.clone());
         Ok(instance)
     }
 
     /// Invoke a function in the runtime
     pub fn invoke(&mut self, entry_symbol: &str, args: Vec<Value>) -> Result<Value, SessionError> {
-        let mut vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
-        
+        let mut vm = self
+            .vm
+            .lock()
+            .map_err(|_| SessionError::new("VM lock poisoned"))?;
+
         // Try to call as function first
         if vm.has_function(entry_symbol) {
-            return vm.call_function(entry_symbol, args)
+            return vm
+                .call_function(entry_symbol, args)
                 .map_err(SessionError::from);
         }
-        
+
         // Try as component render
-        Err(SessionError::new(format!("Symbol '{}' not found", entry_symbol)))
+        Err(SessionError::new(format!(
+            "Symbol '{}' not found",
+            entry_symbol
+        )))
     }
 
     /// Patch modules with changes (hot reload)
-    pub fn patch_modules(&mut self, changed_modules: Vec<ModulePatch>) -> Result<PatchReport, SessionError> {
+    pub fn patch_modules(
+        &mut self,
+        changed_modules: Vec<ModulePatch>,
+    ) -> Result<PatchReport, SessionError> {
         if changed_modules.is_empty() {
             return Ok(PatchReport {
                 patched_modules: Vec::new(),
@@ -236,7 +253,10 @@ impl RuntimeSession {
 
         // Full reload to avoid stale symbols in `NyxVm` when functions are removed/renamed.
         // This is the correct default until the VM tracks per-module symbol ownership.
-        let patched_modules = changed_modules.iter().map(|p| p.module_id.clone()).collect();
+        let patched_modules = changed_modules
+            .iter()
+            .map(|p| p.module_id.clone())
+            .collect();
         match self.reload_entry_package() {
             Ok(mut report) => {
                 report.patched_modules = patched_modules;
@@ -253,8 +273,11 @@ impl RuntimeSession {
 
     /// Take a snapshot of the current runtime state
     pub fn snapshot_reload_state(&mut self) -> Result<ReloadSnapshot, SessionError> {
-        let vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
-        
+        let vm = self
+            .vm
+            .lock()
+            .map_err(|_| SessionError::new("VM lock poisoned"))?;
+
         // Snapshot globals that can be restored after reload
         let globals: BTreeMap<String, Value> = vm.globals.clone().into_iter().collect();
         let module_versions = self
@@ -262,7 +285,7 @@ impl RuntimeSession {
             .modules()
             .map(|module| (module.id.clone(), module.version))
             .collect();
-        
+
         Ok(ReloadSnapshot {
             runtime: RuntimeStateSnapshot::default(),
             module_versions,
@@ -276,15 +299,18 @@ impl RuntimeSession {
 
     /// Restore runtime state from a snapshot
     pub fn restore_reload_state(&mut self, snapshot: ReloadSnapshot) -> Result<(), SessionError> {
-        let mut vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
-        
+        let mut vm = self
+            .vm
+            .lock()
+            .map_err(|_| SessionError::new("VM lock poisoned"))?;
+
         // Restore global values that still exist
         for (key, value) in snapshot.globals {
             if vm.globals.contains_key(&key) {
                 vm.globals.insert(key, value);
             }
         }
-        
+
         Ok(())
     }
 
@@ -300,16 +326,21 @@ impl RuntimeSession {
 
     /// Render a route and get the result
     pub fn render_route(&mut self, path: &str) -> Result<Value, SessionError> {
-        let mut vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
+        let mut vm = self
+            .vm
+            .lock()
+            .map_err(|_| SessionError::new("VM lock poisoned"))?;
         vm.render_http_via_routes_or_app(path)
             .map_err(SessionError::from)
     }
 
     /// Render app fragment for hot reload
     pub fn render_fragment(&mut self) -> Result<String, SessionError> {
-        let mut vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
-        vm.render_app_fragment()
-            .map_err(SessionError::from)
+        let mut vm = self
+            .vm
+            .lock()
+            .map_err(|_| SessionError::new("VM lock poisoned"))?;
+        vm.render_app_fragment().map_err(SessionError::from)
     }
 }
 

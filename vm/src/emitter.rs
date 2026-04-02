@@ -1,5 +1,5 @@
 //! Bytecode Emitter
-//! 
+//!
 //! This module provides utilities for creating bytecode programs.
 
 use crate::bytecode::{BytecodeInstr, BytecodeModule, Function, OpCode, Value};
@@ -74,7 +74,8 @@ impl BytecodeEmitter {
     pub fn emit_instr(&mut self, opcode: OpCode, operands: Vec<i32>, line: usize) {
         if let Some(idx) = self.current_function {
             if let Some(func) = self.module.functions.get_mut(idx) {
-                func.instructions.push(BytecodeInstr::new(opcode, operands, line));
+                func.instructions
+                    .push(BytecodeInstr::new(opcode, operands, line));
             }
         }
     }
@@ -197,7 +198,7 @@ impl BytecodeOptimizer {
     pub fn optimize(func: &mut Function) {
         // Remove NOPs
         func.instructions.retain(|i| i.opcode != OpCode::NOP);
-        
+
         // Remove redundant pushes
         let mut last_push = false;
         for instr in &func.instructions {
@@ -222,52 +223,52 @@ impl BytecodeOptimizer {
 /// Helper to build a simple hello world program
 pub fn build_hello_world() -> BytecodeModule {
     let mut emitter = BytecodeEmitter::new();
-    
+
     // Create main function
     emitter.create_function("main", 0);
-    
+
     // Add string constant "Hello, World!"
     let const_idx = emitter.add_constant(Value::String("Hello, World!".to_string()));
-    
+
     // Push the string
     emitter.push(const_idx, 1);
-    
+
     // Print (placeholder)
     emitter.print(1);
-    
+
     // Return
     emitter.ret(2);
-    
+
     // Halt
     emitter.halt(2);
-    
+
     emitter.get_module()
 }
 
 /// Helper to build an add program
 pub fn build_add_program() -> BytecodeModule {
     let mut emitter = BytecodeEmitter::new();
-    
+
     // Create main function
     emitter.create_function("main", 0);
-    
+
     // Add constant 10
     let const1 = emitter.add_constant(Value::Int(10));
     emitter.push(const1, 1);
-    
+
     // Add constant 20
     let const2 = emitter.add_constant(Value::Int(20));
     emitter.push(const2, 1);
-    
+
     // Add
     emitter.emit_binary(OpCode::ADD, 1);
-    
+
     // Return
     emitter.ret(2);
-    
+
     // Halt
     emitter.halt(2);
-    
+
     emitter.get_module()
 }
 
@@ -314,9 +315,9 @@ mod tests {
             upvalues: Vec::new(),
             line_info: vec![],
         };
-        
+
         BytecodeOptimizer::optimize(&mut func);
-        
+
         // NOP should be removed
         assert!(!func.instructions.iter().any(|i| i.opcode == OpCode::NOP));
     }

@@ -1,5 +1,5 @@
 //! Nyx Security Scanner
-//! 
+//!
 //! A comprehensive security scanning tool for Nyx packages and source code.
 //! Features:
 //! - Dependency vulnerability scanning
@@ -12,11 +12,11 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-mod scanner;
 mod database;
+mod scanner;
 
-use scanner::{SecurityScanner, SecurityReport, Vulnerability, Severity};
 use database::VulnerabilityDatabase;
+use scanner::{SecurityReport, SecurityScanner, Severity, Vulnerability};
 
 /// Security scanner commands
 #[derive(Debug, Subcommand)]
@@ -58,9 +58,9 @@ struct Args {
 fn main() {
     // Initialize logger
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    
+
     let args = Args::parse();
-    
+
     match args.command {
         ScanCommand::Scan { path, format } => run_scan(path, format),
         ScanCommand::Dependencies { path } => scan_dependencies(path),
@@ -76,18 +76,18 @@ fn run_scan(path: PathBuf, format: String) {
     println!("                    Nyx Security Scanner");
     println!("═══════════════════════════════════════════════════════════");
     println!();
-    
+
     if !path.exists() {
         eprintln!("Error: Path does not exist: {}", path.display());
         return;
     }
-    
+
     println!("Scanning: {}", path.display());
     println!();
-    
+
     // Initialize scanner
     let scanner = SecurityScanner::new();
-    
+
     // Run scan
     match scanner.scan_project(&path) {
         Ok(report) => {
@@ -98,7 +98,7 @@ fn run_scan(path: PathBuf, format: String) {
             } else {
                 print_report(&report);
             }
-            
+
             // Exit with error code if vulnerabilities found
             if !report.vulnerabilities.is_empty() {
                 std::process::exit(1);
@@ -115,9 +115,9 @@ fn run_scan(path: PathBuf, format: String) {
 fn scan_dependencies(path: PathBuf) {
     println!("Scanning dependencies for: {}", path.display());
     println!();
-    
+
     let scanner = SecurityScanner::new();
-    
+
     match scanner.scan_dependencies(&path) {
         Ok(vulns) => {
             if vulns.is_empty() {
@@ -140,9 +140,9 @@ fn scan_dependencies(path: PathBuf) {
 fn scan_secrets(path: PathBuf) {
     println!("Scanning for secrets in: {}", path.display());
     println!();
-    
+
     let scanner = SecurityScanner::new();
-    
+
     match scanner.scan_secrets(&path) {
         Ok(secrets) => {
             if secrets.is_empty() {
@@ -164,7 +164,7 @@ fn scan_secrets(path: PathBuf) {
 /// Update the vulnerability database
 fn update_database() {
     println!("Updating vulnerability database...");
-    
+
     let db = VulnerabilityDatabase::new();
     match db.update() {
         Ok(_) => {
@@ -180,7 +180,7 @@ fn update_database() {
 fn show_db_info() {
     let db = VulnerabilityDatabase::new();
     let info = db.get_info();
-    
+
     println!("Vulnerability Database Information");
     println!("====================================");
     println!("Database version: {}", info.version);
@@ -195,9 +195,15 @@ fn show_db_info() {
 
         for entry in db.all() {
             let details = db.lookup(&entry.cwe_id).unwrap_or(entry);
-            println!("{} - {} ({})", details.cwe_id, details.title, details.severity);
+            println!(
+                "{} - {} ({})",
+                details.cwe_id, details.title, details.severity
+            );
             println!("Description: {}", details.description);
-            println!("Affected Versions: {}", details.affected_versions.join(", "));
+            println!(
+                "Affected Versions: {}",
+                details.affected_versions.join(", ")
+            );
             println!("Recommendation: {}", details.recommendation);
             println!();
         }
@@ -211,13 +217,13 @@ fn print_report(report: &SecurityReport) {
     println!("Files scanned: {}", report.files_scanned);
     println!("Vulnerabilities found: {}", report.vulnerabilities.len());
     println!();
-    
+
     // Group by severity
     let mut critical = Vec::new();
     let mut high = Vec::new();
     let mut medium = Vec::new();
     let mut low = Vec::new();
-    
+
     for vuln in &report.vulnerabilities {
         match vuln.severity {
             Severity::Critical => critical.push(vuln),
@@ -226,7 +232,7 @@ fn print_report(report: &SecurityReport) {
             Severity::Low => low.push(vuln),
         }
     }
-    
+
     if !critical.is_empty() {
         println!("─── CRITICAL ({}) ───", critical.len());
         for v in &critical {
@@ -234,7 +240,7 @@ fn print_report(report: &SecurityReport) {
         }
         println!();
     }
-    
+
     if !high.is_empty() {
         println!("─── HIGH ({}) ───", high.len());
         for v in &high {
@@ -242,7 +248,7 @@ fn print_report(report: &SecurityReport) {
         }
         println!();
     }
-    
+
     if !medium.is_empty() {
         println!("─── MEDIUM ({}) ───", medium.len());
         for v in &medium {
@@ -250,7 +256,7 @@ fn print_report(report: &SecurityReport) {
         }
         println!();
     }
-    
+
     if !low.is_empty() {
         println!("─── LOW ({}) ───", low.len());
         for v in &low {
@@ -258,7 +264,7 @@ fn print_report(report: &SecurityReport) {
         }
         println!();
     }
-    
+
     if report.vulnerabilities.is_empty() {
         println!("No security issues found. Your code looks good!");
     }
@@ -272,7 +278,7 @@ fn print_vulnerability(v: &Vulnerability) {
         Severity::Medium => "MEDIUM",
         Severity::Low => "LOW",
     };
-    
+
     println!("[{}] {}", severity_str, v.title);
     println!("  File: {}:{}", v.file, v.line);
     println!("  CWE: {}", v.cwe_id);

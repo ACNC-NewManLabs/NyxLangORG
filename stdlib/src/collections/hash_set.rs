@@ -11,12 +11,16 @@ pub struct HashSet<T> {
 impl<T: Eq + Hash> HashSet<T> {
     /// Create new hash set
     pub fn new() -> HashSet<T> {
-        HashSet { inner: StdHashSet::new() }
+        HashSet {
+            inner: StdHashSet::new(),
+        }
     }
 
     /// With capacity
     pub fn with_capacity(cap: usize) -> HashSet<T> {
-        HashSet { inner: StdHashSet::with_capacity(cap) }
+        HashSet {
+            inner: StdHashSet::with_capacity(cap),
+        }
     }
 
     /// Insert

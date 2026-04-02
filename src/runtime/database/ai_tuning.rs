@@ -22,9 +22,14 @@ impl AITuningConvergence {
     }
 
     /// Records query performance and returns a recommendation if tuning is needed.
-    pub fn record_and_recommend(&mut self, query_fingerprint: &str, latency_ms: f64) -> Option<String> {
-        self.performance_history.insert(query_fingerprint.to_string(), latency_ms);
-        
+    pub fn record_and_recommend(
+        &mut self,
+        query_fingerprint: &str,
+        latency_ms: f64,
+    ) -> Option<String> {
+        self.performance_history
+            .insert(query_fingerprint.to_string(), latency_ms);
+
         if latency_ms > self.tuning_threshold_ms {
             // Heuristic recommendation: Build index for slow queries
             Some(format!("BUILD_INDEX_FOR_{}", query_fingerprint))
@@ -55,7 +60,7 @@ mod tests {
     fn test_autonomous_tuning_recommendation() {
         let mut tuner = AITuningConvergence::new();
         tuner.tuning_threshold_ms = 50.0;
-        
+
         let reco = tuner.record_and_recommend("SELECT_USERS_BY_SCORE", 150.0);
         assert!(reco.is_some());
         assert_eq!(reco.unwrap(), "BUILD_INDEX_FOR_SELECT_USERS_BY_SCORE");
@@ -65,6 +70,9 @@ mod tests {
     fn test_agg_strategy_heuristics() {
         let tuner = AITuningConvergence::new();
         assert_eq!(tuner.recommend_agg_strategy(500), "RADIX_SORT_ACCELERATED");
-        assert_eq!(tuner.recommend_agg_strategy(1_000_000), "HASH_AGGREGATION_PARALLEL");
+        assert_eq!(
+            tuner.recommend_agg_strategy(1_000_000),
+            "HASH_AGGREGATION_PARALLEL"
+        );
     }
 }

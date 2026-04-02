@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AccessibilityRole {
     // Generic roles
     None,
     Generic,
-    
+
     // Interactive elements
     Button,
     Link,
@@ -16,13 +16,13 @@ pub enum AccessibilityRole {
     Slider,
     ProgressIndicator,
     ScrollBar,
-    
+
     // Text elements
     Text,
     Heading,
     Label,
     Caption,
-    
+
     // Container elements
     Group,
     List,
@@ -32,7 +32,7 @@ pub enum AccessibilityRole {
     Cell,
     Grid,
     GridCell,
-    
+
     // Navigation
     Tab,
     TabList,
@@ -40,25 +40,25 @@ pub enum AccessibilityRole {
     Menu,
     MenuItem,
     MenuBar,
-    
+
     // Media
     Image,
     Audio,
     Video,
-    
+
     // Form elements
     TextField,
     TextArea,
     ComboBox,
     SearchBox,
-    
+
     // Structural
     Application,
     Document,
     Dialog,
     Alert,
     Tooltip,
-    
+
     // Custom
     Custom(String),
 }
@@ -70,21 +70,21 @@ pub enum AccessibilityState {
     Hidden,
     ReadOnly,
     Required,
-    
+
     // Selection states
     Selected,
     Checked,
     Pressed,
-    
+
     // Focus states
     Focused,
     Focusable,
-    
+
     // Value states
     Invalid,
     Expanded,
     Collapsed,
-    
+
     // Interactive states
     Busy,
     Live,
@@ -153,24 +153,24 @@ pub enum AccessibilityAction {
     Focus,
     Select,
     Deselect,
-    
+
     // Value actions
     Increment,
     Dismiss,
-    
+
     // Navigation actions
     ScrollUp,
     ScrollDown,
     ScrollLeft,
     ScrollRight,
-    
+
     // Text actions
     Copy,
     Cut,
     Paste,
     InsertText,
     DeleteText,
-    
+
     // Custom actions
     Custom(String),
 }
@@ -196,8 +196,14 @@ impl SemanticsTree {
         self.nodes.insert(node.id.clone(), node);
     }
 
-    pub fn update_node(&mut self, node_id: &str, updates: SemanticsUpdate) -> Result<(), AccessibilityError> {
-        let node = self.nodes.get_mut(node_id)
+    pub fn update_node(
+        &mut self,
+        node_id: &str,
+        updates: SemanticsUpdate,
+    ) -> Result<(), AccessibilityError> {
+        let node = self
+            .nodes
+            .get_mut(node_id)
             .ok_or(AccessibilityError::NodeNotFound(node_id.to_string()))?;
 
         if let Some(role) = updates.role {
@@ -215,11 +221,11 @@ impl SemanticsTree {
         if let Some(bounds) = updates.bounds {
             node.bounds = bounds;
         }
-        
+
         for (state, enabled) in updates.states {
             node.states.insert(state, enabled);
         }
-        
+
         for (key, value) in updates.properties {
             node.properties.insert(key, value);
         }
@@ -237,7 +243,9 @@ impl SemanticsTree {
         }
 
         // Remove node and all descendants
-        let node = self.nodes.remove(node_id)
+        let node = self
+            .nodes
+            .remove(node_id)
             .ok_or(AccessibilityError::NodeNotFound(node_id.to_string()))?;
 
         // Remove descendants
@@ -267,7 +275,7 @@ impl SemanticsTree {
     pub fn hit_test(&self, x: f32, y: f32) -> Option<String> {
         // Find the deepest node at the given coordinates
         let mut candidates = Vec::new();
-        
+
         for (id, node) in &self.nodes {
             if self.point_in_bounds(x, y, &node.bounds) {
                 candidates.push((id.clone(), node));
@@ -276,19 +284,21 @@ impl SemanticsTree {
 
         // Sort by depth (deepest first)
         candidates.sort_by(|a, b| self.get_node_depth(&a.0).cmp(&self.get_node_depth(&b.0)));
-        
+
         candidates.first().map(|(id, _)| id.clone())
     }
 
     fn point_in_bounds(&self, x: f32, y: f32, bounds: &AccessibilityBounds) -> bool {
-        x >= bounds.x && x <= bounds.x + bounds.width &&
-        y >= bounds.y && y <= bounds.y + bounds.height
+        x >= bounds.x
+            && x <= bounds.x + bounds.width
+            && y >= bounds.y
+            && y <= bounds.y + bounds.height
     }
 
     fn get_node_depth(&self, node_id: &str) -> usize {
         let mut depth = 0;
         let mut current_id = node_id;
-        
+
         while let Some(node) = self.nodes.get(current_id) {
             if let Some(parent_id) = &node.parent {
                 current_id = parent_id;
@@ -297,7 +307,7 @@ impl SemanticsTree {
                 break;
             }
         }
-        
+
         depth
     }
 
@@ -309,9 +319,11 @@ impl SemanticsTree {
         }
 
         if let Some(new_id) = node_id {
-            let node = self.nodes.get_mut(new_id)
+            let node = self
+                .nodes
+                .get_mut(new_id)
                 .ok_or(AccessibilityError::NodeNotFound(new_id.to_string()))?;
-            
+
             node.states.insert(AccessibilityState::Focused, true);
             self.focused_node = Some(new_id.to_string());
         } else {
@@ -327,7 +339,7 @@ impl SemanticsTree {
 
     pub fn navigate(&self, from_id: &str, direction: NavigationDirection) -> Option<String> {
         let _from_node = self.nodes.get(from_id)?;
-        
+
         match direction {
             NavigationDirection::Next => self.find_next_sibling(from_id),
             NavigationDirection::Previous => self.find_previous_sibling(from_id),
@@ -343,7 +355,7 @@ impl SemanticsTree {
         if let Some(parent_id) = &node.parent {
             let parent = self.nodes.get(parent_id)?;
             let index = parent.children.iter().position(|id| id == node_id)?;
-            
+
             // Find next focusable sibling
             for sibling_id in parent.children.iter().skip(index + 1) {
                 if let Some(sibling) = self.nodes.get(sibling_id) {
@@ -361,7 +373,7 @@ impl SemanticsTree {
         if let Some(parent_id) = &node.parent {
             let parent = self.nodes.get(parent_id)?;
             let index = parent.children.iter().position(|id| id == node_id)?;
-            
+
             // Find previous focusable sibling (in reverse)
             for sibling_id in parent.children.iter().take(index).rev() {
                 if let Some(sibling) = self.nodes.get(sibling_id) {
@@ -404,7 +416,7 @@ impl SemanticsTree {
         // Reverse depth-first search for last focusable node
         let mut ids: Vec<_> = self.nodes.keys().collect();
         ids.reverse();
-        
+
         for id in ids {
             if let Some(node) = self.nodes.get(id) {
                 if self.is_focusable(node) {
@@ -417,30 +429,43 @@ impl SemanticsTree {
 
     fn is_focusable(&self, node: &SemanticsNode) -> bool {
         // Check if node is focusable based on role and states
-        if node.states.get(&AccessibilityState::Disabled).copied().unwrap_or(false) {
+        if node
+            .states
+            .get(&AccessibilityState::Disabled)
+            .copied()
+            .unwrap_or(false)
+        {
             return false;
         }
-        
-        if node.states.get(&AccessibilityState::Hidden).copied().unwrap_or(false) {
+
+        if node
+            .states
+            .get(&AccessibilityState::Hidden)
+            .copied()
+            .unwrap_or(false)
+        {
             return false;
         }
 
         match node.role {
-            AccessibilityRole::Button |
-            AccessibilityRole::Link |
-            AccessibilityRole::TextField |
-            AccessibilityRole::TextArea |
-            AccessibilityRole::ComboBox |
-            AccessibilityRole::Checkbox |
-            AccessibilityRole::RadioButton |
-            AccessibilityRole::Switch |
-            AccessibilityRole::Slider => true,
-            
+            AccessibilityRole::Button
+            | AccessibilityRole::Link
+            | AccessibilityRole::TextField
+            | AccessibilityRole::TextArea
+            | AccessibilityRole::ComboBox
+            | AccessibilityRole::Checkbox
+            | AccessibilityRole::RadioButton
+            | AccessibilityRole::Switch
+            | AccessibilityRole::Slider => true,
+
             AccessibilityRole::Generic => {
                 // Generic elements are focusable if explicitly marked
-                node.states.get(&AccessibilityState::Focusable).copied().unwrap_or(false)
+                node.states
+                    .get(&AccessibilityState::Focusable)
+                    .copied()
+                    .unwrap_or(false)
             }
-            
+
             _ => false,
         }
     }
@@ -456,13 +481,20 @@ impl SemanticsTree {
     }
 
     pub fn get_live_regions(&self) -> Vec<&SemanticsNode> {
-        self.live_regions.iter()
+        self.live_regions
+            .iter()
             .filter_map(|id| self.nodes.get(id))
             .collect()
     }
 
-    pub fn perform_action(&mut self, node_id: &str, action: AccessibilityAction) -> Result<(), AccessibilityError> {
-        let node = self.nodes.get_mut(node_id)
+    pub fn perform_action(
+        &mut self,
+        node_id: &str,
+        action: AccessibilityAction,
+    ) -> Result<(), AccessibilityError> {
+        let node = self
+            .nodes
+            .get_mut(node_id)
             .ok_or(AccessibilityError::NodeNotFound(node_id.to_string()))?;
 
         // Check if action is supported
@@ -493,7 +525,8 @@ impl SemanticsTree {
                         if let Some(step) = node.properties.get("step") {
                             if let Ok(step_val) = step.parse::<f64>() {
                                 value += step_val;
-                                node.properties.insert("value".to_string(), value.to_string());
+                                node.properties
+                                    .insert("value".to_string(), value.to_string());
                             }
                         }
                     }
@@ -553,16 +586,16 @@ pub enum NavigationDirection {
 pub enum AccessibilityError {
     #[error("Node not found: {0}")]
     NodeNotFound(String),
-    
+
     #[error("Action not supported: {0:?}")]
     ActionNotSupported(AccessibilityAction),
-    
+
     #[error("Action not implemented: {0:?}")]
     ActionNotImplemented(AccessibilityAction),
-    
+
     #[error("Invalid bounds")]
     InvalidBounds,
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }

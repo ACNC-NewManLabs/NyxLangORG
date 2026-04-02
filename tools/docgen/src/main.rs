@@ -3,10 +3,12 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
+use nyx::core::ast::ast_nodes::{
+    EnumDecl, FunctionDecl, ItemKind, StructDecl, TraitDecl, Type, TypePath,
+};
 use nyx::core::lexer::lexer::Lexer;
 use nyx::core::parser::grammar_engine::GrammarEngine;
 use nyx::core::parser::neuro_parser::NeuroParser;
-use nyx::core::ast::ast_nodes::{ItemKind, Type, TypePath, FunctionDecl, StructDecl, EnumDecl, TraitDecl};
 use nyx::core::registry::language_registry::LanguageRegistry;
 
 #[derive(Debug, Parser)]
@@ -29,20 +31,20 @@ fn run() -> Result<(), String> {
 
     files.sort();
     let mut out = String::from("# Nyx Ecosystem Docs\n\n");
-    
+
     let registry = LanguageRegistry::default();
     let grammar = GrammarEngine::from_registry(&registry);
 
     for file in files {
         out.push_str(&format!("## Module: `{}`\n\n", file.display()));
-        
+
         let source = fs::read_to_string(&file).map_err(|e| e.to_string())?;
         let mut lexer = Lexer::from_source(source);
         let tokens = match lexer.tokenize() {
             Ok(t) => t,
             Err(_) => continue, // skip unparseable files
         };
-        
+
         let mut parser = NeuroParser::new(grammar.clone());
         let ast = match parser.parse(&tokens) {
             Ok(a) => a,
@@ -105,20 +107,22 @@ fn type_to_string(ty: &Type) -> String {
             let ts: Vec<String> = types.iter().map(type_to_string).collect();
             format!("({})", ts.join(", "))
         }
-        _ => "unknown".to_string()
+        _ => "unknown".to_string(),
     }
 }
 
 fn format_function(func: &FunctionDecl) -> String {
     let mut sig = format!("### `fn {}`\n\n```nyx\nfn {}(", func.name, func.name);
-    
-    let params: Vec<String> = func.params.iter().map(|p| {
-        format!("{}: {}", p.name, type_to_string(&p.param_type))
-    }).collect();
-    
+
+    let params: Vec<String> = func
+        .params
+        .iter()
+        .map(|p| format!("{}: {}", p.name, type_to_string(&p.param_type)))
+        .collect();
+
     sig.push_str(&params.join(", "));
     sig.push(')');
-    
+
     if let Some(ret) = &func.return_type {
         sig.push_str(&format!(" -> {}", type_to_string(ret)));
     }
@@ -127,27 +131,34 @@ fn format_function(func: &FunctionDecl) -> String {
 }
 
 fn format_struct(strct: &StructDecl) -> String {
-    let mut sig = format!("### `struct {}`\n\n```nyx\nstruct {} {{\n", strct.name, strct.name);
-    
+    let mut sig = format!(
+        "### `struct {}`\n\n```nyx\nstruct {} {{\n",
+        strct.name, strct.name
+    );
+
     for field in &strct.fields {
-        sig.push_str(&format!("    {}: {},\n", field.name, type_to_string(&field.field_type)));
+        sig.push_str(&format!(
+            "    {}: {},\n",
+            field.name,
+            type_to_string(&field.field_type)
+        ));
     }
-    
+
     sig.push_str("}\n```\n\n");
     sig
 }
 
 fn format_enum(enm: &EnumDecl) -> String {
     let mut sig = format!("### `enum {}`\n\n```nyx\nenum {} {{\n", enm.name, enm.name);
-    
+
     for variant in &enm.variants {
-       sig.push_str(&format!("    {},\n", variant.name()));
+        sig.push_str(&format!("    {},\n", variant.name()));
     }
-    
+
     sig.push_str("}\n```\n\n");
     sig
 }
 
 fn format_trait(trt: &TraitDecl) -> String {
-     format!("### `trait {}`\n\n", trt.name)
+    format!("### `trait {}`\n\n", trt.name)
 }

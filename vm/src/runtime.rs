@@ -1,5 +1,5 @@
 //! Nyx VM Runtime
-//! 
+//!
 //! This module provides the runtime engine for executing Nyx bytecode.
 
 use std::cell::RefCell;
@@ -241,7 +241,10 @@ impl VmRuntime {
     fn operand_usize(&self, instr: &BytecodeInstr, idx: usize, name: &str) -> VmResult<usize> {
         let raw = self.operand_i32(instr, idx, name)?;
         if raw < 0 {
-            return Err(VmError::InvalidOperand(format!("negative operand {}", name)));
+            return Err(VmError::InvalidOperand(format!(
+                "negative operand {}",
+                name
+            )));
         }
         Ok(raw as usize)
     }
@@ -250,10 +253,9 @@ impl VmRuntime {
         if let Some(value) = frame.function.constants.get(idx) {
             return Ok(value.clone());
         }
-        let module = self
-            .modules
-            .get(&frame.module_name)
-            .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", frame.module_name)))?;
+        let module = self.modules.get(&frame.module_name).ok_or_else(|| {
+            VmError::RuntimeError(format!("Module not found: {}", frame.module_name))
+        })?;
         let offset = idx.saturating_sub(frame.function.constants.len());
         module
             .constants
@@ -263,33 +265,41 @@ impl VmRuntime {
     }
 
     fn resolve_constant_string(&self, frame: &Frame, idx: usize, label: &str) -> VmResult<String> {
-        if let Some(value) = self
-            .const_string_cache
-            .borrow()
-            .get(&(frame.module_name.clone(), frame.function_idx, idx))
-        {
+        if let Some(value) = self.const_string_cache.borrow().get(&(
+            frame.module_name.clone(),
+            frame.function_idx,
+            idx,
+        )) {
             return Ok(value.clone());
         }
         match self.resolve_constant(frame, idx)? {
             Value::String(s) => {
-                self.const_string_cache
-                    .borrow_mut()
-                    .insert((frame.module_name.clone(), frame.function_idx, idx), s.clone());
+                self.const_string_cache.borrow_mut().insert(
+                    (frame.module_name.clone(), frame.function_idx, idx),
+                    s.clone(),
+                );
                 Ok(s)
             }
             _ => Err(VmError::InvalidOperand(format!("{} must be string", label))),
         }
     }
 
-    fn resolve_module_constant_string(&self, frame: &Frame, idx: usize, label: &str) -> VmResult<String> {
-        let module = self
-            .modules
-            .get(&frame.module_name)
-            .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", frame.module_name)))?;
+    fn resolve_module_constant_string(
+        &self,
+        frame: &Frame,
+        idx: usize,
+        label: &str,
+    ) -> VmResult<String> {
+        let module = self.modules.get(&frame.module_name).ok_or_else(|| {
+            VmError::RuntimeError(format!("Module not found: {}", frame.module_name))
+        })?;
         match module.constants.get(idx) {
             Some(Value::String(s)) => Ok(s.clone()),
             Some(_) => Err(VmError::InvalidOperand(format!("{} must be string", label))),
-            None => Err(VmError::InvalidOperand(format!("module constant index {}", idx))),
+            None => Err(VmError::InvalidOperand(format!(
+                "module constant index {}",
+                idx
+            ))),
         }
     }
 
@@ -332,8 +342,11 @@ impl VmRuntime {
     }
 
     fn check_limits(&self) -> VmResult<()> {
-        if self.config.max_instructions > 0 && self.instruction_count > self.config.max_instructions {
-            return Err(VmError::InstructionLimitExceeded(self.config.max_instructions));
+        if self.config.max_instructions > 0 && self.instruction_count > self.config.max_instructions
+        {
+            return Err(VmError::InstructionLimitExceeded(
+                self.config.max_instructions,
+            ));
         }
         if let Some(start) = self.start_time {
             if self.config.max_exec_time_ms > 0 {
@@ -347,11 +360,16 @@ impl VmRuntime {
     }
 
     fn heap_alloc(&mut self, value: Value, size_hint: usize) -> VmResult<usize> {
-        let size_bytes = if size_hint == 0 { size_of::<Value>() } else { size_hint };
+        let size_bytes = if size_hint == 0 {
+            size_of::<Value>()
+        } else {
+            size_hint
+        };
         if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes
-            && self.config.enable_gc {
-                self.collect_garbage();
-            }
+            && self.config.enable_gc
+        {
+            self.collect_garbage();
+        }
         if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes {
             return Err(VmError::OutOfMemory);
         }
@@ -374,7 +392,7 @@ impl VmRuntime {
         }
         let idx = self.heap.slots.len();
         self.heap.slots.push(Some(Box::new(slot)));
-                self.heap.total_allocated += size_bytes as u64;
+        self.heap.total_allocated += size_bytes as u64;
         self.heap.used_bytes += size_bytes;
         Ok(idx)
     }
@@ -382,9 +400,10 @@ impl VmRuntime {
     fn heap_alloc_upvalue(&mut self, value: Value) -> VmResult<usize> {
         let size_bytes = size_of::<Value>();
         if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes
-            && self.config.enable_gc {
-                self.collect_garbage();
-            }
+            && self.config.enable_gc
+        {
+            self.collect_garbage();
+        }
         if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes {
             return Err(VmError::OutOfMemory);
         }
@@ -407,7 +426,7 @@ impl VmRuntime {
         }
         let idx = self.heap.slots.len();
         self.heap.slots.push(Some(Box::new(slot)));
-                self.heap.total_allocated += size_bytes as u64;
+        self.heap.total_allocated += size_bytes as u64;
         self.heap.used_bytes += size_bytes;
         Ok(idx)
     }
@@ -415,7 +434,10 @@ impl VmRuntime {
     fn ensure_upvalue_cell(&mut self, frame: &Frame, local_idx: usize) -> VmResult<usize> {
         let pos = frame.stack_base + local_idx;
         if pos >= self.stack.len() {
-            return Err(VmError::InvalidOperand(format!("local index {}", local_idx)));
+            return Err(VmError::InvalidOperand(format!(
+                "local index {}",
+                local_idx
+            )));
         }
         if let Value::Pointer(ptr) = &self.stack[pos] {
             let slot = self.heap.slots.get(*ptr).and_then(|s| s.as_ref());
@@ -466,9 +488,10 @@ impl VmRuntime {
     #[allow(dead_code)]
     pub(crate) fn heap_get_field(&self, ptr: usize, field: &str) -> VmResult<Value> {
         match self.heap_get(ptr)? {
-            Value::Object(obj) => obj.get(field).cloned().ok_or_else(|| {
-                VmError::UndefinedVariable(field.to_string())
-            }),
+            Value::Object(obj) => obj
+                .get(field)
+                .cloned()
+                .ok_or_else(|| VmError::UndefinedVariable(field.to_string())),
             _ => Err(VmError::TypeError("GetField expects object".to_string())),
         }
     }
@@ -521,17 +544,22 @@ impl VmRuntime {
                     args.push(self.pop_value()?);
                 }
                 args.reverse();
-                let result = (native.func)(&args)
-                    .map_err(VmError::RuntimeError)?;
+                let result = (native.func)(&args).map_err(VmError::RuntimeError)?;
                 self.push_value(result)?;
                 self.update_callsite_cache(callsite, CallCacheEntry::Native(native.name));
                 Ok(ControlFlow::Continue)
             }
-            _ => Err(VmError::TypeError("CALL expects function/closure/native".to_string())),
+            _ => Err(VmError::TypeError(
+                "CALL expects function/closure/native".to_string(),
+            )),
         }
     }
 
-    fn match_call_cache(&self, entries: &[CallCacheEntry], callee: &Value) -> Option<CallCacheEntry> {
+    fn match_call_cache(
+        &self,
+        entries: &[CallCacheEntry],
+        callee: &Value,
+    ) -> Option<CallCacheEntry> {
         for entry in entries {
             match (entry, callee) {
                 (CallCacheEntry::Function(idx), Value::Function(ci)) if idx == ci => {
@@ -559,7 +587,9 @@ impl VmRuntime {
         module_name: &str,
     ) -> VmResult<ControlFlow> {
         match entry {
-            CallCacheEntry::Function(func_idx) => self.call_function_index(func_idx, num_args, module_name),
+            CallCacheEntry::Function(func_idx) => {
+                self.call_function_index(func_idx, num_args, module_name)
+            }
             CallCacheEntry::Native(name) => {
                 let native = self.resolve_native(&name)?;
                 if native.arity != num_args {
@@ -577,14 +607,14 @@ impl VmRuntime {
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            CallCacheEntry::Closure(func_idx, up_len) => {
-                match callee {
-                    Value::Closure(c) if c.function_idx == func_idx && c.upvalues.len() == up_len => {
-                        self.call_closure(c, num_args, module_name)
-                    }
-                    _ => Err(VmError::TypeError("CALL expects function/closure/native".to_string())),
+            CallCacheEntry::Closure(func_idx, up_len) => match callee {
+                Value::Closure(c) if c.function_idx == func_idx && c.upvalues.len() == up_len => {
+                    self.call_closure(c, num_args, module_name)
                 }
-            }
+                _ => Err(VmError::TypeError(
+                    "CALL expects function/closure/native".to_string(),
+                )),
+            },
         }
     }
 
@@ -606,7 +636,12 @@ impl VmRuntime {
         entries.push(entry);
     }
 
-    fn call_function_index(&mut self, func_idx: usize, num_args: usize, module_name: &str) -> VmResult<ControlFlow> {
+    fn call_function_index(
+        &mut self,
+        func_idx: usize,
+        num_args: usize,
+        module_name: &str,
+    ) -> VmResult<ControlFlow> {
         let func = self.get_function_for_exec(module_name, func_idx)?;
         if func.arity != num_args {
             return Err(VmError::InvalidOperand(format!(
@@ -646,8 +681,12 @@ impl VmRuntime {
                                     let result = jit::call_i64(&jit_func, &int_args);
                                     self.call_depth = self.call_depth.saturating_sub(1);
                                     match plan.ret_kind {
-                                        jit::JitRetKind::I64 => self.push_value(Value::Int(result))?,
-                                        jit::JitRetKind::Bool => self.push_value(Value::Bool(result != 0))?,
+                                        jit::JitRetKind::I64 => {
+                                            self.push_value(Value::Int(result))?
+                                        }
+                                        jit::JitRetKind::Bool => {
+                                            self.push_value(Value::Bool(result != 0))?
+                                        }
                                         jit::JitRetKind::F64 => {}
                                     }
                                     return Ok(ControlFlow::Continue);
@@ -673,7 +712,8 @@ impl VmRuntime {
                                             self.push_value(Value::Float(result))?;
                                         }
                                         jit::JitRetKind::Bool => {
-                                            let result = jit::call_bool_from_f64(&jit_func, &float_args);
+                                            let result =
+                                                jit::call_bool_from_f64(&jit_func, &float_args);
                                             self.push_value(Value::Bool(result != 0))?;
                                         }
                                         jit::JitRetKind::I64 => {}
@@ -707,7 +747,12 @@ impl VmRuntime {
         Ok(ControlFlow::Continue)
     }
 
-    fn call_closure(&mut self, closure: crate::bytecode::Closure, num_args: usize, module_name: &str) -> VmResult<ControlFlow> {
+    fn call_closure(
+        &mut self,
+        closure: crate::bytecode::Closure,
+        num_args: usize,
+        module_name: &str,
+    ) -> VmResult<ControlFlow> {
         let func = self.get_function_for_exec(module_name, closure.function_idx)?;
         if func.arity != num_args {
             return Err(VmError::InvalidOperand(format!(
@@ -723,7 +768,9 @@ impl VmRuntime {
             )));
         }
         if func.num_locals < num_args + closure.upvalues.len() {
-            return Err(VmError::InvalidOperand("insufficient locals for closure upvalues".to_string()));
+            return Err(VmError::InvalidOperand(
+                "insufficient locals for closure upvalues".to_string(),
+            ));
         }
         self.call_depth += 1;
         if self.call_depth > self.config.max_call_depth {
@@ -759,7 +806,7 @@ impl VmRuntime {
         let mut roots: Vec<Value> = Vec::with_capacity(self.stack.len() + self.globals.len());
         roots.extend(self.stack.iter().cloned());
         roots.extend(self.globals.values().cloned());
-        
+
         // Scan field and index caches
         for (_, _, val) in self.field_cache.values() {
             roots.push(val.clone());
@@ -796,7 +843,8 @@ impl VmRuntime {
         for (idx, slot) in self.heap.slots.iter_mut().enumerate() {
             if slot.is_some() && !marks[idx] {
                 if let Some(slot_value) = slot.take() {
-                    self.heap.used_bytes = self.heap.used_bytes.saturating_sub(slot_value.size_bytes);
+                    self.heap.used_bytes =
+                        self.heap.used_bytes.saturating_sub(slot_value.size_bytes);
                     self.heap.free_list.push(idx);
                 }
             }
@@ -842,21 +890,33 @@ impl VmRuntime {
     }
 
     /// Register a native function
-    pub fn register_native(&mut self, name: &str, arity: usize, func: fn(&[Value]) -> Result<Value, String>) {
-        self.natives.insert(name.to_string(), NativeFunction {
-            name: name.to_string(),
-            arity,
-            func,
-        });
+    pub fn register_native(
+        &mut self,
+        name: &str,
+        arity: usize,
+        func: fn(&[Value]) -> Result<Value, String>,
+    ) {
+        self.natives.insert(
+            name.to_string(),
+            NativeFunction {
+                name: name.to_string(),
+                arity,
+                func,
+            },
+        );
     }
 
     /// Run the VM
     pub fn run(&mut self, module_name: &str) -> VmResult<Value> {
-        let module = self.modules.get(module_name)
+        let module = self
+            .modules
+            .get(module_name)
             .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", module_name)))?;
 
         // Find main function
-        let main_func_idx = module.functions.iter()
+        let main_func_idx = module
+            .functions
+            .iter()
             .position(|f| f.name == "main")
             .ok_or_else(|| VmError::UndefinedFunction("main".to_string()))?;
 
@@ -864,7 +924,12 @@ impl VmRuntime {
     }
 
     /// Run a specific function
-    pub fn run_function(&mut self, module_name: &str, func_idx: usize, args: Vec<Value>) -> VmResult<Value> {
+    pub fn run_function(
+        &mut self,
+        module_name: &str,
+        func_idx: usize,
+        args: Vec<Value>,
+    ) -> VmResult<Value> {
         let func = self.get_function_for_exec(module_name, func_idx)?;
 
         // Reset execution state for this run
@@ -931,10 +996,7 @@ impl VmRuntime {
                     .frames
                     .last()
                     .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?;
-                (
-                    frame.ip,
-                    frame.function.instructions.len(),
-                )
+                (frame.ip, frame.function.instructions.len())
             };
 
             // Check IP bounds
@@ -961,17 +1023,20 @@ impl VmRuntime {
                         frame.function.clone()
                     };
                     if jit::vm_plan(&func) {
-                        if let Ok(jit_func) = jit::compile_vm(engine, &module_name, function_idx, &func) {
+                        if let Ok(jit_func) =
+                            jit::compile_vm(engine, &module_name, function_idx, &func)
+                        {
                             self.jit_clear_state();
                             // SAFETY: `self` is a valid, non-null, properly initialised
                             // `VmRuntime` pointer and is not aliased during this call.
-                            let status = unsafe { jit::call_vm(&jit_func, self as *mut VmRuntime, ip as i32) };
+                            let status = unsafe {
+                                jit::call_vm(&jit_func, self as *mut VmRuntime, ip as i32)
+                            };
                             if status == 0 {
                                 let val = self.jit_take_retval().unwrap_or(Value::Unit);
-                                let finished = self
-                                    .frames
-                                    .pop()
-                                    .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?;
+                                let finished = self.frames.pop().ok_or_else(|| {
+                                    VmError::RuntimeError("No frames".to_string())
+                                })?;
                                 self.call_depth = self.call_depth.saturating_sub(1);
                                 self.stack.truncate(finished.stack_base);
                                 if self.frames.is_empty() {
@@ -1011,12 +1076,12 @@ impl VmRuntime {
             if let Some(mut hook) = self.config.on_step.take() {
                 // We must construct a temporary NyxVm to pass to the hook
                 // which is safe because we just pass it a pointer reference effectively.
-                // However, the hook signature takes NyxVm. To avoid lifetime/borrow 
+                // However, the hook signature takes NyxVm. To avoid lifetime/borrow
                 // checker issues, the caller will need to access state carefully.
                 // Given the design, let's just use a pointer to avoid borrowing issues in the hook.
                 let ptr = self as *mut VmRuntime;
                 let vm_ref = unsafe { &mut *(ptr as *mut crate::NyxVm) };
-                
+
                 let res = hook(vm_ref, &instr, instr_idx);
                 self.config.on_step = Some(hook);
                 res?
@@ -1047,16 +1112,16 @@ impl VmRuntime {
     }
 
     /// Execute a single instruction
-    fn execute_instruction(&mut self, instr: BytecodeInstr, instr_idx: usize) -> VmResult<ControlFlow> {
+    fn execute_instruction(
+        &mut self,
+        instr: BytecodeInstr,
+        instr_idx: usize,
+    ) -> VmResult<ControlFlow> {
         match instr.opcode {
-            OpCode::HALT => {
-                Ok(ControlFlow::Return(Value::Unit))
-            }
-            
-            OpCode::NOP => {
-                Ok(ControlFlow::Continue)
-            }
-            
+            OpCode::HALT => Ok(ControlFlow::Return(Value::Unit)),
+
+            OpCode::NOP => Ok(ControlFlow::Continue),
+
             OpCode::PUSH => {
                 let idx = self.operand_usize(&instr, 0, "constant index")?;
                 let frame = self
@@ -1067,18 +1132,14 @@ impl VmRuntime {
                 self.push_value(value)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::POP => {
                 let _ = self.pop_value()?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::DUP => {
-                let top = self
-                    .stack
-                    .last()
-                    .ok_or(VmError::StackUnderflow)?
-                    .clone();
+                let top = self.stack.last().ok_or(VmError::StackUnderflow)?.clone();
                 self.push_value(top)?;
                 Ok(ControlFlow::Continue)
             }
@@ -1135,7 +1196,7 @@ impl VmRuntime {
                 self.stack[pos] = value;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::ADD => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1151,7 +1212,7 @@ impl VmRuntime {
                 }
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::SUB => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1159,7 +1220,7 @@ impl VmRuntime {
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::MUL => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1167,7 +1228,7 @@ impl VmRuntime {
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::DIV => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1178,7 +1239,7 @@ impl VmRuntime {
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::MOD => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1226,7 +1287,9 @@ impl VmRuntime {
                         self.push_value(Value::Int(rem))?;
                         Ok(ControlFlow::Continue)
                     }
-                    _ => Err(VmError::TypeError("DivRem expects int operands".to_string())),
+                    _ => Err(VmError::TypeError(
+                        "DivRem expects int operands".to_string(),
+                    )),
                 }
             }
 
@@ -1235,7 +1298,11 @@ impl VmRuntime {
                 let result = match a {
                     Value::Int(i) => Value::Int(i.abs()),
                     Value::Float(f) => Value::Float(f.abs()),
-                    _ => return Err(VmError::TypeError("ABS expects numeric operand".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "ABS expects numeric operand".to_string(),
+                        ))
+                    }
                 };
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
@@ -1249,7 +1316,11 @@ impl VmRuntime {
                     (Value::Float(af), Value::Float(bf)) => Value::Float(af.min(bf)),
                     (Value::Int(ai), Value::Float(bf)) => Value::Float((ai as f64).min(bf)),
                     (Value::Float(af), Value::Int(bi)) => Value::Float(af.min(bi as f64)),
-                    _ => return Err(VmError::TypeError("MIN expects numeric operands".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "MIN expects numeric operands".to_string(),
+                        ))
+                    }
                 };
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
@@ -1263,39 +1334,43 @@ impl VmRuntime {
                     (Value::Float(af), Value::Float(bf)) => Value::Float(af.max(bf)),
                     (Value::Int(ai), Value::Float(bf)) => Value::Float((ai as f64).max(bf)),
                     (Value::Float(af), Value::Int(bi)) => Value::Float(af.max(bi as f64)),
-                    _ => return Err(VmError::TypeError("MAX expects numeric operands".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "MAX expects numeric operands".to_string(),
+                        ))
+                    }
                 };
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::NEG => {
                 let a = self.pop_value()?;
                 let result = self.unary_op(&a, |a| -a)?;
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::NOT => {
                 let a = self.pop_value()?;
                 self.push_value(Value::Bool(!a.is_truthy()))?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::EQ => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
                 self.push_value(Value::Bool(a == b))?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::NE => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
                 self.push_value(Value::Bool(a != b))?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::LT => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1303,7 +1378,7 @@ impl VmRuntime {
                 self.push_value(Value::Bool(result))?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::GT => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
@@ -1336,14 +1411,18 @@ impl VmRuntime {
                     (Value::Float(af), Value::Float(bf)) => {
                         af.partial_cmp(&bf).unwrap_or(std::cmp::Ordering::Equal)
                     }
-                    (Value::Int(ai), Value::Float(bf)) => {
-                        (ai as f64).partial_cmp(&bf).unwrap_or(std::cmp::Ordering::Equal)
-                    }
-                    (Value::Float(af), Value::Int(bi)) => {
-                        af.partial_cmp(&(bi as f64)).unwrap_or(std::cmp::Ordering::Equal)
-                    }
+                    (Value::Int(ai), Value::Float(bf)) => (ai as f64)
+                        .partial_cmp(&bf)
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                    (Value::Float(af), Value::Int(bi)) => af
+                        .partial_cmp(&(bi as f64))
+                        .unwrap_or(std::cmp::Ordering::Equal),
                     (Value::String(a), Value::String(b)) => a.cmp(&b),
-                    _ => return Err(VmError::TypeError("CMP expects comparable operands".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "CMP expects comparable operands".to_string(),
+                        ))
+                    }
                 };
                 let result = match ord {
                     std::cmp::Ordering::Less => -1,
@@ -1467,7 +1546,7 @@ impl VmRuntime {
                     _ => Err(VmError::TypeError("USHR expects int operands".to_string())),
                 }
             }
-            
+
             OpCode::JMP => {
                 let target = self.operand_usize(&instr, 0, "jump target")?;
                 let frame = self
@@ -1480,7 +1559,7 @@ impl VmRuntime {
                 frame.ip = target;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::JZ => {
                 let cond = self.pop_value()?;
                 let target = self.operand_usize(&instr, 0, "jump target")?;
@@ -1512,7 +1591,7 @@ impl VmRuntime {
                 }
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::RET => {
                 let frame = self
                     .frames
@@ -1525,7 +1604,7 @@ impl VmRuntime {
                 };
                 Ok(ControlFlow::Return(value))
             }
-            
+
             OpCode::CALL => {
                 let func_raw = self.operand_i32(&instr, 0, "function index")?;
                 let num_args = self.operand_usize(&instr, 1, "argument count")?;
@@ -1547,7 +1626,9 @@ impl VmRuntime {
                 }
 
                 if func_raw < 0 {
-                    return Err(VmError::InvalidOperand("negative function index".to_string()));
+                    return Err(VmError::InvalidOperand(
+                        "negative function index".to_string(),
+                    ));
                 }
                 let func_idx = func_raw as usize;
 
@@ -1577,12 +1658,11 @@ impl VmRuntime {
                     args.push(self.pop_value()?);
                 }
                 args.reverse();
-                let result = (native.func)(&args)
-                    .map_err(VmError::RuntimeError)?;
+                let result = (native.func)(&args).map_err(VmError::RuntimeError)?;
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::LOAD => {
                 let idx = self.operand_usize(&instr, 0, "local index")?;
                 let frame = self
@@ -1612,7 +1692,7 @@ impl VmRuntime {
                 }
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::STORE => {
                 let idx = self.operand_usize(&instr, 0, "local index")?;
                 let value = self.pop_value()?;
@@ -1641,7 +1721,7 @@ impl VmRuntime {
                 }
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::GetGlobal => {
                 let idx = self.operand_usize(&instr, 0, "global name index")?;
                 let frame = self
@@ -1650,7 +1730,8 @@ impl VmRuntime {
                     .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?;
                 let name = self.resolve_constant_string(frame, idx, "global name")?;
                 if let Some((version, value)) =
-                    self.global_cache.get(&(frame.module_name.clone(), frame.function_idx, idx))
+                    self.global_cache
+                        .get(&(frame.module_name.clone(), frame.function_idx, idx))
                 {
                     if *version == self.global_version {
                         self.push_value(value.clone())?;
@@ -1677,14 +1758,10 @@ impl VmRuntime {
                 self.push_value(value)?;
                 Ok(ControlFlow::Continue)
             }
-            
+
             OpCode::SetGlobal => {
                 let idx = self.operand_usize(&instr, 0, "global name index")?;
-                let value = self
-                    .stack
-                    .last()
-                    .cloned()
-                    .ok_or(VmError::StackUnderflow)?;
+                let value = self.stack.last().cloned().ok_or(VmError::StackUnderflow)?;
                 let frame = self
                     .frames
                     .last()
@@ -1697,11 +1774,7 @@ impl VmRuntime {
 
             OpCode::SetGlobalM => {
                 let idx = self.operand_usize(&instr, 0, "global name index")?;
-                let value = self
-                    .stack
-                    .last()
-                    .cloned()
-                    .ok_or(VmError::StackUnderflow)?;
+                let value = self.stack.last().cloned().ok_or(VmError::StackUnderflow)?;
                 let frame = self
                     .frames
                     .last()
@@ -1739,7 +1812,7 @@ impl VmRuntime {
                     _ => Err(VmError::TypeError("FREE expects pointer".to_string())),
                 }
             }
-            
+
             OpCode::NewArray => {
                 let len = self.operand_usize(&instr, 0, "array length")?;
                 if len > self.stack.len() {
@@ -1760,14 +1833,15 @@ impl VmRuntime {
                     .frames
                     .last()
                     .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?;
-                let module = self
-                    .modules
-                    .get(&frame.module_name)
-                    .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", frame.module_name)))?;
+                let module = self.modules.get(&frame.module_name).ok_or_else(|| {
+                    VmError::RuntimeError(format!("Module not found: {}", frame.module_name))
+                })?;
                 let value = module
                     .constants
                     .get(idx)
-                    .ok_or_else(|| VmError::InvalidOperand(format!("module constant index {}", idx)))?
+                    .ok_or_else(|| {
+                        VmError::InvalidOperand(format!("module constant index {}", idx))
+                    })?
                     .clone();
                 self.push_value(value)?;
                 Ok(ControlFlow::Continue)
@@ -1784,13 +1858,12 @@ impl VmRuntime {
                         .frames
                         .last()
                         .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?;
-                    let module = self
-                        .modules
-                        .get(&current.module_name)
-                        .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", current.module_name)))?;
-                    let func = module
-                        .get_function(func_idx)
-                        .ok_or_else(|| VmError::UndefinedFunction(format!("Function index: {}", func_idx)))?;
+                    let module = self.modules.get(&current.module_name).ok_or_else(|| {
+                        VmError::RuntimeError(format!("Module not found: {}", current.module_name))
+                    })?;
+                    let func = module.get_function(func_idx).ok_or_else(|| {
+                        VmError::UndefinedFunction(format!("Function index: {}", func_idx))
+                    })?;
                     if func.upvalues.len() != num_upvalues {
                         return Err(VmError::InvalidOperand(format!(
                             "upvalue count mismatch: expected {}, got {}",
@@ -1820,7 +1893,9 @@ impl VmRuntime {
                 let num_upvalues = self.operand_usize(&instr, 1, "upvalue count")?;
                 let expected = 2 + num_upvalues;
                 if instr.operands.len() < expected {
-                    return Err(VmError::InvalidOperand("missing upvalue indices".to_string()));
+                    return Err(VmError::InvalidOperand(
+                        "missing upvalue indices".to_string(),
+                    ));
                 }
                 let frame = self
                     .frames
@@ -1828,13 +1903,12 @@ impl VmRuntime {
                     .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?
                     .clone();
                 let upvalue_names = {
-                    let module = self
-                        .modules
-                        .get(&frame.module_name)
-                        .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", frame.module_name)))?;
-                    let func = module
-                        .get_function(func_idx)
-                        .ok_or_else(|| VmError::UndefinedFunction(format!("Function index: {}", func_idx)))?;
+                    let module = self.modules.get(&frame.module_name).ok_or_else(|| {
+                        VmError::RuntimeError(format!("Module not found: {}", frame.module_name))
+                    })?;
+                    let func = module.get_function(func_idx).ok_or_else(|| {
+                        VmError::UndefinedFunction(format!("Function index: {}", func_idx))
+                    })?;
                     if func.upvalues.len() != num_upvalues {
                         return Err(VmError::InvalidOperand(format!(
                             "upvalue count mismatch: expected {}, got {}",
@@ -1850,7 +1924,8 @@ impl VmRuntime {
                     let local_idx = self.operand_usize(&instr, 2 + i, "upvalue local")?;
                     let ptr = self.ensure_upvalue_cell(&frame, local_idx)?;
                     upvalues.push(Value::Pointer(ptr));
-                    upvalue_captures.push(crate::bytecode::UpvalueCapture::ByRefLocal { local_idx });
+                    upvalue_captures
+                        .push(crate::bytecode::UpvalueCapture::ByRefLocal { local_idx });
                 }
                 self.push_value(Value::Closure(crate::bytecode::Closure {
                     function_idx: func_idx,
@@ -1872,13 +1947,12 @@ impl VmRuntime {
                         .frames
                         .last()
                         .ok_or_else(|| VmError::RuntimeError("No frames".to_string()))?;
-                    let module = self
-                        .modules
-                        .get(&frame.module_name)
-                        .ok_or_else(|| VmError::RuntimeError(format!("Module not found: {}", frame.module_name)))?;
-                    let func = module
-                        .get_function(func_idx)
-                        .ok_or_else(|| VmError::UndefinedFunction(format!("Function index: {}", func_idx)))?;
+                    let module = self.modules.get(&frame.module_name).ok_or_else(|| {
+                        VmError::RuntimeError(format!("Module not found: {}", frame.module_name))
+                    })?;
+                    let func = module.get_function(func_idx).ok_or_else(|| {
+                        VmError::UndefinedFunction(format!("Function index: {}", func_idx))
+                    })?;
                     if func.upvalues.len() != num_upvalues {
                         return Err(VmError::InvalidOperand(format!(
                             "upvalue count mismatch: expected {}, got {}",
@@ -1932,7 +2006,9 @@ impl VmRuntime {
                     let key = self.pop_value()?;
                     let key_str = match key {
                         Value::String(s) => s,
-                        _ => return Err(VmError::TypeError("object key must be string".to_string())),
+                        _ => {
+                            return Err(VmError::TypeError("object key must be string".to_string()))
+                        }
                     };
                     obj.insert(key_str, value);
                 }
@@ -1950,7 +2026,9 @@ impl VmRuntime {
                 match target {
                     Value::Pointer(ptr) => {
                         if let Some(slot) = self.heap.slots.get(ptr).and_then(|s| s.as_ref()) {
-                            if let Some((gen, ver, value)) = self.field_cache.get(&(ptr, field.clone())) {
+                            if let Some((gen, ver, value)) =
+                                self.field_cache.get(&(ptr, field.clone()))
+                            {
                                 if *gen == slot.generation && *ver == slot.version {
                                     self.push_value(value.clone())?;
                                     return Ok(ControlFlow::Continue);
@@ -1960,12 +2038,17 @@ impl VmRuntime {
                         let resolved = self.heap_get(ptr)?.clone();
                         match resolved {
                             Value::Object(obj) => {
-                                let value = obj.get(&field).cloned().ok_or_else(|| {
-                                    VmError::UndefinedVariable(field.clone())
-                                })?;
-                                if let Some(slot) = self.heap.slots.get(ptr).and_then(|s| s.as_ref()) {
-                                    self.field_cache
-                                        .insert((ptr, field), (slot.generation, slot.version, value.clone()));
+                                let value = obj
+                                    .get(&field)
+                                    .cloned()
+                                    .ok_or_else(|| VmError::UndefinedVariable(field.clone()))?;
+                                if let Some(slot) =
+                                    self.heap.slots.get(ptr).and_then(|s| s.as_ref())
+                                {
+                                    self.field_cache.insert(
+                                        (ptr, field),
+                                        (slot.generation, slot.version, value.clone()),
+                                    );
                                 }
                                 self.push_value(value)?;
                                 Ok(ControlFlow::Continue)
@@ -1977,9 +2060,10 @@ impl VmRuntime {
                         let resolved = target;
                         match resolved {
                             Value::Object(obj) => {
-                                let value = obj.get(&field).cloned().ok_or_else(|| {
-                                    VmError::UndefinedVariable(field.clone())
-                                })?;
+                                let value = obj
+                                    .get(&field)
+                                    .cloned()
+                                    .ok_or_else(|| VmError::UndefinedVariable(field.clone()))?;
                                 self.push_value(value)?;
                                 Ok(ControlFlow::Continue)
                             }
@@ -2003,7 +2087,9 @@ impl VmRuntime {
                         match obj {
                             Value::Object(map) => {
                                 map.insert(field, value);
-                                if let Some(slot) = self.heap.slots.get_mut(ptr).and_then(|s| s.as_mut()) {
+                                if let Some(slot) =
+                                    self.heap.slots.get_mut(ptr).and_then(|s| s.as_mut())
+                                {
                                     slot.version = slot.version.saturating_add(1);
                                 }
                                 self.push_value(Value::Pointer(ptr))?;
@@ -2045,12 +2131,18 @@ impl VmRuntime {
                             Value::Array(arr) => {
                                 let idx = idx as isize;
                                 if idx < 0 || idx as usize >= arr.len() {
-                                    return Err(VmError::InvalidOperand("index out of bounds".to_string()));
+                                    return Err(VmError::InvalidOperand(
+                                        "index out of bounds".to_string(),
+                                    ));
                                 }
                                 let value = arr[idx as usize].clone();
-                                if let Some(slot) = self.heap.slots.get(ptr).and_then(|s| s.as_ref()) {
-                                    self.index_cache
-                                        .insert((ptr, idx as i64), (slot.generation, slot.version, value.clone()));
+                                if let Some(slot) =
+                                    self.heap.slots.get(ptr).and_then(|s| s.as_ref())
+                                {
+                                    self.index_cache.insert(
+                                        (ptr, idx as i64),
+                                        (slot.generation, slot.version, value.clone()),
+                                    );
                                 }
                                 self.push_value(value)?;
                                 Ok(ControlFlow::Continue)
@@ -2058,7 +2150,9 @@ impl VmRuntime {
                             Value::String(s) => {
                                 let idx = idx as isize;
                                 if idx < 0 {
-                                    return Err(VmError::InvalidOperand("index out of bounds".to_string()));
+                                    return Err(VmError::InvalidOperand(
+                                        "index out of bounds".to_string(),
+                                    ));
                                 }
                                 let ch = s.chars().nth(idx as usize).ok_or_else(|| {
                                     VmError::InvalidOperand("index out of bounds".to_string())
@@ -2066,7 +2160,9 @@ impl VmRuntime {
                                 self.push_value(Value::String(ch.to_string()))?;
                                 Ok(ControlFlow::Continue)
                             }
-                            _ => Err(VmError::TypeError("GetIndex expects array or string".to_string())),
+                            _ => Err(VmError::TypeError(
+                                "GetIndex expects array or string".to_string(),
+                            )),
                         }
                     }
                     _ => {
@@ -2075,7 +2171,9 @@ impl VmRuntime {
                             Value::Array(arr) => {
                                 let idx = idx as isize;
                                 if idx < 0 || idx as usize >= arr.len() {
-                                    return Err(VmError::InvalidOperand("index out of bounds".to_string()));
+                                    return Err(VmError::InvalidOperand(
+                                        "index out of bounds".to_string(),
+                                    ));
                                 }
                                 self.push_value(arr[idx as usize].clone())?;
                                 Ok(ControlFlow::Continue)
@@ -2083,7 +2181,9 @@ impl VmRuntime {
                             Value::String(s) => {
                                 let idx = idx as isize;
                                 if idx < 0 {
-                                    return Err(VmError::InvalidOperand("index out of bounds".to_string()));
+                                    return Err(VmError::InvalidOperand(
+                                        "index out of bounds".to_string(),
+                                    ));
                                 }
                                 let ch = s.chars().nth(idx as usize).ok_or_else(|| {
                                     VmError::InvalidOperand("index out of bounds".to_string())
@@ -2091,7 +2191,9 @@ impl VmRuntime {
                                 self.push_value(Value::String(ch.to_string()))?;
                                 Ok(ControlFlow::Continue)
                             }
-                            _ => Err(VmError::TypeError("GetIndex expects array or string".to_string())),
+                            _ => Err(VmError::TypeError(
+                                "GetIndex expects array or string".to_string(),
+                            )),
                         }
                     }
                 }
@@ -2112,10 +2214,14 @@ impl VmRuntime {
                             Value::Array(arr) => {
                                 let idx = idx as isize;
                                 if idx < 0 || idx as usize >= arr.len() {
-                                    return Err(VmError::InvalidOperand("index out of bounds".to_string()));
+                                    return Err(VmError::InvalidOperand(
+                                        "index out of bounds".to_string(),
+                                    ));
                                 }
                                 arr[idx as usize] = value;
-                                if let Some(slot) = self.heap.slots.get_mut(ptr).and_then(|s| s.as_mut()) {
+                                if let Some(slot) =
+                                    self.heap.slots.get_mut(ptr).and_then(|s| s.as_mut())
+                                {
                                     slot.version = slot.version.saturating_add(1);
                                 }
                                 self.push_value(Value::Pointer(ptr))?;
@@ -2138,7 +2244,7 @@ impl VmRuntime {
                     _ => Err(VmError::TypeError("SetIndex expects array".to_string())),
                 }
             }
-            
+
             OpCode::LEN => {
                 let value = self.pop_value()?;
                 let resolved = match value {
@@ -2176,8 +2282,12 @@ impl VmRuntime {
                         let len = arr.len() as isize;
                         let mut s = start as isize;
                         let mut e = end as isize;
-                        if s < 0 { s += len; }
-                        if e < 0 { e += len; }
+                        if s < 0 {
+                            s += len;
+                        }
+                        if e < 0 {
+                            e += len;
+                        }
                         if s < 0 || e < s || e > len {
                             return Err(VmError::InvalidOperand("slice out of bounds".to_string()));
                         }
@@ -2190,8 +2300,12 @@ impl VmRuntime {
                         let len = chars.len() as isize;
                         let mut s_idx = start as isize;
                         let mut e_idx = end as isize;
-                        if s_idx < 0 { s_idx += len; }
-                        if e_idx < 0 { e_idx += len; }
+                        if s_idx < 0 {
+                            s_idx += len;
+                        }
+                        if e_idx < 0 {
+                            e_idx += len;
+                        }
                         if s_idx < 0 || e_idx < s_idx || e_idx > len {
                             return Err(VmError::InvalidOperand("slice out of bounds".to_string()));
                         }
@@ -2199,7 +2313,9 @@ impl VmRuntime {
                         self.push_value(Value::String(slice))?;
                         Ok(ControlFlow::Continue)
                     }
-                    _ => Err(VmError::TypeError("SLICE expects array or string".to_string())),
+                    _ => Err(VmError::TypeError(
+                        "SLICE expects array or string".to_string(),
+                    )),
                 }
             }
 
@@ -2219,7 +2335,9 @@ impl VmRuntime {
                         self.push_value(Value::Bool(arr.contains(&n)))?;
                         Ok(ControlFlow::Continue)
                     }
-                    _ => Err(VmError::TypeError("CONTAINS expects (string, string) or (array, any)".to_string())),
+                    _ => Err(VmError::TypeError(
+                        "CONTAINS expects (string, string) or (array, any)".to_string(),
+                    )),
                 }
             }
 
@@ -2232,11 +2350,14 @@ impl VmRuntime {
                 };
                 match (resolved_input, delimiter) {
                     (Value::String(s), Value::String(d)) => {
-                        let parts: Vec<Value> = s.split(&d).map(|p| Value::String(p.to_string())).collect();
+                        let parts: Vec<Value> =
+                            s.split(&d).map(|p| Value::String(p.to_string())).collect();
                         self.push_value(Value::Array(parts))?;
                         Ok(ControlFlow::Continue)
                     }
-                    _ => Err(VmError::TypeError("SPLIT expects (string, string)".to_string())),
+                    _ => Err(VmError::TypeError(
+                        "SPLIT expects (string, string)".to_string(),
+                    )),
                 }
             }
 
@@ -2248,7 +2369,8 @@ impl VmRuntime {
                 };
                 match resolved_input {
                     Value::String(s) => {
-                        let chars: Vec<Value> = s.chars().map(|c| Value::String(c.to_string())).collect();
+                        let chars: Vec<Value> =
+                            s.chars().map(|c| Value::String(c.to_string())).collect();
                         self.push_value(Value::Array(chars))?;
                         Ok(ControlFlow::Continue)
                     }
@@ -2267,14 +2389,18 @@ impl VmRuntime {
                                     self.push_value(Value::Null)?;
                                 } else {
                                     let first = arr.remove(0);
-                                    if let Some(slot) = self.heap.slots.get_mut(ptr).and_then(|s| s.as_mut()) {
+                                    if let Some(slot) =
+                                        self.heap.slots.get_mut(ptr).and_then(|s| s.as_mut())
+                                    {
                                         slot.version = slot.version.saturating_add(1);
                                     }
                                     self.push_value(first)?;
                                 }
                                 Ok(ControlFlow::Continue)
                             }
-                            _ => Err(VmError::TypeError("SHIFT expects array pointer".to_string())),
+                            _ => Err(VmError::TypeError(
+                                "SHIFT expects array pointer".to_string(),
+                            )),
                         }
                     }
                     Value::Array(mut arr) => {
@@ -2282,7 +2408,7 @@ impl VmRuntime {
                             self.push_value(Value::Null)?;
                         } else {
                             let first = arr.remove(0);
-                            // Push the remaining array back to stack? 
+                            // Push the remaining array back to stack?
                             // Usually SHIFT modifies the source. If it's on stack, we just return the element.
                             // But wait, if someone does `[1,2].shift()`, they expect 1.
                             // If they did `let a = [1,2]; a.shift()`, they expect `a` to be `[2]`.
@@ -2291,7 +2417,9 @@ impl VmRuntime {
                         }
                         Ok(ControlFlow::Continue)
                     }
-                    _ => Err(VmError::TypeError("SHIFT expects array or array pointer".to_string())),
+                    _ => Err(VmError::TypeError(
+                        "SHIFT expects array or array pointer".to_string(),
+                    )),
                 }
             }
         }
@@ -2307,16 +2435,12 @@ impl VmRuntime {
                 let result = op(*ai as f64, *bi as f64) as i64;
                 Ok(Value::Int(result))
             }
-            (Value::Float(af), Value::Float(bf)) => {
-                Ok(Value::Float(op(*af, *bf)))
-            }
-            (Value::Int(ai), Value::Float(bf)) => {
-                Ok(Value::Float(op(*ai as f64, *bf)))
-            }
-            (Value::Float(af), Value::Int(bi)) => {
-                Ok(Value::Float(op(*af, *bi as f64)))
-            }
-            _ => Err(VmError::TypeError("Invalid operands for binary operation".to_string()))
+            (Value::Float(af), Value::Float(bf)) => Ok(Value::Float(op(*af, *bf))),
+            (Value::Int(ai), Value::Float(bf)) => Ok(Value::Float(op(*ai as f64, *bf))),
+            (Value::Float(af), Value::Int(bi)) => Ok(Value::Float(op(*af, *bi as f64))),
+            _ => Err(VmError::TypeError(
+                "Invalid operands for binary operation".to_string(),
+            )),
         }
     }
 
@@ -2328,7 +2452,9 @@ impl VmRuntime {
         match a {
             Value::Int(ai) => Ok(Value::Int(op(*ai as f64) as i64)),
             Value::Float(af) => Ok(Value::Float(op(*af))),
-            _ => Err(VmError::TypeError("Invalid operand for unary operation".to_string()))
+            _ => Err(VmError::TypeError(
+                "Invalid operand for unary operation".to_string(),
+            )),
         }
     }
 
@@ -2342,7 +2468,9 @@ impl VmRuntime {
             (Value::Float(af), Value::Float(bf)) => Ok(op(*af, *bf)),
             (Value::Int(ai), Value::Float(bf)) => Ok(op(*ai as f64, *bf)),
             (Value::Float(af), Value::Int(bi)) => Ok(op(*af, *bi as f64)),
-            _ => Err(VmError::TypeError("Invalid operands for comparison".to_string()))
+            _ => Err(VmError::TypeError(
+                "Invalid operands for comparison".to_string(),
+            )),
         }
     }
 
@@ -2394,7 +2522,12 @@ impl NyxVm {
     }
 
     /// Register native function
-    pub fn register(&mut self, name: &str, arity: usize, func: fn(&[Value]) -> Result<Value, String>) {
+    pub fn register(
+        &mut self,
+        name: &str,
+        arity: usize,
+        func: fn(&[Value]) -> Result<Value, String>,
+    ) {
         self.runtime.register_native(name, arity, func);
     }
 
@@ -2404,7 +2537,12 @@ impl NyxVm {
     }
 
     /// Run specific function
-    pub fn run_function(&mut self, module_name: &str, func_idx: usize, args: Vec<Value>) -> VmResult<Value> {
+    pub fn run_function(
+        &mut self,
+        module_name: &str,
+        func_idx: usize,
+        args: Vec<Value>,
+    ) -> VmResult<Value> {
         self.runtime.run_function(module_name, func_idx, args)
     }
 
@@ -2413,7 +2551,7 @@ impl NyxVm {
         &self.runtime
     }
 
-    /// Access the underlying runtime state mutably 
+    /// Access the underlying runtime state mutably
     pub fn runtime_mut(&mut self) -> &mut VmRuntime {
         &mut self.runtime
     }
@@ -2463,7 +2601,10 @@ unsafe fn jit_wrap(rt: *mut VmRuntime, f: impl FnOnce(&mut VmRuntime) -> i64) ->
     let Some(rt) = rt.as_mut() else { return -1 };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(rt))) {
         Ok(v) => v,
-        Err(_) => jit_err(rt, VmError::RuntimeError("panic in JIT runtime stub".to_string())),
+        Err(_) => jit_err(
+            rt,
+            VmError::RuntimeError("panic in JIT runtime stub".to_string()),
+        ),
     }
 }
 
@@ -2473,7 +2614,8 @@ pub(crate) unsafe extern "C" fn nyx_jit_stack_guard(rt: *mut VmRuntime) -> i64 {
         if rt.frames.len() >= rt.config.max_call_depth {
             return jit_err(rt, VmError::StackOverflow);
         }
-        if rt.stack.len() + 100 > rt.config.max_stack_size { // Safety buffer
+        if rt.stack.len() + 100 > rt.config.max_stack_size {
+            // Safety buffer
             return jit_err(rt, VmError::StackOverflow);
         }
         0
@@ -2484,7 +2626,14 @@ pub(crate) unsafe extern "C" fn nyx_jit_stack_guard(rt: *mut VmRuntime) -> i64 {
 pub(crate) unsafe extern "C" fn nyx_jit_check_arity(rt: *mut VmRuntime, expected: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if rt.stack.len() < expected as usize {
-             return jit_err(rt, VmError::TypeError(format!("arity mismatch: expected {}, but stack size is only {}", expected, rt.stack.len())));
+            return jit_err(
+                rt,
+                VmError::TypeError(format!(
+                    "arity mismatch: expected {}, but stack size is only {}",
+                    expected,
+                    rt.stack.len()
+                )),
+            );
         }
         0
     })
@@ -2505,7 +2654,12 @@ pub(crate) unsafe extern "C" fn nyx_jit_tick(rt: *mut VmRuntime, ip: i32) -> i64
         }
         rt.instruction_count = rt.instruction_count.saturating_add(1);
         if rt.instruction_count % 1 == 0 {
-             println!("JIT TICK: ip={}, i_count={}, stack_len={}", ip, rt.instruction_count, rt.stack.len());
+            println!(
+                "JIT TICK: ip={}, i_count={}, stack_len={}",
+                ip,
+                rt.instruction_count,
+                rt.stack.len()
+            );
         }
 
         match rt.check_limits() {
@@ -2533,12 +2687,18 @@ pub(crate) unsafe extern "C" fn nyx_jit_pop_truthy(rt: *mut VmRuntime) -> i64 {
 pub(crate) unsafe extern "C" fn nyx_jit_push_const(rt: *mut VmRuntime, idx: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if idx < 0 {
-            return jit_err(rt, VmError::InvalidOperand("negative constant index".to_string()));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand("negative constant index".to_string()),
+            );
         }
         let Some(frame) = rt.frames.last() else {
             return jit_err(rt, VmError::RuntimeError("No frames".to_string()));
         };
-        match rt.resolve_constant(frame, idx as usize).and_then(|v| rt.push_value(v)) {
+        match rt
+            .resolve_constant(frame, idx as usize)
+            .and_then(|v| rt.push_value(v))
+        {
             Ok(()) => 0,
             Err(e) => jit_err(rt, e),
         }
@@ -2549,13 +2709,19 @@ pub(crate) unsafe extern "C" fn nyx_jit_push_const(rt: *mut VmRuntime, idx: i32)
 pub(crate) unsafe extern "C" fn nyx_jit_pushm(rt: *mut VmRuntime, idx: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if idx < 0 {
-            return jit_err(rt, VmError::InvalidOperand("negative module constant index".to_string()));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand("negative module constant index".to_string()),
+            );
         }
         let Some(frame) = rt.frames.last() else {
             return jit_err(rt, VmError::RuntimeError("No frames".to_string()));
         };
         let Some(module) = rt.modules.get(&frame.module_name) else {
-            return jit_err(rt, VmError::RuntimeError(format!("Module not found: {}", frame.module_name)));
+            return jit_err(
+                rt,
+                VmError::RuntimeError(format!("Module not found: {}", frame.module_name)),
+            );
         };
         match module
             .constants
@@ -2608,7 +2774,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_swap(rt: *mut VmRuntime) -> i64 {
 pub(crate) unsafe extern "C" fn nyx_jit_load(rt: *mut VmRuntime, local_idx: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if local_idx < 0 {
-            return jit_err(rt, VmError::InvalidOperand("negative local index".to_string()));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand("negative local index".to_string()),
+            );
         }
         let Some(frame) = rt.frames.last() else {
             return jit_err(rt, VmError::RuntimeError("No frames".to_string()));
@@ -2616,9 +2785,14 @@ pub(crate) unsafe extern "C" fn nyx_jit_load(rt: *mut VmRuntime, local_idx: i32)
         let pos = frame.stack_base + (local_idx as usize);
         let value = match rt.stack.get(pos).cloned() {
             Some(v) => v,
-            None => return jit_err(rt, VmError::InvalidOperand(format!("local index {}", local_idx))),
+            None => {
+                return jit_err(
+                    rt,
+                    VmError::InvalidOperand(format!("local index {}", local_idx)),
+                )
+            }
         };
-        
+
         // eprintln!("JIT_LOAD: idx={}, val={:?}", local_idx, value);
 
         // Mirror `LOAD` behavior (upvalue pointer deref).
@@ -2650,7 +2824,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_load(rt: *mut VmRuntime, local_idx: i32)
 pub(crate) unsafe extern "C" fn nyx_jit_store(rt: *mut VmRuntime, local_idx: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if local_idx < 0 {
-            return jit_err(rt, VmError::InvalidOperand("negative local index".to_string()));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand("negative local index".to_string()),
+            );
         }
         let value = match rt.pop_value() {
             Ok(v) => v,
@@ -2661,9 +2838,12 @@ pub(crate) unsafe extern "C" fn nyx_jit_store(rt: *mut VmRuntime, local_idx: i32
         };
         let pos = frame.stack_base + (local_idx as usize);
         if pos >= rt.stack.len() {
-            return jit_err(rt, VmError::InvalidOperand(format!("local index {}", local_idx)));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand(format!("local index {}", local_idx)),
+            );
         }
-        
+
         match &rt.stack[pos] {
             Value::Pointer(ptr) => {
                 let slot = rt.heap.slots.get_mut(*ptr).and_then(|s| s.as_mut());
@@ -2712,7 +2892,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_sub(rt: *mut VmRuntime) -> i64 {
             Ok(v) => v,
             Err(e) => return jit_err(rt, e),
         };
-        match rt.binary_op(&a, &b, |x, y| x - y).and_then(|v| rt.push_value(v)) {
+        match rt
+            .binary_op(&a, &b, |x, y| x - y)
+            .and_then(|v| rt.push_value(v))
+        {
             Ok(()) => 0,
             Err(e) => jit_err(rt, e),
         }
@@ -2730,7 +2913,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_mul(rt: *mut VmRuntime) -> i64 {
             Ok(v) => v,
             Err(e) => return jit_err(rt, e),
         };
-        match rt.binary_op(&a, &b, |x, y| x * y).and_then(|v| rt.push_value(v)) {
+        match rt
+            .binary_op(&a, &b, |x, y| x * y)
+            .and_then(|v| rt.push_value(v))
+        {
             Ok(()) => 0,
             Err(e) => jit_err(rt, e),
         }
@@ -2754,7 +2940,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_div(rt: *mut VmRuntime) -> i64 {
             Value::Float(f) if *f == 0.0 => return jit_err(rt, VmError::DivisionByZero),
             _ => {}
         }
-        match rt.binary_op(&a, &b, |x, y| x / y).and_then(|v| rt.push_value(v)) {
+        match rt
+            .binary_op(&a, &b, |x, y| x / y)
+            .and_then(|v| rt.push_value(v))
+        {
             Ok(()) => 0,
             Err(e) => jit_err(rt, e),
         }
@@ -2905,7 +3094,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_ge(rt: *mut VmRuntime) -> i64 {
 pub(crate) unsafe extern "C" fn nyx_jit_new_array(rt: *mut VmRuntime, len: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if len < 0 {
-            return jit_err(rt, VmError::InvalidOperand("negative array length".to_string()));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand("negative array length".to_string()),
+            );
         }
         let len = len as usize;
         if len > rt.stack.len() {
@@ -2930,7 +3122,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_new_array(rt: *mut VmRuntime, len: i32) 
 pub(crate) unsafe extern "C" fn nyx_jit_new_obj(rt: *mut VmRuntime, pairs: i32) -> i64 {
     jit_wrap(rt, |rt| {
         if pairs < 0 {
-            return jit_err(rt, VmError::InvalidOperand("negative object pair count".to_string()));
+            return jit_err(
+                rt,
+                VmError::InvalidOperand("negative object pair count".to_string()),
+            );
         }
         let pairs = pairs as usize;
         if pairs * 2 > rt.stack.len() {
@@ -2948,7 +3143,12 @@ pub(crate) unsafe extern "C" fn nyx_jit_new_obj(rt: *mut VmRuntime, pairs: i32) 
             };
             let key_str = match key {
                 Value::String(s) => s,
-                _ => return jit_err(rt, VmError::TypeError("object key must be string".to_string())),
+                _ => {
+                    return jit_err(
+                        rt,
+                        VmError::TypeError("object key must be string".to_string()),
+                    )
+                }
             };
             obj.insert(key_str, value);
         }
@@ -3021,7 +3221,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_pop_n(rt: *mut VmRuntime, n: i32) -> i64
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_push_ic_value(rt: *mut VmRuntime, ic: *const AttributeIC) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_push_ic_value(
+    rt: *mut VmRuntime,
+    ic: *const AttributeIC,
+) -> i64 {
     let rt = &mut *rt;
     let ic = &*ic;
     match rt.push_value(ic.value.clone()) {
@@ -3031,7 +3234,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_push_ic_value(rt: *mut VmRuntime, ic: *c
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_push_index_ic_value(rt: *mut VmRuntime, ic: *const IndexIC) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_push_index_ic_value(
+    rt: *mut VmRuntime,
+    ic: *const IndexIC,
+) -> i64 {
     let rt = &mut *rt;
     let ic = &*ic;
     match rt.push_value(ic.value.clone()) {
@@ -3041,12 +3247,20 @@ pub(crate) unsafe extern "C" fn nyx_jit_push_index_ic_value(rt: *mut VmRuntime, 
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_get_field_cached(rt: *mut VmRuntime, ic_ptr: *mut AttributeIC, field_name_ptr: *const u8, field_name_len: usize) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_get_field_cached(
+    rt: *mut VmRuntime,
+    ic_ptr: *mut AttributeIC,
+    field_name_ptr: *const u8,
+    field_name_len: usize,
+) -> i64 {
     jit_wrap(rt, |rt| {
-        let field_name = match std::str::from_utf8(std::slice::from_raw_parts(field_name_ptr, field_name_len)) {
-            Ok(s) => s,
-            Err(e) => return jit_err(rt, VmError::RuntimeError(format!("Invalid UTF-8: {}", e))),
-        };
+        let field_name =
+            match std::str::from_utf8(std::slice::from_raw_parts(field_name_ptr, field_name_len)) {
+                Ok(s) => s,
+                Err(e) => {
+                    return jit_err(rt, VmError::RuntimeError(format!("Invalid UTF-8: {}", e)))
+                }
+            };
         let _field = match rt.pop_value() {
             Ok(v) => v,
             Err(e) => return jit_err(rt, e),
@@ -3091,19 +3305,20 @@ pub(crate) unsafe extern "C" fn nyx_jit_get_field_cached(rt: *mut VmRuntime, ic_
                 Value::Object(obj) => {
                     // Autobox for production performance.
                     match rt.heap_alloc(Value::Object(obj), 0) {
-                        Ok(ptr) => {
-                            match rt.heap_get_field(ptr, field_name) {
-                                Ok(v) => match rt.push_value(v) {
-                                    Ok(()) => 0,
-                                    Err(e) => jit_err(rt, e),
-                                },
+                        Ok(ptr) => match rt.heap_get_field(ptr, field_name) {
+                            Ok(v) => match rt.push_value(v) {
+                                Ok(()) => 0,
                                 Err(e) => jit_err(rt, e),
-                            }
-                        }
+                            },
+                            Err(e) => jit_err(rt, e),
+                        },
                         Err(e) => jit_err(rt, e),
                     }
                 }
-                _ => jit_err(rt, VmError::TypeError("GetField expects object".to_string())),
+                _ => jit_err(
+                    rt,
+                    VmError::TypeError("GetField expects object".to_string()),
+                ),
             }
         }
     })
@@ -3122,12 +3337,20 @@ pub(crate) unsafe extern "C" fn nyx_jit_get_field(rt: *mut VmRuntime) -> i64 {
         };
         let field = match field {
             Value::String(s) => s,
-            _ => return jit_err(rt, VmError::TypeError("field name must be string".to_string())),
+            _ => {
+                return jit_err(
+                    rt,
+                    VmError::TypeError("field name must be string".to_string()),
+                )
+            }
         };
         // Reuse the interpreter behavior (including caches/autobox semantics).
         let instr = BytecodeInstr::new(OpCode::GetField, vec![], 0);
         // Push back in expected order: target, field.
-        if let Err(e) = rt.push_value(target).and_then(|_| rt.push_value(Value::String(field))) {
+        if let Err(e) = rt
+            .push_value(target)
+            .and_then(|_| rt.push_value(Value::String(field)))
+        {
             return jit_err(rt, e);
         }
         match rt.execute_instruction(instr, 0) {
@@ -3143,12 +3366,20 @@ pub(crate) unsafe extern "C" fn nyx_jit_get_field(rt: *mut VmRuntime) -> i64 {
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_set_field_cached(rt: *mut VmRuntime, ic_ptr: *mut AttributeIC, field_name_ptr: *const u8, field_name_len: usize) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_set_field_cached(
+    rt: *mut VmRuntime,
+    ic_ptr: *mut AttributeIC,
+    field_name_ptr: *const u8,
+    field_name_len: usize,
+) -> i64 {
     jit_wrap(rt, |rt| {
-        let field_name = match std::str::from_utf8(std::slice::from_raw_parts(field_name_ptr, field_name_len)) {
-            Ok(s) => s,
-            Err(e) => return jit_err(rt, VmError::RuntimeError(format!("Invalid UTF-8: {}", e))),
-        };
+        let field_name =
+            match std::str::from_utf8(std::slice::from_raw_parts(field_name_ptr, field_name_len)) {
+                Ok(s) => s,
+                Err(e) => {
+                    return jit_err(rt, VmError::RuntimeError(format!("Invalid UTF-8: {}", e)))
+                }
+            };
         let value = match rt.pop_value() {
             Ok(v) => v,
             Err(e) => return jit_err(rt, e),
@@ -3202,7 +3433,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_set_field_cached(rt: *mut VmRuntime, ic_
                         Err(e) => jit_err(rt, e),
                     }
                 }
-                _ => jit_err(rt, VmError::TypeError("SetField expects object".to_string())),
+                _ => jit_err(
+                    rt,
+                    VmError::TypeError("SetField expects object".to_string()),
+                ),
             }
         }
     })
@@ -3225,7 +3459,11 @@ pub(crate) unsafe extern "C" fn nyx_jit_set_field(rt: *mut VmRuntime) -> i64 {
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_get_index_cached(rt: *mut VmRuntime, ic_ptr: *mut IndexIC, index: i64) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_get_index_cached(
+    rt: *mut VmRuntime,
+    ic_ptr: *mut IndexIC,
+    index: i64,
+) -> i64 {
     jit_wrap(rt, |rt| {
         let _index = match rt.pop_value() {
             Ok(v) => v,
@@ -3257,11 +3495,22 @@ pub(crate) unsafe extern "C" fn nyx_jit_get_index_cached(rt: *mut VmRuntime, ic_
                     let value = match resolved {
                         Value::Array(arr) => {
                             if index < 0 || index as usize >= arr.len() {
-                                return jit_err(rt, VmError::InvalidOperand(format!("index {} out of bounds", index)));
+                                return jit_err(
+                                    rt,
+                                    VmError::InvalidOperand(format!(
+                                        "index {} out of bounds",
+                                        index
+                                    )),
+                                );
                             }
                             arr[index as usize].clone()
                         }
-                        _ => return jit_err(rt, VmError::TypeError("GetIndex expects array".to_string())),
+                        _ => {
+                            return jit_err(
+                                rt,
+                                VmError::TypeError("GetIndex expects array".to_string()),
+                            )
+                        }
                     };
 
                     if let Some(slot) = rt.heap.slots.get(ptr).and_then(|s| s.as_ref()) {
@@ -3282,7 +3531,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_get_index_cached(rt: *mut VmRuntime, ic_
             match target {
                 Value::Array(arr) => {
                     if index < 0 || index as usize >= arr.len() {
-                        return jit_err(rt, VmError::InvalidOperand(format!("index {} out of bounds", index)));
+                        return jit_err(
+                            rt,
+                            VmError::InvalidOperand(format!("index {} out of bounds", index)),
+                        );
                     }
                     match rt.push_value(arr[index as usize].clone()) {
                         Ok(()) => 0,
@@ -3311,7 +3563,11 @@ pub(crate) unsafe extern "C" fn nyx_jit_get_index(rt: *mut VmRuntime) -> i64 {
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_set_index_cached(rt: *mut VmRuntime, ic_ptr: *mut IndexIC, index: i64) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_set_index_cached(
+    rt: *mut VmRuntime,
+    ic_ptr: *mut IndexIC,
+    index: i64,
+) -> i64 {
     jit_wrap(rt, |rt| {
         let value = match rt.pop_value() {
             Ok(v) => v,
@@ -3339,11 +3595,19 @@ pub(crate) unsafe extern "C" fn nyx_jit_set_index_cached(rt: *mut VmRuntime, ic_
                 match obj {
                     Value::Array(arr) => {
                         if index < 0 || index as usize >= arr.len() {
-                            return jit_err(rt, VmError::InvalidOperand(format!("index {} out of bounds", index)));
+                            return jit_err(
+                                rt,
+                                VmError::InvalidOperand(format!("index {} out of bounds", index)),
+                            );
                         }
                         arr[index as usize] = value.clone();
                     }
-                    _ => return jit_err(rt, VmError::TypeError("SetIndex expects array".to_string())),
+                    _ => {
+                        return jit_err(
+                            rt,
+                            VmError::TypeError("SetIndex expects array".to_string()),
+                        )
+                    }
                 }
             }
             if let Some(slot) = rt.heap.slots.get(ptr).and_then(|s| s.as_ref()) {
@@ -3361,7 +3625,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_set_index_cached(rt: *mut VmRuntime, ic_
             match target {
                 Value::Array(mut arr) => {
                     if index < 0 || index as usize >= arr.len() {
-                        return jit_err(rt, VmError::InvalidOperand(format!("index {} out of bounds", index)));
+                        return jit_err(
+                            rt,
+                            VmError::InvalidOperand(format!("index {} out of bounds", index)),
+                        );
                     }
                     arr[index as usize] = value.clone();
                     match rt.heap_alloc(Value::Array(arr), 0) {
@@ -3551,7 +3818,11 @@ pub(crate) unsafe extern "C" fn nyx_jit_ret(rt: *mut VmRuntime) -> i64 {
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_call(rt: *mut VmRuntime, func_raw: i32, num_args: i32) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_call(
+    rt: *mut VmRuntime,
+    func_raw: i32,
+    num_args: i32,
+) -> i64 {
     jit_wrap(rt, |rt| {
         let instr = BytecodeInstr::new(OpCode::CALL, vec![func_raw, num_args], 0);
         match rt.execute_instruction(instr, 0) {
@@ -3567,7 +3838,11 @@ pub(crate) unsafe extern "C" fn nyx_jit_call(rt: *mut VmRuntime, func_raw: i32, 
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_call_ext(rt: *mut VmRuntime, name_idx: i32, num_args: i32) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_call_ext(
+    rt: *mut VmRuntime,
+    name_idx: i32,
+    num_args: i32,
+) -> i64 {
     jit_wrap(rt, |rt| {
         let instr = BytecodeInstr::new(OpCode::CallExt, vec![name_idx, num_args], 0);
         match rt.execute_instruction(instr, 0) {
@@ -3583,7 +3858,11 @@ pub(crate) unsafe extern "C" fn nyx_jit_call_ext(rt: *mut VmRuntime, name_idx: i
 }
 
 #[cfg(feature = "jit")]
-pub(crate) unsafe extern "C" fn nyx_jit_closure(rt: *mut VmRuntime, func_idx: i32, num_upvalues: i32) -> i64 {
+pub(crate) unsafe extern "C" fn nyx_jit_closure(
+    rt: *mut VmRuntime,
+    func_idx: i32,
+    num_upvalues: i32,
+) -> i64 {
     jit_wrap(rt, |rt| {
         let instr = BytecodeInstr::new(OpCode::CLOSURE, vec![func_idx, num_upvalues], 0);
         match rt.execute_instruction(instr, 0) {
@@ -3711,9 +3990,7 @@ mod tests {
             name: "main".to_string(),
             arity: 0,
             num_locals: 0,
-            instructions: vec![
-                BytecodeInstr::with_operand(OpCode::JMP, 0, 0),
-            ],
+            instructions: vec![BytecodeInstr::with_operand(OpCode::JMP, 0, 0)],
             constants: vec![],
             upvalues: vec![],
             line_info: vec![],
@@ -3885,11 +4162,11 @@ mod tests {
             arity: 0,
             num_locals: 2,
             instructions: vec![
-                BytecodeInstr::with_operand(OpCode::PUSH, 0, 0), // 0
+                BytecodeInstr::with_operand(OpCode::PUSH, 0, 0),  // 0
                 BytecodeInstr::with_operand(OpCode::STORE, 0, 0), // counter
-                BytecodeInstr::with_operand(OpCode::PUSH, 1, 0), // limit
+                BytecodeInstr::with_operand(OpCode::PUSH, 1, 0),  // limit
                 BytecodeInstr::with_operand(OpCode::STORE, 1, 0), // limit local
-                BytecodeInstr::with_operand(OpCode::LOAD, 0, 0), // loop_start
+                BytecodeInstr::with_operand(OpCode::LOAD, 0, 0),  // loop_start
                 BytecodeInstr::with_operand(OpCode::LOAD, 1, 0),
                 BytecodeInstr::new(OpCode::LT, vec![], 0),
                 BytecodeInstr::with_operand(OpCode::JZ, loop_end, 0),

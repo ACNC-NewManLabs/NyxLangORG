@@ -10,12 +10,16 @@ pub struct String {
 impl String {
     /// Create a new empty string
     pub fn new() -> String {
-        String { inner: StdString::new() }
+        String {
+            inner: StdString::new(),
+        }
     }
 
     /// Create from a &str
     pub fn from(s: &str) -> String {
-        String { inner: StdString::from(s) }
+        String {
+            inner: StdString::from(s),
+        }
     }
 
     /// Get length in bytes
@@ -53,15 +57,20 @@ impl String {
         if start > end || end > self.inner.len() {
             return Err(crate::error::NyxError::new(
                 "STD002",
-                format!("String slice out of bounds: {}..{} for length {}", start, end, self.inner.len()),
-                crate::error::ErrorCategory::Runtime
+                format!(
+                    "String slice out of bounds: {}..{} for length {}",
+                    start,
+                    end,
+                    self.inner.len()
+                ),
+                crate::error::ErrorCategory::Runtime,
             ));
         }
         if !self.inner.is_char_boundary(start) || !self.inner.is_char_boundary(end) {
             return Err(crate::error::NyxError::new(
                 "STD003",
                 "String slice falls on non-char boundary",
-                crate::error::ErrorCategory::Runtime
+                crate::error::ErrorCategory::Runtime,
             ));
         }
         Ok(&self.inner[start..end])

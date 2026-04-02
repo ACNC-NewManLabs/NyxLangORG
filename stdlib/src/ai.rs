@@ -2,8 +2,8 @@
 
 pub mod ai {
     pub mod tensor {
-        use crate::error::{NyxError, ErrorCategory};
         use crate::collections::vec::Vec as NyxVec;
+        use crate::error::{ErrorCategory, NyxError};
 
         pub struct Tensor {
             data: NyxVec<f64>,
@@ -14,15 +14,16 @@ pub mod ai {
             pub fn new(shape_vec: Vec<usize>) -> Tensor {
                 let size: usize = shape_vec.iter().product();
                 let mut shape = NyxVec::new();
-                for s in shape_vec { shape.push(s); }
-                
-                let mut data = NyxVec::with_capacity(size);
-                for _ in 0..size { data.push(0.0); }
-                
-                Tensor {
-                    data,
-                    shape,
+                for s in shape_vec {
+                    shape.push(s);
                 }
+
+                let mut data = NyxVec::with_capacity(size);
+                for _ in 0..size {
+                    data.push(0.0);
+                }
+
+                Tensor { data, shape }
             }
 
             pub fn from_vec(data_vec: Vec<f64>, shape_vec: Vec<usize>) -> Result<Tensor, NyxError> {
@@ -30,46 +31,81 @@ pub mod ai {
                 if data_vec.len() != expected_size {
                     return Err(NyxError::new(
                         "AI001",
-                        format!("Tensor data size mismatch: expected {}, found {}", expected_size, data_vec.len()),
-                        ErrorCategory::Runtime
+                        format!(
+                            "Tensor data size mismatch: expected {}, found {}",
+                            expected_size,
+                            data_vec.len()
+                        ),
+                        ErrorCategory::Runtime,
                     ));
                 }
                 let mut data = NyxVec::new();
-                for d in data_vec { data.push(d); }
+                for d in data_vec {
+                    data.push(d);
+                }
                 let mut shape = NyxVec::new();
-                for s in shape_vec { shape.push(s); }
+                for s in shape_vec {
+                    shape.push(s);
+                }
                 Ok(Tensor { data, shape })
             }
 
-            pub fn shape(&self) -> &[usize] { self.shape.as_slice() }
-            pub fn data(&self) -> &[f64] { self.data.as_slice() }
-            
+            pub fn shape(&self) -> &[usize] {
+                self.shape.as_slice()
+            }
+            pub fn data(&self) -> &[f64] {
+                self.data.as_slice()
+            }
+
             pub fn add(&self, other: &Tensor) -> Result<Tensor, NyxError> {
                 if self.shape.as_slice() != other.shape.as_slice() {
                     return Err(NyxError::new(
                         "AI002",
-                        format!("Tensor shape mismatch for addition: {:?} vs {:?}", self.shape.as_slice(), other.shape.as_slice()),
-                        ErrorCategory::Runtime
+                        format!(
+                            "Tensor shape mismatch for addition: {:?} vs {:?}",
+                            self.shape.as_slice(),
+                            other.shape.as_slice()
+                        ),
+                        ErrorCategory::Runtime,
                     ));
                 }
-                
+
                 let mut result_data = NyxVec::new();
-                for (a, b) in self.data.as_slice().iter().zip(other.data.as_slice().iter()) {
+                for (a, b) in self
+                    .data
+                    .as_slice()
+                    .iter()
+                    .zip(other.data.as_slice().iter())
+                {
                     result_data.push(a + b);
                 }
-                Ok(Tensor { data: result_data, shape: self.clone_shape() })
+                Ok(Tensor {
+                    data: result_data,
+                    shape: self.clone_shape(),
+                })
             }
 
             pub fn matmul(&self, other: &Tensor) -> Result<Tensor, NyxError> {
                 let s_shape = self.shape.as_slice();
                 let o_shape = other.shape.as_slice();
-                
+
                 if s_shape.len() != 2 || o_shape.len() != 2 {
-                    return Err(NyxError::new("AI004", "Matmul requires 2D tensors", ErrorCategory::Runtime));
+                    return Err(NyxError::new(
+                        "AI004",
+                        "Matmul requires 2D tensors",
+                        ErrorCategory::Runtime,
+                    ));
                 }
-                
+
                 if s_shape[1] != o_shape[0] {
-                    return Err(NyxError::new("AI005", format!("Matmul inner dimension mismatch: {} vs {}", s_shape[1], o_shape[0]), ErrorCategory::Runtime));
+                    return Err(NyxError::new(
+                        "AI005",
+                        format!(
+                            "Matmul inner dimension mismatch: {} vs {}",
+                            s_shape[1], o_shape[0]
+                        ),
+                        ErrorCategory::Runtime,
+                    ));
                 }
 
                 let rows = s_shape[0];
@@ -82,22 +118,27 @@ pub mod ai {
                         let mut sum = 0.0_f64;
                         for k in 0..inner {
                             sum += self.data.as_slice()[i * inner + k]
-                                 * other.data.as_slice()[k * cols + j];
+                                * other.data.as_slice()[k * cols + j];
                         }
                         result_data.push(sum);
                     }
                 }
-                
+
                 let mut final_shape = NyxVec::new();
                 final_shape.push(rows);
                 final_shape.push(cols);
-                
-                Ok(Tensor { data: result_data, shape: final_shape })
+
+                Ok(Tensor {
+                    data: result_data,
+                    shape: final_shape,
+                })
             }
 
             fn clone_shape(&self) -> NyxVec<usize> {
                 let mut s = NyxVec::new();
-                for val in self.shape.as_slice() { s.push(*val); }
+                for val in self.shape.as_slice() {
+                    s.push(*val);
+                }
                 s
             }
         }
@@ -120,7 +161,9 @@ pub mod ai {
                     // Simple deterministic init via LCG (no external dep needed here).
                     let mut state: u64 = 0xdeadbeef_cafef00d;
                     let mut next_f64 = move || {
-                        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                        state = state
+                            .wrapping_mul(6364136223846793005)
+                            .wrapping_add(1442695040888963407);
                         let hi = (state >> 33) as f64;
                         hi / (u32::MAX as f64) * scale - limit
                     };
@@ -150,7 +193,9 @@ pub mod ai {
 
             impl Dense {
                 pub fn new(input_size: usize, output_size: usize) -> Dense {
-                    Dense { layer: Layer::new(input_size, output_size) }
+                    Dense {
+                        layer: Layer::new(input_size, output_size),
+                    }
                 }
                 pub fn forward(&self, input: &[f64]) -> Vec<f64> {
                     self.layer.forward(input)
@@ -159,22 +204,32 @@ pub mod ai {
         }
 
         pub mod activations {
-            pub fn relu(x: f64) -> f64 { x.max(0.0) }
-            pub fn sigmoid(x: f64) -> f64 { 1.0 / (1.0 + (-x).exp()) }
-            pub fn tanh(x: f64) -> f64 { x.tanh() }
+            pub fn relu(x: f64) -> f64 {
+                x.max(0.0)
+            }
+            pub fn sigmoid(x: f64) -> f64 {
+                1.0 / (1.0 + (-x).exp())
+            }
+            pub fn tanh(x: f64) -> f64 {
+                x.tanh()
+            }
         }
 
         pub mod losses {
             pub fn mse_loss(pred: &[f64], target: &[f64]) -> f64 {
-                pred.iter().zip(target.iter())
+                pred.iter()
+                    .zip(target.iter())
                     .map(|(&p, &t)| (p - t).powi(2))
-                    .sum::<f64>() / pred.len() as f64
+                    .sum::<f64>()
+                    / pred.len() as f64
             }
 
             pub fn cross_entropy_loss(pred: &[f64], target: &[f64]) -> f64 {
                 // Clamp predictions to avoid log(0) = -inf which propagates NaN.
                 const EPS: f64 = 1e-15;
-                -pred.iter().zip(target.iter())
+                -pred
+                    .iter()
+                    .zip(target.iter())
                     .map(|(&p, &t)| t * p.clamp(EPS, 1.0 - EPS).ln())
                     .sum::<f64>()
             }
@@ -187,7 +242,9 @@ pub mod ai {
         }
 
         impl SGD {
-            pub fn new(learning_rate: f64) -> SGD { SGD { lr: learning_rate } }
+            pub fn new(learning_rate: f64) -> SGD {
+                SGD { lr: learning_rate }
+            }
             pub fn step(&self, params: &mut [f64], grads: &[f64]) {
                 for (p, g) in params.iter_mut().zip(grads.iter()) {
                     *p -= self.lr * g;
@@ -243,7 +300,10 @@ pub mod ai {
 
         impl Dataset {
             pub fn new() -> Dataset {
-                Dataset { data: Vec::new(), labels: Vec::new() }
+                Dataset {
+                    data: Vec::new(),
+                    labels: Vec::new(),
+                }
             }
 
             pub fn add(&mut self, data: Vec<f64>, label: Vec<f64>) {
@@ -251,8 +311,12 @@ pub mod ai {
                 self.labels.push(label);
             }
 
-            pub fn len(&self) -> usize { self.data.len() }
-            pub fn is_empty(&self) -> bool { self.data.is_empty() }
+            pub fn len(&self) -> usize {
+                self.data.len()
+            }
+            pub fn is_empty(&self) -> bool {
+                self.data.is_empty()
+            }
         }
     }
 
@@ -285,9 +349,11 @@ mod tests {
 
     #[test]
     fn test_tensor_ops() {
-        let t1 = tensor::Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]).expect("Tensor 1 creation failed");
-        let t2 = tensor::Tensor::from_vec(vec![5.0, 6.0, 7.0, 8.0], vec![2, 2]).expect("Tensor 2 creation failed");
-        
+        let t1 = tensor::Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2])
+            .expect("Tensor 1 creation failed");
+        let t2 = tensor::Tensor::from_vec(vec![5.0, 6.0, 7.0, 8.0], vec![2, 2])
+            .expect("Tensor 2 creation failed");
+
         let t3 = t1.add(&t2).expect("Tensor addition failed");
         assert_eq!(t3.data(), &[6.0, 8.0, 10.0, 12.0]);
         assert_eq!(t3.shape(), &[2, 2]);
@@ -314,4 +380,3 @@ mod tests {
         assert!(nn::activations::tanh(0.0).abs() < 1e-6);
     }
 }
-

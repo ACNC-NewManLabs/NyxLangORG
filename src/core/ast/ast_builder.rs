@@ -21,7 +21,12 @@ impl AstBuilder {
     }
 
     pub fn item(vis: Visibility, kind: ItemKind, span: Span) -> Item {
-        Item { attributes: Vec::new(), vis, kind, span }
+        Item {
+            attributes: Vec::new(),
+            vis,
+            kind,
+            span,
+        }
     }
 
     pub fn function_item(vis: Visibility, decl: FunctionDecl) -> Item {

@@ -1,21 +1,21 @@
 //! Nyx Systems Programming Module
-//! 
+//!
 //! This module provides low-level systems programming capabilities for Nyx,
 //! including unsafe operations, raw pointers, inline assembly, and bare-metal support.
 
-pub mod unsafe_ops;
-pub mod pointers;
-pub mod inline_asm;
 pub mod bare_metal;
-pub mod memory;
+pub mod inline_asm;
 pub mod io;
+pub mod memory;
+pub mod pointers;
+pub mod unsafe_ops;
 
-pub use unsafe_ops::{unsafe_block, UnsafeCell};
-pub use pointers::{Ptr, PtrMut};
 pub use crate::asm;
 pub use bare_metal::KernelInterface;
+pub use io::{IoPort, Port};
 pub use memory::{Allocator, MemoryRegion};
-pub use io::{Port, IoPort};
+pub use pointers::{Ptr, PtrMut};
+pub use unsafe_ops::{unsafe_block, UnsafeCell};
 
 /// Systems programming configuration
 pub struct SystemsConfig {
@@ -71,4 +71,3 @@ impl std::fmt::Display for SystemsError {
 impl std::error::Error for SystemsError {}
 
 pub type SystemsResult<T> = Result<T, SystemsError>;
-

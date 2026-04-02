@@ -1,7 +1,7 @@
-use std::fs::OpenOptions;
-use std::io::{Read, Write, Seek, SeekFrom};
-use rand::Rng;
 use crate::runtime::database::distributed::NetworkPool;
+use rand::Rng;
+use std::fs::OpenOptions;
+use std::io::{Read, Seek, SeekFrom, Write};
 
 pub struct ChaosMonkey {
     pub intensity: f64, // 0.0 to 1.0
@@ -17,7 +17,7 @@ impl ChaosMonkey {
         let mut file = OpenOptions::new().read(true).write(true).open(path)?;
         let metadata = file.metadata()?;
         let len = metadata.len();
-        
+
         let mut rng = rand::thread_rng();
         let num_corruptions = (len as f64 * self.intensity * 0.01).max(1.0) as usize;
 
@@ -30,7 +30,7 @@ impl ChaosMonkey {
             file.seek(SeekFrom::Start(pos))?;
             file.write_all(&byte)?;
         }
-        
+
         file.sync_all()?;
         Ok(())
     }
@@ -54,8 +54,8 @@ impl ChaosMonkey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use std::fs::File;
+    use std::io::Write;
 
     #[test]
     fn test_file_corruption_resilience() {
@@ -71,10 +71,10 @@ mod tests {
         let mut f = File::open(path).unwrap();
         let mut buf = Vec::new();
         f.read_to_end(&mut buf).unwrap();
-        
+
         // Data should be different now
         assert_ne!(buf, b"LEGITIMATE-DATA-12345");
-        
+
         std::fs::remove_file(path).unwrap();
     }
 }

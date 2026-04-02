@@ -16,11 +16,13 @@ use crate::core::diagnostics::{codes, ErrorCategory, NyxError};
 pub const PLUGIN_API_VERSION: u32 = 1;
 
 /// Global registry for statically compiled plugins
-static STATIC_PLUGINS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, fn() -> Box<dyn Plugin + Send + Sync>>>> = 
-    std::sync::OnceLock::new();
+static STATIC_PLUGINS: std::sync::OnceLock<
+    std::sync::Mutex<HashMap<String, fn() -> Box<dyn Plugin + Send + Sync>>>,
+> = std::sync::OnceLock::new();
 
 /// Get the static plugins registry
-fn get_static_plugins() -> &'static std::sync::Mutex<HashMap<String, fn() -> Box<dyn Plugin + Send + Sync>>> {
+fn get_static_plugins(
+) -> &'static std::sync::Mutex<HashMap<String, fn() -> Box<dyn Plugin + Send + Sync>>> {
     STATIC_PLUGINS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
 }
 
@@ -174,17 +176,33 @@ impl std::str::FromStr for Version {
             ));
         }
 
-        let major = parts[0]
-            .parse()
-            .map_err(|_| NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, "Invalid major version", ErrorCategory::Internal))?;
-        let minor = parts[1]
-            .parse()
-            .map_err(|_| NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, "Invalid minor version", ErrorCategory::Internal))?;
-        let patch = parts[2]
-            .parse()
-            .map_err(|_| NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, "Invalid patch version", ErrorCategory::Internal))?;
+        let major = parts[0].parse().map_err(|_| {
+            NyxError::new(
+                codes::INTERNAL_UNKNOWN_ERROR,
+                "Invalid major version",
+                ErrorCategory::Internal,
+            )
+        })?;
+        let minor = parts[1].parse().map_err(|_| {
+            NyxError::new(
+                codes::INTERNAL_UNKNOWN_ERROR,
+                "Invalid minor version",
+                ErrorCategory::Internal,
+            )
+        })?;
+        let patch = parts[2].parse().map_err(|_| {
+            NyxError::new(
+                codes::INTERNAL_UNKNOWN_ERROR,
+                "Invalid patch version",
+                ErrorCategory::Internal,
+            )
+        })?;
 
-        Ok(Self { major, minor, patch })
+        Ok(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -247,10 +265,15 @@ impl PluginManager {
         if self.search_paths.is_empty() {
             // Add default plugin directories
             if let Ok(current_dir) = std::env::current_dir() {
-                self.search_paths.push(current_dir.join("plugins").to_string_lossy().to_string());
+                self.search_paths
+                    .push(current_dir.join("plugins").to_string_lossy().to_string());
             }
-            self.search_paths.push("/usr/local/lib/nyx/plugins".to_string());
-            self.search_paths.push(format!("{}/.nyx/plugins", std::env::var("HOME").unwrap_or_default()));
+            self.search_paths
+                .push("/usr/local/lib/nyx/plugins".to_string());
+            self.search_paths.push(format!(
+                "{}/.nyx/plugins",
+                std::env::var("HOME").unwrap_or_default()
+            ));
         }
 
         self.initialized = true;
@@ -297,7 +320,7 @@ impl PluginManager {
         }
 
         let config = PluginConfig::new(plugin_name, path);
-        
+
         // Attempt to load the dynamic library
         #[cfg(feature = "dynamic_loading")]
         let mut dynamic_load_error: Option<NyxError> = None;
@@ -309,9 +332,11 @@ impl PluginManager {
                 Ok(library) => {
                     // Try to load the plugin_create symbol
                     unsafe {
-                        let create_symbol: Result<Symbol<extern "C" fn(PluginConfig) -> Box<dyn Plugin>>, _> = 
-                            library.get(b"plugin_create");
-                        
+                        let create_symbol: Result<
+                            Symbol<extern "C" fn(PluginConfig) -> Box<dyn Plugin>>,
+                            _,
+                        > = library.get(b"plugin_create");
+
                         if let Ok(create_fn) = create_symbol {
                             let plugin = create_fn(config);
                             let name = plugin.name().to_string();
@@ -319,11 +344,13 @@ impl PluginManager {
                             log::info!("Loaded plugin: {} from {}", plugin_name, path);
                             return Ok(());
                         }
-                        
+
                         // Try alternative symbol name
-                        let create_symbol2: Result<Symbol<extern "C" fn() -> Box<dyn Plugin + Send + Sync>>, _> = 
-                            library.get(b"nyx_plugin_create");
-                        
+                        let create_symbol2: Result<
+                            Symbol<extern "C" fn() -> Box<dyn Plugin + Send + Sync>>,
+                            _,
+                        > = library.get(b"nyx_plugin_create");
+
                         if let Ok(create_fn) = create_symbol2 {
                             let mut plugin = create_fn();
                             plugin.initialize(config.clone())?;
@@ -333,7 +360,7 @@ impl PluginManager {
                             return Ok(());
                         }
                     }
-                    
+
                     dynamic_load_error = Some(NyxError::new(
                         codes::PLUGIN_NOT_FOUND,
                         format!(
@@ -344,7 +371,11 @@ impl PluginManager {
                     ));
                 }
                 Err(e) => {
-                    log::warn!("Failed to load library {}: {}. Using static plugin registration.", path, e);
+                    log::warn!(
+                        "Failed to load library {}: {}. Using static plugin registration.",
+                        path,
+                        e
+                    );
                 }
             }
         }
@@ -379,7 +410,11 @@ impl PluginManager {
     }
 
     /// Register a static plugin (for compiled-in plugins)
-    pub fn register_static_plugin(&mut self, name: &str, creator: fn() -> Box<dyn Plugin + Send + Sync>) -> Result<(), NyxError> {
+    pub fn register_static_plugin(
+        &mut self,
+        name: &str,
+        creator: fn() -> Box<dyn Plugin + Send + Sync>,
+    ) -> Result<(), NyxError> {
         if let Ok(mut plugins) = get_static_plugins().lock() {
             plugins.insert(name.to_string(), creator);
         }
@@ -408,12 +443,13 @@ impl PluginManager {
         }
 
         // Find and remove the plugin
-        let mut plugin = self.loaded_plugins.remove(name)
-            .ok_or_else(|| NyxError::new(
+        let mut plugin = self.loaded_plugins.remove(name).ok_or_else(|| {
+            NyxError::new(
                 codes::INTERNAL_UNKNOWN_ERROR,
                 format!("Plugin not found: {}", name),
                 ErrorCategory::Internal,
-            ))?;
+            )
+        })?;
 
         // Call shutdown to clean up
         plugin.shutdown()?;
@@ -424,14 +460,18 @@ impl PluginManager {
 
     /// Get a reference to a loaded plugin by name
     pub fn get_plugin(&self, name: &str) -> Option<&dyn Plugin> {
-        self.loaded_plugins.get(name).map(|p| p.as_ref() as &dyn Plugin)
+        self.loaded_plugins
+            .get(name)
+            .map(|p| p.as_ref() as &dyn Plugin)
     }
 
     /// Get a mutable reference to a loaded plugin by name
     /// Get a mutable reference to a loaded plugin by name
     /// Note: This returns a reference with the same lifetime as self
     pub fn get_plugin_mut(&mut self, name: &str) -> Option<&mut dyn Plugin> {
-        self.loaded_plugins.get_mut(name).map(|p| p.as_mut() as &mut dyn Plugin)
+        self.loaded_plugins
+            .get_mut(name)
+            .map(|p| p.as_mut() as &mut dyn Plugin)
     }
 
     /// List all loaded plugin names
@@ -451,18 +491,24 @@ impl PluginManager {
 
     /// Get all loaded plugins
     pub fn get_all_plugins(&self) -> Vec<&dyn Plugin> {
-        self.loaded_plugins.values().map(|p| p.as_ref() as &dyn Plugin).collect()
+        self.loaded_plugins
+            .values()
+            .map(|p| p.as_ref() as &dyn Plugin)
+            .collect()
     }
 
     /// Reload a plugin (unload and load again)
     pub fn reload_plugin(&mut self, name: &str) -> Result<(), NyxError> {
         // Get the path from the existing plugin config
-        let config = self.get_plugin(name)
-            .ok_or_else(|| NyxError::new(
-                codes::INTERNAL_UNKNOWN_ERROR,
-                format!("Plugin not found: {}", name),
-                ErrorCategory::Internal,
-            ))?
+        let config = self
+            .get_plugin(name)
+            .ok_or_else(|| {
+                NyxError::new(
+                    codes::INTERNAL_UNKNOWN_ERROR,
+                    format!("Plugin not found: {}", name),
+                    ErrorCategory::Internal,
+                )
+            })?
             .get_config()
             .clone();
 
@@ -545,9 +591,21 @@ mod tests {
 
     #[test]
     fn test_version_comparison() {
-        let v1 = Version { major: 1, minor: 0, patch: 0 };
-        let v2 = Version { major: 1, minor: 0, patch: 1 };
-        let v3 = Version { major: 2, minor: 0, patch: 0 };
+        let v1 = Version {
+            major: 1,
+            minor: 0,
+            patch: 0,
+        };
+        let v2 = Version {
+            major: 1,
+            minor: 0,
+            patch: 1,
+        };
+        let v3 = Version {
+            major: 2,
+            minor: 0,
+            patch: 0,
+        };
 
         assert!(v1 < v2);
         assert!(v2 < v3);

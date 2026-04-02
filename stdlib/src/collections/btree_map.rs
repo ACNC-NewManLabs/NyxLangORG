@@ -9,7 +9,9 @@ pub struct BTreeMap<K, V> {
 
 impl<K: Ord, V> BTreeMap<K, V> {
     pub fn new() -> BTreeMap<K, V> {
-        BTreeMap { inner: StdBTreeMap::new() }
+        BTreeMap {
+            inner: StdBTreeMap::new(),
+        }
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {

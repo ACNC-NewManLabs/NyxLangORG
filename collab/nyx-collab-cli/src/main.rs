@@ -157,7 +157,11 @@ fn run() -> Result<(), String> {
             }
         }
         Command::HelpSolve { query } => {
-            let url = format!("{}/api/v1/help/solve?q={}", trim_base(&args.base_url), query);
+            let url = format!(
+                "{}/api/v1/help/solve?q={}",
+                trim_base(&args.base_url),
+                query
+            );
             let resp = client.get(url).send().map_err(|e| e.to_string())?;
             ensure_ok(resp.status())?;
             let data: SolveResponse = resp.json().map_err(|e| e.to_string())?;
@@ -183,11 +187,22 @@ fn run() -> Result<(), String> {
             let data: DiscoverResponse = resp.json().map_err(|e| e.to_string())?;
             println!("projects:");
             for p in data.projects {
-                println!("- {} [{}] by {}: {}", p.name, p.tags.join(","), p.maintainer_alias, p.summary);
+                println!(
+                    "- {} [{}] by {}: {}",
+                    p.name,
+                    p.tags.join(","),
+                    p.maintainer_alias,
+                    p.summary
+                );
             }
             println!("contributors:");
             for c in data.contributors {
-                println!("- {} [{}] contact={} ", c.alias, c.skills.join(","), c.contact_hint);
+                println!(
+                    "- {} [{}] contact={} ",
+                    c.alias,
+                    c.skills.join(","),
+                    c.contact_hint
+                );
             }
         }
         Command::Contribute {
@@ -201,7 +216,11 @@ fn run() -> Result<(), String> {
                 contact_hint: contact,
             };
             let url = format!("{}/api/v1/contribute", trim_base(&args.base_url));
-            let resp = client.post(url).json(&req).send().map_err(|e| e.to_string())?;
+            let resp = client
+                .post(url)
+                .json(&req)
+                .send()
+                .map_err(|e| e.to_string())?;
             ensure_ok(resp.status())?;
             println!("contributor profile submitted");
         }
@@ -212,7 +231,9 @@ fn run() -> Result<(), String> {
             impact,
         } => {
             if !args.opt_in {
-                return Err("sharing insights requires --opt-in or NYX_COLLAB_OPT_IN=true".to_string());
+                return Err(
+                    "sharing insights requires --opt-in or NYX_COLLAB_OPT_IN=true".to_string(),
+                );
             }
             let raw = fs::read_to_string(pattern_file).map_err(|e| e.to_string())?;
             let anon_id = anonymous_id()?;
@@ -224,7 +245,11 @@ fn run() -> Result<(), String> {
                 anonymous_id: anon_id,
             };
             let url = format!("{}/api/v1/insights/submit", trim_base(&args.base_url));
-            let resp = client.post(url).json(&req).send().map_err(|e| e.to_string())?;
+            let resp = client
+                .post(url)
+                .json(&req)
+                .send()
+                .map_err(|e| e.to_string())?;
             ensure_ok(resp.status())?;
             println!("insight shared (anonymized)");
         }
@@ -244,7 +269,11 @@ fn run() -> Result<(), String> {
                 author_alias: author,
             };
             let url = format!("{}/api/v1/knowledge/publish", trim_base(&args.base_url));
-            let resp = client.post(url).json(&req).send().map_err(|e| e.to_string())?;
+            let resp = client
+                .post(url)
+                .json(&req)
+                .send()
+                .map_err(|e| e.to_string())?;
             ensure_ok(resp.status())?;
             println!("knowledge resource published");
         }
@@ -253,7 +282,10 @@ fn run() -> Result<(), String> {
             let resp = client.get(url).send().map_err(|e| e.to_string())?;
             ensure_ok(resp.status())?;
             let value: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-            println!("{}", serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?
+            );
         }
     }
 

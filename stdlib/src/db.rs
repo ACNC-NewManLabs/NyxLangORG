@@ -2,9 +2,9 @@
 //! Unified interface for SQL and NoSQL databases.
 
 pub mod database {
-    use crate::error::NyxError;
-    use crate::collections::vec::Vec as NyxVec;
     use crate::collections::string::String as NyxString;
+    use crate::collections::vec::Vec as NyxVec;
+    use crate::error::NyxError;
 
     pub trait Connection {
         fn execute(&mut self, query: &str) -> Result<ResultSet, NyxError>;
@@ -29,10 +29,16 @@ pub mod database {
         pub struct SqliteConnection;
         impl Connection for SqliteConnection {
             fn execute(&mut self, _query: &str) -> Result<ResultSet, NyxError> {
-                Ok(ResultSet { columns: NyxVec::new(), rows: NyxVec::new() })
+                Ok(ResultSet {
+                    columns: NyxVec::new(),
+                    rows: NyxVec::new(),
+                })
             }
             fn query(&mut self, _query: &str) -> Result<ResultSet, NyxError> {
-                Ok(ResultSet { columns: NyxVec::new(), rows: NyxVec::new() })
+                Ok(ResultSet {
+                    columns: NyxVec::new(),
+                    rows: NyxVec::new(),
+                })
             }
         }
     }

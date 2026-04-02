@@ -10,7 +10,9 @@ use std::fmt;
 // RE-EXPORTS FROM NYX_DIAGNOSTICS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-pub use nyx_diagnostics::{Severity, ErrorCategory, Position, Span, NyxError, codes, LogLevel, LogConfig};
+pub use nyx_diagnostics::{
+    codes, ErrorCategory, LogConfig, LogLevel, NyxError, Position, Severity, Span,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ERROR BUILDER MACRO AND FUNCTIONS
@@ -296,8 +298,13 @@ impl DiagnosticEngine {
     }
 
     pub fn has_errors(&self) -> bool {
-        self.diagnostics.iter().any(|d| d.severity == Severity::Error)
-            || self.nyx_errors.iter().any(|e| e.severity == Severity::Error)
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error)
+            || self
+                .nyx_errors
+                .iter()
+                .any(|e| e.severity == Severity::Error)
     }
 
     pub fn has_any_errors(&self) -> bool {
@@ -305,13 +312,27 @@ impl DiagnosticEngine {
     }
 
     pub fn error_count(&self) -> usize {
-        self.diagnostics.iter().filter(|d| d.severity == Severity::Error).count()
-            + self.nyx_errors.iter().filter(|e| e.severity == Severity::Error).count()
+        self.diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .count()
+            + self
+                .nyx_errors
+                .iter()
+                .filter(|e| e.severity == Severity::Error)
+                .count()
     }
 
     pub fn warning_count(&self) -> usize {
-        self.diagnostics.iter().filter(|d| d.severity == Severity::Warning).count()
-            + self.nyx_errors.iter().filter(|e| e.severity == Severity::Warning).count()
+        self.diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .count()
+            + self
+                .nyx_errors
+                .iter()
+                .filter(|e| e.severity == Severity::Warning)
+                .count()
     }
 
     pub fn clear(&mut self) {
@@ -328,8 +349,12 @@ impl DiagnosticEngine {
     }
 
     pub fn print_all(&self) {
-        for d in &self.diagnostics { eprintln!("{d}"); }
-        for e in &self.nyx_errors { eprintln!("{e}"); }
+        for d in &self.diagnostics {
+            eprintln!("{d}");
+        }
+        for e in &self.nyx_errors {
+            eprintln!("{e}");
+        }
     }
 
     pub fn print_all_pretty(&self) {

@@ -2,8 +2,8 @@
 //! Sandboxing and Attestation.
 
 pub mod sandbox {
-    use crate::collections::vec::Vec as NyxVec;
     use crate::collections::string::String as NyxString;
+    use crate::collections::vec::Vec as NyxVec;
 
     pub struct SecurityPolicy {
         pub allow_io: bool,
@@ -33,8 +33,10 @@ pub mod sandbox {
 }
 
 pub mod attestation {
-    pub fn verify_boot() -> bool { true }
-    
+    pub fn verify_boot() -> bool {
+        true
+    }
+
     pub fn audit_log(event: &str) {
         // Stub for secure audit logging
         println!("[AUDIT] {}", event);

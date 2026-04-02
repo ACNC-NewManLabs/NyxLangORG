@@ -1,13 +1,13 @@
 //! Sandbox Manager
-//! 
+//!
 //! This module manages sandbox execution.
 
 use std::collections::HashMap;
 // use std::path::Path;
 
 use crate::limits::{CpuLimit, MemoryLimit, ResourceLimits, ResourceUsage};
-use crate::policy::{PolicyBuilder, SandboxPolicy};
 use crate::monitor::ResourceMonitor;
+use crate::policy::{PolicyBuilder, SandboxPolicy};
 use crate::{SandboxError, SandboxResult};
 
 #[derive(Debug, Clone)]
@@ -56,17 +56,23 @@ impl SandboxContext {
     pub fn check_limits(&self) -> SandboxResult<()> {
         // Check memory
         if self.usage.memory_used > self.limits.memory.max_total {
-            return Err(SandboxError::ResourceLimitExceeded("Memory limit exceeded".to_string()));
+            return Err(SandboxError::ResourceLimitExceeded(
+                "Memory limit exceeded".to_string(),
+            ));
         }
 
         // Check CPU time
         if self.limits.cpu.is_exceeded() {
-            return Err(SandboxError::ResourceLimitExceeded("CPU time limit exceeded".to_string()));
+            return Err(SandboxError::ResourceLimitExceeded(
+                "CPU time limit exceeded".to_string(),
+            ));
         }
 
         // Check file size
         if self.limits.max_file_size > 0 && self.usage.file_ops > self.limits.max_file_size as u64 {
-            return Err(SandboxError::ResourceLimitExceeded("File size limit exceeded".to_string()));
+            return Err(SandboxError::ResourceLimitExceeded(
+                "File size limit exceeded".to_string(),
+            ));
         }
 
         Ok(())
@@ -74,8 +80,14 @@ impl SandboxContext {
 
     /// Record allocation
     pub fn record_alloc(&mut self, size: usize) -> SandboxResult<()> {
-        if !self.limits.memory.can_allocate(self.usage.memory_used, size) {
-            return Err(SandboxError::ResourceLimitExceeded("Memory allocation failed".to_string()));
+        if !self
+            .limits
+            .memory
+            .can_allocate(self.usage.memory_used, size)
+        {
+            return Err(SandboxError::ResourceLimitExceeded(
+                "Memory allocation failed".to_string(),
+            ));
         }
 
         self.usage.record_alloc(size);
@@ -131,20 +143,24 @@ impl SandboxManager {
     pub fn create(&mut self, id: &str) -> SandboxResult<&mut SandboxContext> {
         let policy = self.default_policy.clone();
         let context = SandboxContext::new(id.to_string(), policy);
-        
+
         self.contexts.insert(id.to_string(), context);
-        
+
         self.contexts
             .get_mut(id)
             .ok_or_else(|| SandboxError::SystemError("Failed to create sandbox".to_string()))
     }
 
     /// Create with custom policy
-    pub fn create_with_policy(&mut self, id: &str, policy: SandboxPolicy) -> SandboxResult<&mut SandboxContext> {
+    pub fn create_with_policy(
+        &mut self,
+        id: &str,
+        policy: SandboxPolicy,
+    ) -> SandboxResult<&mut SandboxContext> {
         let context = SandboxContext::new(id.to_string(), policy);
-        
+
         self.contexts.insert(id.to_string(), context);
-        
+
         self.contexts
             .get_mut(id)
             .ok_or_else(|| SandboxError::SystemError("Failed to create sandbox".to_string()))
@@ -165,7 +181,7 @@ impl SandboxManager {
         if let Some(ctx) = self.contexts.get_mut(id) {
             ctx.stop();
         }
-        
+
         self.contexts
             .remove(id)
             .map(|_| ())
@@ -186,8 +202,9 @@ impl SandboxManager {
     pub fn check_all(&self) -> SandboxResult<()> {
         for (id, ctx) in &self.contexts {
             if ctx.active {
-                ctx.check_limits()
-                    .map_err(|e| SandboxError::ResourceLimitExceeded(format!("Sandbox {}: {}", id, e)))?;
+                ctx.check_limits().map_err(|e| {
+                    SandboxError::ResourceLimitExceeded(format!("Sandbox {}: {}", id, e))
+                })?;
             }
         }
         Ok(())
@@ -219,7 +236,9 @@ impl SandboxBuilder {
 
     /// Set memory limit
     pub fn memory(mut self, max_heap: u64, max_stack: u64, max_total: u64) -> Self {
-        self.policy_builder = self.policy_builder.memory_limit(max_heap, max_stack, max_total);
+        self.policy_builder = self
+            .policy_builder
+            .memory_limit(max_heap, max_stack, max_total);
         self
     }
 
@@ -239,7 +258,7 @@ impl SandboxBuilder {
     pub fn create(self) -> SandboxResult<SandboxContext> {
         let policy = self.policy_builder.build();
         let mut manager = self.manager;
-        
+
         let context = manager.create_with_policy(&self.id, policy)?;
         Ok(context.clone())
     }
@@ -252,7 +271,7 @@ mod tests {
     #[test]
     fn test_sandbox_manager() {
         let mut manager = SandboxManager::new();
-        
+
         let ctx = manager.create("test").unwrap();
         assert_eq!(ctx.id, "test");
     }
@@ -261,16 +280,16 @@ mod tests {
     fn test_sandbox_context() {
         let policy = SandboxPolicy::default();
         let mut ctx = SandboxContext::new("test".to_string(), policy);
-        
+
         ctx.start();
         assert!(ctx.active);
-        
+
         ctx.record_alloc(1000).unwrap();
         assert_eq!(ctx.usage.memory_used, 1000);
-        
+
         ctx.record_dealloc(500);
         assert_eq!(ctx.usage.memory_used, 500);
-        
+
         ctx.stop();
         assert!(!ctx.active);
     }
@@ -282,8 +301,7 @@ mod tests {
             .cpu_time(60)
             .create()
             .unwrap();
-        
+
         assert_eq!(ctx.id, "test");
     }
 }
-

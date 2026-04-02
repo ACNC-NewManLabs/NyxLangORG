@@ -206,10 +206,10 @@ fn ensure_no_duplicates(values: &[String], label: &str) -> Result<(), String> {
 fn ensure_operator_set_supported(operators: &[String]) -> Result<(), String> {
     // Support all operators from the language registry
     const SUPPORTED: &[&str] = &[
-        "+", "-", "*", "/", "%", "=", "==", "!", "!=", "<", "<=", ">", ">=",
-        "&", "&&", "|", "||", "^", "~", "<<", ">>", "+=", "-=", "*=", "/=",
-        "%=", "&=", "|=", "^=", "<<=", ">>=", "(", ")", "{", "}", "[", "]",
-        ",", ":", "::", ".", "..", "..=", "...", ";", "?", "??", "@", "->", "=>", "<-"
+        "+", "-", "*", "/", "%", "=", "==", "!", "!=", "<", "<=", ">", ">=", "&", "&&", "|", "||",
+        "^", "~", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", "(",
+        ")", "{", "}", "[", "]", ",", ":", "::", ".", "..", "..=", "...", ";", "?", "??", "@",
+        "->", "=>", "<-",
     ];
     for op in operators {
         if !SUPPORTED.contains(&op.as_str()) {
@@ -223,8 +223,12 @@ fn ensure_operator_set_supported(operators: &[String]) -> Result<(), String> {
 
 fn ensure_required_patterns(rules: &SyntaxRules) -> Result<(), String> {
     let p = &rules.patterns;
-    if !p.function.contains("fn") || !(p.function.contains("<stmt>*") || p.function.contains("<body>")) {
-        return Err("function syntax pattern must include 'fn' and '<stmt>*' or '<body>'".to_string());
+    if !p.function.contains("fn")
+        || !(p.function.contains("<stmt>*") || p.function.contains("<body>"))
+    {
+        return Err(
+            "function syntax pattern must include 'fn' and '<stmt>*' or '<body>'".to_string(),
+        );
     }
     if !p.let_stmt.contains("let") || !p.let_stmt.contains("<expr>") {
         return Err("let syntax pattern must include 'let' and '<expr>'".to_string());

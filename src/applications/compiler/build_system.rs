@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::runtime::compiler_bridge::package::{content_hash, package_entry, AssetRecord, PackageBuild};
+use crate::runtime::compiler_bridge::package::{
+    content_hash, package_entry, AssetRecord, PackageBuild,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum BuildTarget {
@@ -45,7 +47,8 @@ pub fn init_project(path: &Path) -> Result<(), String> {
     fs::create_dir_all(path.join("src")).map_err(|e| e.to_string())?;
     let main_path = path.join("src").join("main.nyx");
     if !main_path.exists() {
-        fs::write(main_path, "fn main() {\nlet x = 10\nprint(x)\n}\n").map_err(|e| e.to_string())?;
+        fs::write(main_path, "fn main() {\nlet x = 10\nprint(x)\n}\n")
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -96,7 +99,10 @@ fn write_bootstrap(out_dir: &Path, target: BuildTarget) -> Result<(), String> {
         BuildTarget::Linux | BuildTarget::Windows | BuildTarget::Macos => {
             fs::write(
                 out_dir.join("launcher.json"),
-                format!("{{\"target\":\"{}\",\"package\":\"app.nyxpkg\"}}\n", target.as_str()),
+                format!(
+                    "{{\"target\":\"{}\",\"package\":\"app.nyxpkg\"}}\n",
+                    target.as_str()
+                ),
             )
             .map_err(|e| e.to_string())?;
         }

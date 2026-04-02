@@ -8,7 +8,9 @@ pub struct Mutex<T> {
 
 impl<T> Mutex<T> {
     pub fn new(value: T) -> Mutex<T> {
-        Mutex { inner: StdMutex::new(value) }
+        Mutex {
+            inner: StdMutex::new(value),
+        }
     }
     pub fn lock(&self) -> MutexGuard<'_, T> {
         self.inner.lock().unwrap()

@@ -1,7 +1,6 @@
 //! Nyx-IR Kernel Compiler
 //! Responsible for translating high-level Nyx ops into hardware-optimized kernels.
 
-
 pub enum Instruction {
     Load(String),
     Store(String),
@@ -20,7 +19,7 @@ pub struct Kernel {
 pub fn compile_to_wgsl(kernel: &Kernel) -> String {
     let mut body = String::new();
     body.push_str("    var x = data[i];\n");
-    
+
     for ins in &kernel.instructions {
         match ins {
             Instruction::Add => body.push_str("    x = x + params.val;\n"),
@@ -31,8 +30,9 @@ pub fn compile_to_wgsl(kernel: &Kernel) -> String {
             _ => {}
         }
     }
-    
-    format!(r#"
+
+    format!(
+        r#"
 @group(0) @binding(0) var<storage, read_write> data: array<f32>;
 struct Meta {{ val: f32 }};
 @group(0) @binding(1) var<uniform> params: Meta;
@@ -44,5 +44,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 {}
     data[i] = x;
 }}
-"#, body)
+"#,
+        body
+    )
 }

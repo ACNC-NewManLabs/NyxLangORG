@@ -1,4 +1,4 @@
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
 /// Actor-based Concurrency for Nyx, effectively mimicking Erlang OTP processes and Go routines.
@@ -9,18 +9,16 @@ pub struct Actor<T: Send + 'static> {
 
 impl<T: Send + 'static> Actor<T> {
     /// Spawns a lightweight Green-Thread proxy mapping to an OS thread with a private mailbox
-    pub fn spawn<F>(handler: F) -> Self 
-    where 
-        F: FnOnce(Receiver<T>) + Send + 'static 
+    pub fn spawn<F>(handler: F) -> Self
+    where
+        F: FnOnce(Receiver<T>) + Send + 'static,
     {
         let (tx, rx) = channel();
         thread::spawn(move || {
             handler(rx);
         });
 
-        Self {
-            mailbox_sender: tx,
-        }
+        Self { mailbox_sender: tx }
     }
 
     /// Fire-and-forget message passing

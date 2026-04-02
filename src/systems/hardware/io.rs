@@ -2,15 +2,37 @@
 
 use super::inline_asm::io as asm_io;
 
-pub struct Port { port: u16 }
+pub struct Port {
+    port: u16,
+}
 impl Port {
-    pub const fn new(port: u16) -> Self { Self { port } }
-    #[inline] pub fn readb(&self) -> u8 { unsafe { asm_io::inb(self.port) } }
-    #[inline] pub fn writeb(&self, value: u8) { unsafe { asm_io::outb(self.port, value) } }
-    #[inline] pub fn readw(&self) -> u16 { unsafe { asm_io::inw(self.port) } }
-    #[inline] pub fn writew(&self, value: u16) { unsafe { asm_io::outw(self.port, value) } }
-    #[inline] pub fn readl(&self) -> u32 { unsafe { asm_io::inl(self.port) } }
-    #[inline] pub fn writel(&self, value: u32) { unsafe { asm_io::outl(self.port, value) } }
+    pub const fn new(port: u16) -> Self {
+        Self { port }
+    }
+    #[inline]
+    pub fn readb(&self) -> u8 {
+        unsafe { asm_io::inb(self.port) }
+    }
+    #[inline]
+    pub fn writeb(&self, value: u8) {
+        unsafe { asm_io::outb(self.port, value) }
+    }
+    #[inline]
+    pub fn readw(&self) -> u16 {
+        unsafe { asm_io::inw(self.port) }
+    }
+    #[inline]
+    pub fn writew(&self, value: u16) {
+        unsafe { asm_io::outw(self.port, value) }
+    }
+    #[inline]
+    pub fn readl(&self) -> u32 {
+        unsafe { asm_io::inl(self.port) }
+    }
+    #[inline]
+    pub fn writel(&self, value: u32) {
+        unsafe { asm_io::outl(self.port, value) }
+    }
 }
 
 #[allow(dead_code)]
@@ -19,7 +41,12 @@ pub struct IoPort<T: Copy> {
     _phantom: core::marker::PhantomData<T>,
 }
 impl<T: Copy> IoPort<T> {
-    pub const fn new(port: u16) -> Self { Self { port, _phantom: core::marker::PhantomData } }
+    pub const fn new(port: u16) -> Self {
+        Self {
+            port,
+            _phantom: core::marker::PhantomData,
+        }
+    }
 }
 
 pub mod ports {
@@ -44,8 +71,14 @@ pub const PCI_DATA: u16 = 0xCFC;
 
 pub struct PciConfig;
 impl PciConfig {
-    pub fn read(_bus: u8, _slot: u8, _func: u8, _offset: u8) -> u32 { 0 }
+    pub fn read(_bus: u8, _slot: u8, _func: u8, _offset: u8) -> u32 {
+        0
+    }
     pub fn write(_bus: u8, _slot: u8, _func: u8, _offset: u8, _value: u32) {}
-    pub fn vendor_id(_bus: u8, _slot: u8) -> u16 { 0xFFFF }
-    pub fn device_exists(_bus: u8, _slot: u8) -> bool { false }
+    pub fn vendor_id(_bus: u8, _slot: u8) -> u16 {
+        0xFFFF
+    }
+    pub fn device_exists(_bus: u8, _slot: u8) -> bool {
+        false
+    }
 }

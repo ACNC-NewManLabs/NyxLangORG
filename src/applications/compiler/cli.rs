@@ -2,9 +2,13 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::applications::compiler::build_system::{build_deterministic, init_project, BuildTarget, DeterministicBuildOptions};
+use crate::applications::compiler::build_system::{
+    build_deterministic, init_project, BuildTarget, DeterministicBuildOptions,
+};
 use crate::applications::compiler::compiler_main::{CompileOptions, Compiler};
-use crate::runtime::execution::nyx_vm::{format_eval_error as vm_format_eval_error, to_stringish as vm_to_stringish, Value as VmValue};
+use crate::runtime::execution::nyx_vm::{
+    format_eval_error as vm_format_eval_error, to_stringish as vm_to_stringish, Value as VmValue,
+};
 use crate::runtime::execution::ui_runtime::{execute_app as execute_vm_app, execute_bytecode_app};
 use crate::systems::backend::llvm_backend::Target;
 #[cfg(feature = "hypervisor")]
@@ -24,7 +28,11 @@ struct Args {
     command: Option<Command>,
 
     /// Compatibility positional for 'nyx -- db shell' syntax
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true, value_name = "ARGS")]
+    #[arg(
+        trailing_var_arg = true,
+        allow_hyphen_values = true,
+        value_name = "ARGS"
+    )]
     _extra: Vec<String>,
 }
 
@@ -176,9 +184,7 @@ enum UiCommand {
         input: Option<PathBuf>,
     },
     /// Run the UI engine internal test suite.
-    Test {
-        input: Option<PathBuf>,
-    },
+    Test { input: Option<PathBuf> },
 }
 
 #[derive(Debug, Subcommand)]
@@ -232,7 +238,7 @@ enum WebCommand {
 
 pub async fn run() -> Result<(), String> {
     let mut args = Args::parse();
-    
+
     // Compatibility: If 'nyx -- db shell' was used, args.command will be None
     // but args._extra will contain ["db", "shell", ...].
     if args.command.is_none() && !args._extra.is_empty() {
@@ -311,7 +317,8 @@ pub async fn run() -> Result<(), String> {
 
             let target_type = parse_target(&target)?;
             let value = if jit {
-                crate::runtime::execution::ui_runtime::execute_jit_app(&input).map_err(|e| vm_format_eval_error(&e))?
+                crate::runtime::execution::ui_runtime::execute_jit_app(&input)
+                    .map_err(|e| vm_format_eval_error(&e))?
             } else if matches!(target_type, Target::Bytecode) {
                 execute_bytecode_app(&input).map_err(|e| vm_format_eval_error(&e))?
             } else {
@@ -338,7 +345,11 @@ pub async fn run() -> Result<(), String> {
                 println!("Binary: {bin}");
             }
         }
-        Some(Command::BuildOs { input, linker_script, out_dir }) => {
+        Some(Command::BuildOs {
+            input,
+            linker_script,
+            out_dir,
+        }) => {
             let output = compiler.compile(CompileOptions {
                 input,
                 output_dir: out_dir,
@@ -348,7 +359,10 @@ pub async fn run() -> Result<(), String> {
                 is_shared: false,
                 linker_script: Some(linker_script),
             })?;
-            println!("SUCCESS: Bare-metal OS kernel built at {}", output.binary_path.unwrap_or_default());
+            println!(
+                "SUCCESS: Bare-metal OS kernel built at {}",
+                output.binary_path.unwrap_or_default()
+            );
         }
         Some(Command::Check { input }) => {
             let source = std::fs::read_to_string(input).map_err(|e| e.to_string())?;
@@ -425,9 +439,8 @@ pub async fn run() -> Result<(), String> {
                 println!("built static site to {}", out_dir.display());
             }
             UiCommand::Test { input } => {
-                let path = input.unwrap_or_else(|| {
-                    PathBuf::from("engines/ui_engine/tests/ui_tests.nyx")
-                });
+                let path =
+                    input.unwrap_or_else(|| PathBuf::from("engines/ui_engine/tests/ui_tests.nyx"));
                 println!("UI tests: executing {}", path.display());
                 let value = execute_vm_app(&path).map_err(|e| vm_format_eval_error(&e))?;
                 if !matches!(value, VmValue::Null) {
@@ -458,10 +471,7 @@ pub async fn run() -> Result<(), String> {
             WebCommand::Build { input, out_dir } => {
                 let out_display = out_dir.display().to_string();
                 crate::applications::compiler::web_preview::build(
-                    crate::applications::compiler::web_preview::WebBuildOptions { 
-                        input, 
-                        out_dir 
-                    },
+                    crate::applications::compiler::web_preview::WebBuildOptions { input, out_dir },
                 )?;
                 println!("built static site to {}", out_display);
             }
@@ -477,13 +487,26 @@ pub async fn run() -> Result<(), String> {
                 );
             }
         },
-        Some(Command::Export { input, format, out_dir }) => {
+        Some(Command::Export {
+            input,
+            format,
+            out_dir,
+        }) => {
             let is_shared = matches!(format.as_str(), "dll" | "so" | "dylib");
             let target = Target::X86_64; // Default to host, can be expanded later
-            let module_name = input.file_stem().unwrap_or_else(|| std::ffi::OsStr::new("main")).to_string_lossy().to_string();
-            
-            println!("Exporting {} to {} (format: {})...", input.display(), out_dir.display(), format);
-            
+            let module_name = input
+                .file_stem()
+                .unwrap_or_else(|| std::ffi::OsStr::new("main"))
+                .to_string_lossy()
+                .to_string();
+
+            println!(
+                "Exporting {} to {} (format: {})...",
+                input.display(),
+                out_dir.display(),
+                format
+            );
+
             let output = compiler.compile(CompileOptions {
                 input,
                 output_dir: out_dir,
@@ -493,18 +516,26 @@ pub async fn run() -> Result<(), String> {
                 is_shared,
                 linker_script: None,
             })?;
-            
+
             if let Some(bin) = output.binary_path {
                 let bin_path = std::path::Path::new(&bin);
                 let mut final_path = bin_path.to_path_buf();
                 match format.as_str() {
-                    "exe" => { final_path.set_extension("exe"); }
-                    "dll" => { final_path.set_extension("dll"); }
-                    "so" => { final_path.set_extension("so"); }
-                    "bin" => { final_path.set_extension("bin"); }
+                    "exe" => {
+                        final_path.set_extension("exe");
+                    }
+                    "dll" => {
+                        final_path.set_extension("dll");
+                    }
+                    "so" => {
+                        final_path.set_extension("so");
+                    }
+                    "bin" => {
+                        final_path.set_extension("bin");
+                    }
                     _ => {}
                 }
-                
+
                 if final_path != bin_path {
                     std::fs::rename(bin_path, &final_path).map_err(|e| e.to_string())?;
                 }
@@ -516,17 +547,20 @@ pub async fn run() -> Result<(), String> {
         Some(Command::Db { cmd }) => match cmd {
             DbCommand::Server { port } => {
                 println!("Starting Nyx-Server on port {}...", port);
-                crate::runtime::execution::nyx_server::NyxServer::start(port).await
+                crate::runtime::execution::nyx_server::NyxServer::start(port)
+                    .await
                     .map_err(|e| e.to_string())?;
             }
             DbCommand::Shell { host, port } => {
-                crate::runtime::execution::nyx_shell_client::run_shell(&host, port).await
+                crate::runtime::execution::nyx_shell_client::run_shell(&host, port)
+                    .await
                     .map_err(|e| e.to_string())?;
             }
         },
         Some(Command::Server { port }) => {
             println!("Starting Nyx-Server on port {}...", port);
-            crate::runtime::execution::nyx_server::NyxServer::start(port).await
+            crate::runtime::execution::nyx_server::NyxServer::start(port)
+                .await
                 .map_err(|e| e.to_string())?;
         }
         #[cfg(feature = "hypervisor")]
@@ -534,7 +568,8 @@ pub async fn run() -> Result<(), String> {
             cli.execute().map_err(|e| e.to_string())?;
         }
         Some(Command::Shell { host, port }) => {
-            crate::runtime::execution::nyx_shell_client::run_shell(&host, port).await
+            crate::runtime::execution::nyx_shell_client::run_shell(&host, port)
+                .await
                 .map_err(|e| e.to_string())?;
         }
     }
@@ -559,10 +594,7 @@ fn collect_nyx_files(path: &std::path::Path) -> Result<Vec<PathBuf>, String> {
 
     let mut stack = vec![path.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let dir_name = dir
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default();
+        let dir_name = dir.file_name().and_then(|s| s.to_str()).unwrap_or_default();
         if dir_name.starts_with('.') || dir_name == "target" || dir_name == "node_modules" {
             continue;
         }

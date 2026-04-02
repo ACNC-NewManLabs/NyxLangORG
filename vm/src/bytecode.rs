@@ -1,5 +1,5 @@
 //! Bytecode Definitions
-//! 
+//!
 //! This module defines the bytecode instruction set for the Nyx VM.
 //! The VM uses a stack-based architecture with 71 opcodes.
 
@@ -35,8 +35,8 @@ pub enum OpCode {
     DUP2 = 11,
     SWAP = 12,
     ROT = 13,
-    PICK = 14,   // Pick nth item from stack
-    PUT = 15,    // Put item at nth position
+    PICK = 14, // Pick nth item from stack
+    PUT = 15,  // Put item at nth position
 
     // Arithmetic (16-31)
     ADD = 16,
@@ -76,13 +76,13 @@ pub enum OpCode {
     BXOR = 47,
     SHL = 48,
     SHR = 49,
-    USHR = 50,  // Unsigned shift right
+    USHR = 50, // Unsigned shift right
 
     // Memory (51-55)
-    LOAD = 51,    // Load from local
-    STORE = 52,   // Store to local
-    ALLOC = 53,   // Allocate heap
-    FREE = 54,    // Free heap
+    LOAD = 51,  // Load from local
+    STORE = 52, // Store to local
+    ALLOC = 53, // Allocate heap
+    FREE = 54,  // Free heap
     GetGlobal = 55,
     SetGlobal = 56,
 
@@ -98,10 +98,10 @@ pub enum OpCode {
 
     // Closure (65-70)
     CLOSURE = 65,
-    PushM = 66,       // Push module constant
-    ClosureRef = 67,  // Closure with by-reference upvalues
-    GetGlobalM = 68,  // Get global by module constant
-    SetGlobalM = 69,  // Set global by module constant
+    PushM = 66,           // Push module constant
+    ClosureRef = 67,      // Closure with by-reference upvalues
+    GetGlobalM = 68,      // Get global by module constant
+    SetGlobalM = 69,      // Set global by module constant
     ClosureRefStack = 70, // Closure with by-reference upvalues from stack
 
     // String/Array Primitives (71-74)
@@ -278,7 +278,8 @@ impl Value {
                 format!("[{}]", items.join(", "))
             }
             Value::Object(obj) => {
-                let items: Vec<String> = obj.iter()
+                let items: Vec<String> = obj
+                    .iter()
                     .map(|(k, v)| format!("{}: {}", k, v.to_string()))
                     .collect();
                 format!("{{{}}}", items.join(", "))
@@ -311,7 +312,9 @@ impl std::fmt::Debug for NativeFunction {
 
 impl PartialEq for NativeFunction {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.arity == other.arity && self.func as usize == other.func as usize
+        self.name == other.name
+            && self.arity == other.arity
+            && self.func as usize == other.func as usize
     }
 }
 
@@ -368,7 +371,11 @@ pub struct BytecodeInstr {
 impl BytecodeInstr {
     /// Create new instruction
     pub fn new(opcode: OpCode, operands: Vec<i32>, line: usize) -> Self {
-        Self { opcode, operands, line }
+        Self {
+            opcode,
+            operands,
+            line,
+        }
     }
 
     /// Create instruction with single operand
@@ -558,7 +565,12 @@ fn read_u32(bytes: &[u8], pos: &mut usize) -> Result<u32, String> {
     if *pos + 4 > bytes.len() {
         return Err("Unexpected EOF".to_string());
     }
-    let value = u32::from_be_bytes([bytes[*pos], bytes[*pos + 1], bytes[*pos + 2], bytes[*pos + 3]]);
+    let value = u32::from_be_bytes([
+        bytes[*pos],
+        bytes[*pos + 1],
+        bytes[*pos + 2],
+        bytes[*pos + 3],
+    ]);
     *pos += 4;
     Ok(value)
 }
@@ -567,7 +579,12 @@ fn read_i32(bytes: &[u8], pos: &mut usize) -> Result<i32, String> {
     if *pos + 4 > bytes.len() {
         return Err("Unexpected EOF".to_string());
     }
-    let value = i32::from_be_bytes([bytes[*pos], bytes[*pos + 1], bytes[*pos + 2], bytes[*pos + 3]]);
+    let value = i32::from_be_bytes([
+        bytes[*pos],
+        bytes[*pos + 1],
+        bytes[*pos + 2],
+        bytes[*pos + 3],
+    ]);
     *pos += 4;
     Ok(value)
 }

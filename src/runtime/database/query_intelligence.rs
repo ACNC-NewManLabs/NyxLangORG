@@ -25,11 +25,11 @@ impl QueryIntelligence {
     pub fn estimate_plan_cost(&self, table_name: &str, filter_selectivity: f64) -> f64 {
         let rows = *self.table_stats.get(table_name).unwrap_or(&1000);
         let selected_rows = rows as f64 * filter_selectivity;
-        
+
         // Base cost: O(N) for scan + O(M log M) for sorting/filtering
         let scan_cost = rows as f64 * 0.1;
         let processing_cost = selected_rows * 1.5;
-        
+
         scan_cost + processing_cost
     }
 
@@ -58,10 +58,10 @@ mod tests {
     fn test_cbo_cost_scaling() {
         let mut intel = QueryIntelligence::new();
         intel.update_stats("users".to_string(), 1_000_000);
-        
+
         let cost_full = intel.estimate_plan_cost("users", 1.0);
         let cost_filtered = intel.estimate_plan_cost("users", 0.01);
-        
+
         assert!(cost_filtered < cost_full);
     }
 
@@ -70,7 +70,7 @@ mod tests {
         let mut intel = QueryIntelligence::new();
         intel.update_stats("large_fact".to_string(), 10_000_000);
         intel.update_stats("small_dim".to_string(), 100);
-        
+
         let order = intel.suggest_join_order(&["large_fact".to_string(), "small_dim".to_string()]);
         assert_eq!(order[0], "small_dim");
     }

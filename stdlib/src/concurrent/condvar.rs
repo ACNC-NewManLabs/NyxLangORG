@@ -14,7 +14,9 @@ impl Default for Condvar {
 
 impl Condvar {
     pub fn new() -> Condvar {
-        Condvar { inner: StdCondvar::new() }
+        Condvar {
+            inner: StdCondvar::new(),
+        }
     }
 
     pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {

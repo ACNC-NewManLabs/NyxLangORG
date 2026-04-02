@@ -1,10 +1,9 @@
 //! NYX Core Memory Module
-//! 
+//!
 //! Low-level memory operations that work without an OS.
 //! This module provides unsafe memory utilities for the core library.
 
 use core::ptr;
-
 
 // =============================================================================
 // Memory Operations
@@ -131,7 +130,10 @@ pub unsafe fn uninit<T>() -> T {
 ///
 /// This is equivalent to `mem::zeroed()` but works in const contexts.
 #[inline]
-pub const fn zeroed<T>() -> T where T: Copy {
+pub const fn zeroed<T>() -> T
+where
+    T: Copy,
+{
     unsafe { core::mem::zeroed() }
 }
 
@@ -303,13 +305,17 @@ impl<T: Copy> MaybeUninit<T> {
     #[inline]
     pub const fn zeroed() -> MaybeUninit<T> {
         // SAFETY: zero is a valid bit-pattern for zeroed memory.
-        MaybeUninit { value: core::mem::ManuallyDrop::new(unsafe { core::mem::zeroed() }) }
+        MaybeUninit {
+            value: core::mem::ManuallyDrop::new(unsafe { core::mem::zeroed() }),
+        }
     }
 
     /// Creates a new MaybeUninit with initialized memory.
     #[inline]
     pub const fn new(value: T) -> MaybeUninit<T> {
-        MaybeUninit { value: core::mem::ManuallyDrop::new(value) }
+        MaybeUninit {
+            value: core::mem::ManuallyDrop::new(value),
+        }
     }
 
     /// Returns a raw pointer to the contained value.
@@ -478,4 +484,3 @@ mod tests {
         assert_eq!(addr % 8, 0);
     }
 }
-

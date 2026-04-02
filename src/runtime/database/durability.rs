@@ -1,10 +1,10 @@
-use std::fs::{File, OpenOptions};
-use std::io::{Write, Read};
-use std::path::Path;
-use serde::{Serialize, Deserialize};
-use crc32fast::Hasher;
-use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, aead::Aead};
 use crate::runtime::database::core_types::*;
+use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit, Nonce};
+use crc32fast::Hasher;
+use serde::{Deserialize, Serialize};
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WalOp {
@@ -21,10 +21,19 @@ pub enum WalOp {
     DropTable {
         name: String,
     },
-    BeginTransaction { tx_id: u64 },
-    Commit { tx_id: u64 },
-    Abort { tx_id: u64 },
-    CreateTable { name: String, schema: Schema },
+    BeginTransaction {
+        tx_id: u64,
+    },
+    Commit {
+        tx_id: u64,
+    },
+    Abort {
+        tx_id: u64,
+    },
+    CreateTable {
+        name: String,
+        schema: Schema,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,7 +76,10 @@ impl DurabilityStorage {
     }
 
     pub fn execute_point_in_time_recovery(&self, timestamp: u64) -> std::io::Result<()> {
-        println!("[Durability] Performing Point-in-Time Recovery to timestamp: {}", timestamp);
+        println!(
+            "[Durability] Performing Point-in-Time Recovery to timestamp: {}",
+            timestamp
+        );
         Ok(())
     }
 
@@ -95,7 +107,7 @@ impl DurabilityStorage {
         file.write_all(&Self::MAGIC)?;
         file.write_all(&[Self::VERSION])?;
         file.write_all(&crc.to_le_bytes())?;
-        
+
         // ENCRYPTION LAYER
         let encrypted_body = self.encrypt_data(&body);
         file.write_all(&(encrypted_body.len() as u32).to_le_bytes())?;
@@ -111,8 +123,10 @@ impl DurabilityStorage {
         let key = Key::<Aes256Gcm>::from_slice(key_bytes);
         let cipher = Aes256Gcm::new(key);
         let nonce = Nonce::from_slice(b"NYX_NONCE_12"); // 12-byte nonce (In prod, should be random/unique)
-        
-        cipher.encrypt(nonce, data.as_ref()).expect("Encryption failed")
+
+        cipher
+            .encrypt(nonce, data.as_ref())
+            .expect("Encryption failed")
     }
 
     fn decrypt_data(&self, data: &[u8]) -> Vec<u8> {
@@ -120,8 +134,10 @@ impl DurabilityStorage {
         let key = Key::<Aes256Gcm>::from_slice(key_bytes);
         let cipher = Aes256Gcm::new(key);
         let nonce = Nonce::from_slice(b"NYX_NONCE_12");
-        
-        cipher.decrypt(nonce, data.as_ref()).expect("Decryption failed")
+
+        cipher
+            .decrypt(nonce, data.as_ref())
+            .expect("Decryption failed")
     }
 
     pub fn recover_metadata(&self) -> Vec<WalOp> {
@@ -139,12 +155,16 @@ impl DurabilityStorage {
         let mut header = [0u8; 13]; // 4+1+4+4
 
         while file.read_exact(&mut header).is_ok() {
-            if header[0..4] != Self::MAGIC { break; }
+            if header[0..4] != Self::MAGIC {
+                break;
+            }
             let crc = u32::from_le_bytes(header[5..9].try_into().unwrap());
             let len = u32::from_le_bytes(header[9..13].try_into().unwrap()) as usize;
 
             let mut encrypted_body = vec![0u8; len];
-            if file.read_exact(&mut encrypted_body).is_err() { break; }
+            if file.read_exact(&mut encrypted_body).is_err() {
+                break;
+            }
 
             let body = self.decrypt_data(&encrypted_body);
 
@@ -162,17 +182,20 @@ impl DurabilityStorage {
         ops
     }
 
-    pub fn create_full_checkpoint(&self, catalog_data: &std::collections::HashMap<String, Vec<DataChunk>>) -> std::io::Result<()> {
+    pub fn create_full_checkpoint(
+        &self,
+        catalog_data: &std::collections::HashMap<String, Vec<DataChunk>>,
+    ) -> std::io::Result<()> {
         let path = format!("{}/checkpoint.bin", self.storage_path);
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .open(path)?;
-        
+
         let serialized = bincode::serialize(catalog_data).map_err(std::io::Error::other)?;
         let encrypted = self.encrypt_data(&serialized);
-        
+
         file.write_all(b"NYX-CHECKPOINT-1.2-SECURED-BIN")?;
         file.write_all(&(encrypted.len() as u32).to_le_bytes())?;
         file.write_all(&encrypted)?;
@@ -187,26 +210,32 @@ impl DurabilityStorage {
         Ok(())
     }
 
-    pub fn load_full_checkpoint(&self) -> Option<std::collections::HashMap<String, Vec<DataChunk>>> {
+    pub fn load_full_checkpoint(
+        &self,
+    ) -> Option<std::collections::HashMap<String, Vec<DataChunk>>> {
         let path = format!("{}/checkpoint.bin", self.storage_path);
         if let Ok(mut file) = File::open(path) {
             let mut magic = [0u8; 30];
-            if file.read_exact(&mut magic).is_err() || &magic != b"NYX-CHECKPOINT-1.2-SECURED-BIN" { return None; }
-            
+            if file.read_exact(&mut magic).is_err() || &magic != b"NYX-CHECKPOINT-1.2-SECURED-BIN" {
+                return None;
+            }
+
             let mut len_bytes = [0u8; 4];
             file.read_exact(&mut len_bytes).ok()?;
             let len = u32::from_le_bytes(len_bytes) as usize;
-            
+
             let mut encrypted = vec![0u8; len];
             file.read_exact(&mut encrypted).ok()?;
             let decrypted = self.decrypt_data(&encrypted);
-            
+
             return bincode::deserialize(&decrypted).ok();
         }
         None
     }
 
-    pub fn reconstruct_catalog(&self) -> std::io::Result<std::collections::HashMap<String, Schema>> {
+    pub fn reconstruct_catalog(
+        &self,
+    ) -> std::io::Result<std::collections::HashMap<String, Schema>> {
         let wal_path = format!("{}/wal.log", self.storage_path);
         if !Path::new(&wal_path).exists() {
             return Ok(std::collections::HashMap::new());
@@ -221,25 +250,33 @@ impl DurabilityStorage {
         let mut header = [0u8; 13];
 
         while file.read_exact(&mut header).is_ok() {
-            if header[0..4] != Self::MAGIC { break; }
+            if header[0..4] != Self::MAGIC {
+                break;
+            }
             let crc = u32::from_le_bytes(header[5..9].try_into().unwrap());
             let len = u32::from_le_bytes(header[9..13].try_into().unwrap()) as usize;
 
             let mut encrypted_body = vec![0u8; len];
-            if file.read_exact(&mut encrypted_body).is_err() { break; }
+            if file.read_exact(&mut encrypted_body).is_err() {
+                break;
+            }
 
             let body = self.decrypt_data(&encrypted_body);
-            
+
             let mut hasher = Hasher::new();
             hasher.update(&body);
-            if hasher.finalize() != crc { continue; }
+            if hasher.finalize() != crc {
+                continue;
+            }
 
             if let Ok(entry) = serde_json::from_slice::<WalEntry>(&body) {
                 match entry.op {
                     WalOp::CreateTable { name, schema } => {
                         catalog.insert(name, schema);
                     }
-                    WalOp::RegisterTable { name, schema_json, .. } => {
+                    WalOp::RegisterTable {
+                        name, schema_json, ..
+                    } => {
                         if let Ok(fields) = serde_json::from_str::<Vec<Field>>(&schema_json) {
                             catalog.insert(name, Schema { fields });
                         }
@@ -267,9 +304,15 @@ mod tests {
     #[test]
     fn test_wal_integrity_and_recovery() {
         let mut dur = DurabilityStorage::new();
-        dur.storage_path = format!("nyx_data_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        dur.storage_path = format!(
+            "nyx_data_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         std::fs::create_dir_all(&dur.storage_path).unwrap();
-        
+
         let wal_path = format!("{}/wal.log", dur.storage_path);
         if Path::new(&wal_path).exists() {
             std::fs::remove_file(&wal_path).unwrap();

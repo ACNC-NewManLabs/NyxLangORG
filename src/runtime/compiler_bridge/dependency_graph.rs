@@ -19,7 +19,9 @@ impl DependencyGraph {
             .to_string();
         let source = std::fs::read_to_string(entry)
             .map_err(|e| RuntimeError::new(format!("failed reading {}: {e}", entry.display())))?;
-        graph.module_files.insert(module_id.clone(), entry.to_path_buf());
+        graph
+            .module_files
+            .insert(module_id.clone(), entry.to_path_buf());
         graph.edges.insert(module_id, parse_imports(&source));
         Ok(graph)
     }
@@ -30,7 +32,8 @@ impl DependencyGraph {
         while changed_any {
             changed_any = false;
             for (module, deps) in &self.edges {
-                if deps.iter().any(|dep| impacted.contains(dep)) && impacted.insert(module.clone()) {
+                if deps.iter().any(|dep| impacted.contains(dep)) && impacted.insert(module.clone())
+                {
                     changed_any = true;
                 }
             }

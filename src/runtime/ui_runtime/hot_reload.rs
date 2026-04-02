@@ -18,7 +18,11 @@ pub fn patch_runtime<R: RuntimeSession>(
 }
 
 pub fn watched_paths(entry: &Path, engine_root: &Path) -> Vec<PathBuf> {
-    let mut out = vec![entry.to_path_buf(), engine_root.join("engine.json"), engine_root.join("src")];
+    let mut out = vec![
+        entry.to_path_buf(),
+        engine_root.join("engine.json"),
+        engine_root.join("src"),
+    ];
     out.sort();
     out.dedup();
     out

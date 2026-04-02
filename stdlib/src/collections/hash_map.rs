@@ -11,12 +11,16 @@ pub struct HashMap<K, V> {
 impl<K: Eq + Hash, V> HashMap<K, V> {
     /// Create new hash map
     pub fn new() -> HashMap<K, V> {
-        HashMap { inner: StdHashMap::new() }
+        HashMap {
+            inner: StdHashMap::new(),
+        }
     }
 
     /// With capacity
     pub fn with_capacity(cap: usize) -> HashMap<K, V> {
-        HashMap { inner: StdHashMap::with_capacity(cap) }
+        HashMap {
+            inner: StdHashMap::with_capacity(cap),
+        }
     }
 
     /// Insert

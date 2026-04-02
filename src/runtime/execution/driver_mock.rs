@@ -1,6 +1,6 @@
-use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write};
 use crate::runtime::execution::df_engine::global_catalog;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 
 pub struct NyxDriverMock;
 
@@ -9,7 +9,10 @@ impl NyxDriverMock {
     /// This simulates a real database wire protocol for JDBC/ODBC compatibility.
     pub fn start(port: u16) -> std::io::Result<()> {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port))?;
-        println!("[Nyx-Driver] Mock Arrow-over-TCP server listening on port {}", port);
+        println!(
+            "[Nyx-Driver] Mock Arrow-over-TCP server listening on port {}",
+            port
+        );
 
         for stream in listener.incoming() {
             match stream {
@@ -32,7 +35,9 @@ impl NyxDriverMock {
 
     fn handle_get_chunk(stream: &mut TcpStream, request: &str) {
         let parts: Vec<&str> = request.split_whitespace().collect();
-        if parts.len() < 2 { return; }
+        if parts.len() < 2 {
+            return;
+        }
         let table_name = parts[1];
 
         let catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());

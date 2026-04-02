@@ -22,4 +22,3 @@ pub mod copy {
         ptr::copy_nonoverlapping(src, dst, count);
     }
 }
-

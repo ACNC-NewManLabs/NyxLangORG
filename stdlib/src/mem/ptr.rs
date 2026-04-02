@@ -66,4 +66,3 @@ pub mod ptr {
         ptr.is_null()
     }
 }
-

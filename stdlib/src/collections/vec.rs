@@ -10,12 +10,16 @@ pub struct Vec<T> {
 impl<T> Vec<T> {
     /// Create a new empty vector
     pub fn new() -> Vec<T> {
-        Vec { inner: StdVec::new() }
+        Vec {
+            inner: StdVec::new(),
+        }
     }
 
     /// Create vector with capacity
     pub fn with_capacity(cap: usize) -> Vec<T> {
-        Vec { inner: StdVec::with_capacity(cap) }
+        Vec {
+            inner: StdVec::with_capacity(cap),
+        }
     }
 
     /// Push element to end
@@ -48,9 +52,14 @@ impl<T> Vec<T> {
         self.inner.get(index).ok_or_else(|| {
             crate::error::NyxError::new(
                 "STD001",
-                format!("Index out of bounds: index {} is >= length {}", index, self.inner.len()),
-                crate::error::ErrorCategory::Runtime
-            ).with_suggestion("Check index bounds before access or use safe_get().")
+                format!(
+                    "Index out of bounds: index {} is >= length {}",
+                    index,
+                    self.inner.len()
+                ),
+                crate::error::ErrorCategory::Runtime,
+            )
+            .with_suggestion("Check index bounds before access or use safe_get().")
         })
     }
 

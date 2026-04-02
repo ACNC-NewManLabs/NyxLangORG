@@ -1,5 +1,7 @@
 use crate::systems::ir::nyx_ir::{BinaryOp, Instruction, IrFunction, Module, Value};
-use nyx_vm::bytecode::{BytecodeInstr, BytecodeModule, Function as VmFunction, OpCode, Value as VmValue};
+use nyx_vm::bytecode::{
+    BytecodeInstr, BytecodeModule, Function as VmFunction, OpCode, Value as VmValue,
+};
 use std::collections::HashMap;
 
 pub struct BytecodeBackend;
@@ -66,7 +68,10 @@ impl<'a> FunctionLowerer<'a> {
         // Patch jumps
         let pending = std::mem::take(&mut self.pending_jumps);
         for (instr_idx, label_name) in pending {
-            let target_pc = *self.labels.get(&label_name).ok_or_else(|| format!("Undefined label: {}", label_name))?;
+            let target_pc = *self
+                .labels
+                .get(&label_name)
+                .ok_or_else(|| format!("Undefined label: {}", label_name))?;
             self.instructions[instr_idx].operands[0] = target_pc as i32;
         }
 
@@ -102,27 +107,48 @@ impl<'a> FunctionLowerer<'a> {
         match val {
             Value::Int(n) => {
                 let const_idx = self.add_constant(VmValue::Int(*n));
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::PUSH, const_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::PUSH,
+                    const_idx as i32,
+                    0,
+                ));
             }
             Value::Float(f) => {
                 let const_idx = self.add_constant(VmValue::Float(*f));
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::PUSH, const_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::PUSH,
+                    const_idx as i32,
+                    0,
+                ));
             }
             Value::Bool(b) => {
                 let const_idx = self.add_constant(VmValue::Bool(*b));
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::PUSH, const_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::PUSH,
+                    const_idx as i32,
+                    0,
+                ));
             }
             Value::Str(s) => {
                 let const_idx = self.add_constant(VmValue::String(s.clone()));
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::PUSH, const_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::PUSH,
+                    const_idx as i32,
+                    0,
+                ));
             }
             Value::Null => {
                 let const_idx = self.add_constant(VmValue::Null);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::PUSH, const_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::PUSH,
+                    const_idx as i32,
+                    0,
+                ));
             }
             Value::Local(name) | Value::Temp(name) => {
                 let idx = self.get_or_create_local(name);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::LOAD, idx as i32, 0));
+                self.instructions
+                    .push(BytecodeInstr::with_operand(OpCode::LOAD, idx as i32, 0));
             }
         }
         Ok(())
@@ -133,7 +159,8 @@ impl<'a> FunctionLowerer<'a> {
             Instruction::Let { name, value } => {
                 self.push_value(value)?;
                 let idx = self.get_or_create_local(name);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, idx as i32, 0));
+                self.instructions
+                    .push(BytecodeInstr::with_operand(OpCode::STORE, idx as i32, 0));
             }
             Instruction::Binary { dst, op, lhs, rhs } => {
                 self.push_value(lhs)?;
@@ -159,41 +186,62 @@ impl<'a> FunctionLowerer<'a> {
                     BinaryOp::Shr => OpCode::SHR,
                     _ => return Err(format!("Unsupported binary op: {:?}", op)),
                 };
-                self.instructions.push(BytecodeInstr::new(opcode, vec![], 0));
+                self.instructions
+                    .push(BytecodeInstr::new(opcode, vec![], 0));
                 let dst_idx = self.get_or_create_local(dst);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, dst_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::STORE,
+                    dst_idx as i32,
+                    0,
+                ));
             }
             Instruction::Print { value } => {
                 self.push_value(value)?;
                 // Call external "print"
                 let name_idx = self.add_constant(VmValue::String("print".to_string()));
-                self.instructions.push(BytecodeInstr::new(OpCode::CallExt, vec![name_idx as i32, 1], 0));
+                self.instructions.push(BytecodeInstr::new(
+                    OpCode::CallExt,
+                    vec![name_idx as i32, 1],
+                    0,
+                ));
             }
             Instruction::Return { value } => {
                 if let Some(v) = value {
                     self.push_value(v)?;
                 } else {
                     let const_idx = self.add_constant(VmValue::Null);
-                    self.instructions.push(BytecodeInstr::with_operand(OpCode::PUSH, const_idx as i32, 0));
+                    self.instructions.push(BytecodeInstr::with_operand(
+                        OpCode::PUSH,
+                        const_idx as i32,
+                        0,
+                    ));
                 }
-                self.instructions.push(BytecodeInstr::new(OpCode::RET, vec![], 0));
+                self.instructions
+                    .push(BytecodeInstr::new(OpCode::RET, vec![], 0));
             }
             Instruction::Label(name) => {
                 self.labels.insert(name.clone(), self.instructions.len());
             }
             Instruction::Jump(name) => {
                 let idx = self.instructions.len();
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::JMP, 0, 0));
+                self.instructions
+                    .push(BytecodeInstr::with_operand(OpCode::JMP, 0, 0));
                 self.pending_jumps.push((idx, name.clone()));
             }
-            Instruction::Branch { cond, then_label, else_label } => {
+            Instruction::Branch {
+                cond,
+                then_label,
+                else_label,
+            } => {
                 self.push_value(cond)?;
                 let jnz_idx = self.instructions.len();
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::JNZ, 0, 0));
+                self.instructions
+                    .push(BytecodeInstr::with_operand(OpCode::JNZ, 0, 0));
                 self.pending_jumps.push((jnz_idx, then_label.clone()));
-                
+
                 let jmp_idx = self.instructions.len();
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::JMP, 0, 0));
+                self.instructions
+                    .push(BytecodeInstr::with_operand(OpCode::JMP, 0, 0));
                 self.pending_jumps.push((jmp_idx, else_label.clone()));
             }
             Instruction::Call { dst, callee, args } => {
@@ -209,56 +257,127 @@ impl<'a> FunctionLowerer<'a> {
                 } else {
                     // Try external call
                     let name_idx = self.add_constant(VmValue::String(callee.clone()));
-                    self.instructions.push(BytecodeInstr::new(OpCode::CallExt, vec![name_idx as i32, args.len() as i32], 0));
+                    self.instructions.push(BytecodeInstr::new(
+                        OpCode::CallExt,
+                        vec![name_idx as i32, args.len() as i32],
+                        0,
+                    ));
                 }
                 let dst_idx = self.get_or_create_local(dst);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, dst_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::STORE,
+                    dst_idx as i32,
+                    0,
+                ));
             }
-            Instruction::StructInit { dst, struct_name: _, fields } => {
+            Instruction::StructInit {
+                dst,
+                struct_name: _,
+                fields,
+            } => {
                 // How to handle structs? The VM has NewObj and SetField.
-                self.instructions.push(BytecodeInstr::new(OpCode::NewObj, vec![], 0));
+                self.instructions
+                    .push(BytecodeInstr::new(OpCode::NewObj, vec![], 0));
                 for (field_name, value) in fields {
-                    self.instructions.push(BytecodeInstr::new(OpCode::DUP, vec![], 0));
+                    self.instructions
+                        .push(BytecodeInstr::new(OpCode::DUP, vec![], 0));
                     self.push_value(value)?;
                     let name_idx = self.add_constant(VmValue::String(field_name.clone()));
-                    self.instructions.push(BytecodeInstr::with_operand(OpCode::SetField, name_idx as i32, 0));
+                    self.instructions.push(BytecodeInstr::with_operand(
+                        OpCode::SetField,
+                        name_idx as i32,
+                        0,
+                    ));
                 }
                 let dst_idx = self.get_or_create_local(dst);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, dst_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::STORE,
+                    dst_idx as i32,
+                    0,
+                ));
             }
-            Instruction::StructGet { dst, struct_name: _, base, field } => {
+            Instruction::StructGet {
+                dst,
+                struct_name: _,
+                base,
+                field,
+            } => {
                 let base_idx = self.get_or_create_local(base);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::LOAD, base_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::LOAD,
+                    base_idx as i32,
+                    0,
+                ));
                 let name_idx = self.add_constant(VmValue::String(field.clone()));
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::GetField, name_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::GetField,
+                    name_idx as i32,
+                    0,
+                ));
                 let dst_idx = self.get_or_create_local(dst);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, dst_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::STORE,
+                    dst_idx as i32,
+                    0,
+                ));
             }
-            Instruction::ArrayInit { dst, elem_ty: _, len } => {
+            Instruction::ArrayInit {
+                dst,
+                elem_ty: _,
+                len,
+            } => {
                 self.push_value(len)?;
-                self.instructions.push(BytecodeInstr::new(OpCode::NewArray, vec![], 0));
+                self.instructions
+                    .push(BytecodeInstr::new(OpCode::NewArray, vec![], 0));
                 let dst_idx = self.get_or_create_local(dst);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, dst_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::STORE,
+                    dst_idx as i32,
+                    0,
+                ));
             }
-            Instruction::ArraySet { base, elem_ty: _, index, value } => {
+            Instruction::ArraySet {
+                base,
+                elem_ty: _,
+                index,
+                value,
+            } => {
                 let base_idx = self.get_or_create_local(base);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::LOAD, base_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::LOAD,
+                    base_idx as i32,
+                    0,
+                ));
                 self.push_value(index)?;
                 self.push_value(value)?;
-                self.instructions.push(BytecodeInstr::new(OpCode::SetIndex, vec![], 0));
+                self.instructions
+                    .push(BytecodeInstr::new(OpCode::SetIndex, vec![], 0));
                 // SetIndex usually pops everything.
             }
-            Instruction::ArrayGet { dst, elem_ty: _, base, index } => {
+            Instruction::ArrayGet {
+                dst,
+                elem_ty: _,
+                base,
+                index,
+            } => {
                 let base_idx = self.get_or_create_local(base);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::LOAD, base_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::LOAD,
+                    base_idx as i32,
+                    0,
+                ));
                 self.push_value(index)?;
-                self.instructions.push(BytecodeInstr::new(OpCode::GetIndex, vec![], 0));
+                self.instructions
+                    .push(BytecodeInstr::new(OpCode::GetIndex, vec![], 0));
                 let dst_idx = self.get_or_create_local(dst);
-                self.instructions.push(BytecodeInstr::with_operand(OpCode::STORE, dst_idx as i32, 0));
+                self.instructions.push(BytecodeInstr::with_operand(
+                    OpCode::STORE,
+                    dst_idx as i32,
+                    0,
+                ));
             }
             _ => return Err(format!("Instruction {:?} not yet implemented", instr)),
         }
         Ok(())
     }
-
 }

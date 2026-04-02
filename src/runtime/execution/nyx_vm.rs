@@ -5,17 +5,17 @@
 //! A future milestone is swapping the backend to Nyx bytecode without changing the
 //! public execution API surface.
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use serde::{Serialize, Deserialize};
 
 use crate::core::ast::ast_nodes::{
-    BlockItem, Expr, FieldInit, FunctionDecl, ItemKind, MatchBody, MatchPattern, ModuleDecl,
-    Program, Stmt, Type, ImplItem,
+    BlockItem, Expr, FieldInit, FunctionDecl, ImplItem, ItemKind, MatchBody, MatchPattern,
+    ModuleDecl, Program, Stmt, Type,
 };
-use crate::core::lexer::token::Span;
 use crate::core::lexer::lexer::Lexer;
+use crate::core::lexer::token::Span;
 use crate::core::parser::grammar_engine::GrammarEngine;
 use crate::core::parser::neuro_parser::NeuroParser;
 use crate::core::registry::language_registry::LanguageRegistry;
@@ -65,13 +65,17 @@ pub enum TensorStorage {
 
 impl serde::Serialize for TensorStorage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer {
+    where
+        S: serde::Serializer,
+    {
         use serde::ser::SerializeSeq;
         match self {
             TensorStorage::Cpu(rc) => {
                 let data = rc.read().unwrap_or_else(|e| e.into_inner());
                 let mut seq = serializer.serialize_seq(Some(data.len()))?;
-                for &f in data.iter() { seq.serialize_element(&f)?; }
+                for &f in data.iter() {
+                    seq.serialize_element(&f)?;
+                }
                 seq.end()
             }
             TensorStorage::Gpu(buf) => {
@@ -79,7 +83,9 @@ impl serde::Serialize for TensorStorage {
                 let mut data = vec![0.0f32; (buf.bucket_size / 4) as usize];
                 if crate::runtime::execution::gpu_bridge::gpu_read_buffer(buf, &mut data) {
                     let mut seq = serializer.serialize_seq(Some(data.len()))?;
-                    for &f in data.iter() { seq.serialize_element(&f)?; }
+                    for &f in data.iter() {
+                        seq.serialize_element(&f)?;
+                    }
                     seq.end()
                 } else {
                     serializer.serialize_seq(Some(0))?.end()
@@ -92,9 +98,13 @@ impl serde::Serialize for TensorStorage {
 
 impl<'de> serde::Deserialize<'de> for TensorStorage {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
+    where
+        D: serde::Deserializer<'de>,
+    {
         let data: Vec<f32> = serde::Deserialize::deserialize(deserializer)?;
-        Ok(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(data))))
+        Ok(TensorStorage::Cpu(std::sync::Arc::new(
+            std::sync::RwLock::new(data),
+        )))
     }
 }
 
@@ -106,13 +116,19 @@ pub enum Value {
     Bool(bool),
     BigInt(String),
     Str(String),
-    #[serde(serialize_with = "serialize_array", deserialize_with = "deserialize_array")]
+    #[serde(
+        serialize_with = "serialize_array",
+        deserialize_with = "deserialize_array"
+    )]
     Array(std::sync::Arc<std::sync::RwLock<Vec<Value>>>),
     #[serde(skip)]
     FloatArray(std::sync::Arc<std::sync::RwLock<Vec<f32>>>),
     #[serde(skip)]
     DoubleArray(std::sync::Arc<std::sync::RwLock<Vec<f64>>>),
-    #[serde(serialize_with = "serialize_object", deserialize_with = "deserialize_object")]
+    #[serde(
+        serialize_with = "serialize_object",
+        deserialize_with = "deserialize_object"
+    )]
     Object(std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Value>>>),
     #[serde(skip)]
     Closure(Box<ClosureValue>),
@@ -198,8 +214,16 @@ impl std::fmt::Display for Value {
             Value::BigInt(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
             Value::Array(_) => write!(f, "[...]"),
-            Value::FloatArray(fr) => write!(f, "<f32[{}]>", fr.read().unwrap_or_else(|e| e.into_inner()).len()),
-            Value::DoubleArray(dr) => write!(f, "<f64[{}]>", dr.read().unwrap_or_else(|e| e.into_inner()).len()),
+            Value::FloatArray(fr) => write!(
+                f,
+                "<f32[{}]>",
+                fr.read().unwrap_or_else(|e| e.into_inner()).len()
+            ),
+            Value::DoubleArray(dr) => write!(
+                f,
+                "<f64[{}]>",
+                dr.read().unwrap_or_else(|e| e.into_inner()).len()
+            ),
             Value::Object(_) => write!(f, "{{...}}"),
             Value::Closure(_) => write!(f, "<closure>"),
             Value::Node(_) => write!(f, "<vnode>"),
@@ -309,16 +333,22 @@ pub struct VmConfig {
 /// This is a convenience wrapper used by the REPL and session layer.
 pub fn eval_repl_line(vm: &mut NyxVm, line: &str) -> Result<Value, EvalError> {
     use crate::core::lexer::lexer::Lexer;
-    use crate::core::parser::neuro_parser::NeuroParser;
     use crate::core::parser::grammar_engine::GrammarEngine;
+    use crate::core::parser::neuro_parser::NeuroParser;
     use crate::core::registry::language_registry::LanguageRegistry;
     let registry_path = concat!(env!("CARGO_MANIFEST_DIR"), "/registry/language.json");
     let registry = LanguageRegistry::load(registry_path).unwrap_or_default();
     let grammar = GrammarEngine::from_registry(&registry);
     let mut lexer = Lexer::from_source(line.to_string());
-    let tokens = lexer.tokenize().map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
+    let tokens = lexer.tokenize().map_err(|e| EvalError {
+        message: e.to_string(),
+        stack: vec![],
+    })?;
     let mut parser = NeuroParser::new(grammar);
-    let program = parser.parse(&tokens).map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
+    let program = parser.parse(&tokens).map_err(|e| EvalError {
+        message: e.to_string(),
+        stack: vec![],
+    })?;
     vm.load_program("", program.clone(), None)?;
     Ok(Value::Null)
 }
@@ -340,7 +370,10 @@ impl NyxVm {
             buffer_cache: std::sync::Arc::new(std::sync::Mutex::new(Vec::with_capacity(32))),
             gas: config.max_gas.unwrap_or(u64::MAX),
             max_gas: config.max_gas.unwrap_or(u64::MAX),
-            memory_limit: config.memory_limit_mb.map(|m| m * 1024 * 1024).unwrap_or(u64::MAX),
+            memory_limit: config
+                .memory_limit_mb
+                .map(|m| m * 1024 * 1024)
+                .unwrap_or(u64::MAX),
             memory_used: 0,
             source_cache: HashMap::new(),
             last_span: None,
@@ -394,7 +427,9 @@ impl NyxVm {
     }
 
     pub fn trace_call(&mut self, name: &str, args: &[Value], module: &str) {
-        if !self.record_traces { return; }
+        if !self.record_traces {
+            return;
+        }
         if self.traces.len() < 1000 {
             self.traces.push(TraceEvent::Call {
                 name: name.to_string(),
@@ -405,7 +440,9 @@ impl NyxVm {
     }
 
     pub fn trace_return(&mut self, name: &str, value: &Value) {
-        if !self.record_traces { return; }
+        if !self.record_traces {
+            return;
+        }
         if self.traces.len() < 1000 {
             self.traces.push(TraceEvent::Return {
                 name: name.to_string(),
@@ -415,7 +452,9 @@ impl NyxVm {
     }
 
     pub fn trace_native_call(&mut self, name: &str, args: &[Value], result: &Value) {
-        if !self.record_traces { return; }
+        if !self.record_traces {
+            return;
+        }
         if self.traces.len() < 1000 {
             self.traces.push(TraceEvent::NativeCall {
                 name: name.to_string(),
@@ -426,7 +465,9 @@ impl NyxVm {
     }
 
     pub fn trace_error(&mut self, error: &EvalError) {
-        if !self.record_traces { return; }
+        if !self.record_traces {
+            return;
+        }
         if self.traces.len() < 1000 {
             self.traces.push(TraceEvent::Error {
                 message: error.message.clone(),
@@ -450,11 +491,16 @@ impl NyxVm {
     }
 
     pub fn track_memory(&mut self, bytes: u64) -> Result<(), EvalError> {
-        if self.memory_limit == u64::MAX { return Ok(()); }
+        if self.memory_limit == u64::MAX {
+            return Ok(());
+        }
         self.memory_used += bytes;
         if self.memory_used > self.memory_limit {
             return Err(EvalError {
-                message: format!("Memory limit exceeded: {} bytes used, limit is {} bytes", self.memory_used, self.memory_limit),
+                message: format!(
+                    "Memory limit exceeded: {} bytes used, limit is {} bytes",
+                    self.memory_used, self.memory_limit
+                ),
                 stack: vec![],
             });
         }
@@ -512,8 +558,10 @@ impl NyxVm {
                     map.insert(vname.clone(), Value::Str(vname));
                 }
                 let full = qualify(&module_prefix, &e.name);
-                self.globals.insert(full, Value::
-    Object(std::sync::Arc::new(std::sync::RwLock::new(map))));
+                self.globals.insert(
+                    full,
+                    Value::Object(std::sync::Arc::new(std::sync::RwLock::new(map))),
+                );
             } else if let ItemKind::ModuleValue(m) = &item.kind {
                 let full = qualify(&module_prefix, &m.name);
                 self.globals.insert(full, Value::Null); // Forward-declare
@@ -574,7 +622,9 @@ impl NyxVm {
                         }
                     }
                     ModuleDecl::Inline { name, items } => {
-                        let inner_program = Program { items: items.clone() };
+                        let inner_program = Program {
+                            items: items.clone(),
+                        };
                         self.load_program(qualify(&module_prefix, name), inner_program, base_path)?;
                     }
                 }
@@ -586,22 +636,37 @@ impl NyxVm {
                 self.process_use_tree(&u.tree, &module_prefix);
             }
         }
-        
+
         // Execute statics
         for item in &program.items {
             match &item.kind {
                 ItemKind::Static(s) => {
-                    let v = self.eval_expr_with_module(&s.value, &module_prefix, &mut HashMap::new(), 0)?;
+                    let v = self.eval_expr_with_module(
+                        &s.value,
+                        &module_prefix,
+                        &mut HashMap::new(),
+                        0,
+                    )?;
                     let full = qualify(&module_prefix, &s.name);
                     self.globals.insert(full, v);
                 }
                 ItemKind::Const(c) => {
-                    let v = self.eval_expr_with_module(&c.value, &module_prefix, &mut HashMap::new(), 0)?;
+                    let v = self.eval_expr_with_module(
+                        &c.value,
+                        &module_prefix,
+                        &mut HashMap::new(),
+                        0,
+                    )?;
                     let full = qualify(&module_prefix, &c.name);
                     self.globals.insert(full, v);
                 }
                 ItemKind::ModuleValue(m) => {
-                    let v = self.eval_expr_with_module(&m.value, &module_prefix, &mut HashMap::new(), 0)?;
+                    let v = self.eval_expr_with_module(
+                        &m.value,
+                        &module_prefix,
+                        &mut HashMap::new(),
+                        0,
+                    )?;
                     let full = qualify(&module_prefix, &m.name);
                     self.globals.insert(full, v);
                 }
@@ -661,14 +726,17 @@ impl NyxVm {
         })?;
 
         let base_prefix = manifest.name.as_deref().unwrap_or_else(|| {
-            engine_root.file_name().and_then(|s| s.to_str()).unwrap_or("")
+            engine_root
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
         });
-        
+
         for rel in manifest.modules {
             let module_path = engine_root.join(rel.trim_start_matches("./"));
             let rel_mod = rel.trim_start_matches("./");
             let mut parts: Vec<&str> = rel_mod.split('/').collect();
-            
+
             // Skip "src" or "source" at the start of the module path
             if !parts.is_empty() && (parts[0] == "src" || parts[0] == "source") {
                 parts.remove(0);
@@ -677,7 +745,9 @@ impl NyxVm {
             if !parts.is_empty() {
                 let last_idx = parts.len() - 1;
                 let stem = if parts[last_idx].ends_with(".nyx") {
-                    parts[last_idx].strip_suffix(".nyx").unwrap_or(&parts[last_idx])
+                    parts[last_idx]
+                        .strip_suffix(".nyx")
+                        .unwrap_or(&parts[last_idx])
                 } else {
                     parts[last_idx]
                 };
@@ -690,25 +760,25 @@ impl NyxVm {
                     parts[last_idx] = stem;
                 }
             }
-            
+
             let sub_prefix = parts.join("::");
             let full_prefix = if sub_prefix.is_empty() {
                 base_prefix.to_string()
             } else {
                 format!("{base_prefix}::{sub_prefix}")
             };
-            
+
             self.load_file(full_prefix, &module_path)?;
         }
 
         if let Some(entry) = manifest.entry {
             let entry_path = engine_root.join(entry.trim_start_matches("./"));
             self.load_file(base_prefix.to_string(), &entry_path)?;
-            
+
             // Attempt to alias base_prefix::base_prefix OR base_prefix::main::base_prefix to base_prefix
             let main_obj_direct = format!("{base_prefix}::{base_prefix}");
             let main_obj_main = format!("{base_prefix}::main::{base_prefix}");
-            
+
             if let Some(val) = self.globals.get(&main_obj_direct).cloned() {
                 self.globals.insert(base_prefix.to_string(), val);
             } else if let Some(val) = self.globals.get(&main_obj_main).cloned() {
@@ -737,7 +807,7 @@ impl NyxVm {
             }
             return res;
         }
-        
+
         let (decl, prefix) = match self.resolve_function(name, "") {
             Some(v) => v,
             None => {
@@ -752,7 +822,7 @@ impl NyxVm {
             self.trace_error(e);
         }
         let rs = rs_res?;
-        
+
         // Tag objects with their origin module for smarter UFCS resolution
         if let Value::Object(map_rc) = &rs {
             let mut map = map_rc.write().unwrap_or_else(|e| e.into_inner());
@@ -760,7 +830,7 @@ impl NyxVm {
                 map.insert("__origin__".to_string(), Value::Str(prefix.to_string()));
             }
         }
-        
+
         Ok(rs)
     }
 
@@ -782,9 +852,13 @@ impl NyxVm {
         if path != "/" {
             // Check if App handles routing internally instead of simply returning 404
             if self.has_function("App") {
-                return self.call_function("App", vec![req.clone()]).or_else(|_| self.call_function("App", vec![]));
+                return self
+                    .call_function("App", vec![req.clone()])
+                    .or_else(|_| self.call_function("App", vec![]));
             } else if self.has_function("app") {
-                return self.call_function("app", vec![req.clone()]).or_else(|_| self.call_function("app", vec![]));
+                return self
+                    .call_function("app", vec![req.clone()])
+                    .or_else(|_| self.call_function("app", vec![]));
             }
             return Ok(Value::Null);
         }
@@ -817,7 +891,7 @@ impl NyxVm {
                 stack: vec![],
             });
         };
-        
+
         let Value::Node(root) = app else {
             return Err(EvalError {
                 message: "App() did not return a ui::VNode".to_string(),
@@ -831,7 +905,11 @@ impl NyxVm {
         self.resolve_function(name, "").is_some()
     }
 
-    fn process_use_tree(&mut self, tree: &crate::core::ast::ast_nodes::UseTree, current_prefix: &str) {
+    fn process_use_tree(
+        &mut self,
+        tree: &crate::core::ast::ast_nodes::UseTree,
+        current_prefix: &str,
+    ) {
         use crate::core::ast::ast_nodes::UseTree;
         match tree {
             UseTree::Name { name, alias } => {
@@ -883,13 +961,13 @@ impl NyxVm {
                 if let Some(f) = self.functions.get(qualified) {
                     return Some((f.decl.clone(), f.module_prefix.clone()));
                 }
-                
+
                 // If it's a module, it might be qualified further
                 if !current_prefix.is_empty() {
-                     let double_qualified = format!("{}::{}", current_prefix, qualified);
-                     if let Some(f) = self.functions.get(&double_qualified) {
-                         return Some((f.decl.clone(), f.module_prefix.clone()));
-                     }
+                    let double_qualified = format!("{}::{}", current_prefix, qualified);
+                    if let Some(f) = self.functions.get(&double_qualified) {
+                        return Some((f.decl.clone(), f.module_prefix.clone()));
+                    }
                 }
             }
         }
@@ -904,7 +982,8 @@ impl NyxVm {
         }
 
         if let Some(inner) = name.strip_prefix("ui_runtime::event_bus::") {
-            if let Some(res) = self.resolve_function(&format!("ui_runtime::event_bus::{inner}"), "") {
+            if let Some(res) = self.resolve_function(&format!("ui_runtime::event_bus::{inner}"), "")
+            {
                 return Some(res);
             }
         }
@@ -916,13 +995,15 @@ impl NyxVm {
         }
 
         if let Some(inner) = name.strip_prefix("ui_runtime::platform::") {
-            if let Some(res) = self.resolve_function(&format!("ui_runtime::platform::{inner}"), "") {
+            if let Some(res) = self.resolve_function(&format!("ui_runtime::platform::{inner}"), "")
+            {
                 return Some(res);
             }
         }
-        
+
         if let Some(inner) = name.strip_prefix("platform::") {
-            if let Some(res) = self.resolve_function(&format!("ui_runtime::platform::{inner}"), "") {
+            if let Some(res) = self.resolve_function(&format!("ui_runtime::platform::{inner}"), "")
+            {
                 return Some(res);
             }
         }
@@ -944,13 +1025,15 @@ impl NyxVm {
             let mod_segment = parts[parts.len() - 2];
             let mod_pattern1 = format!("::{}::", mod_segment);
             let mod_pattern2 = format!("{}::", mod_segment);
-            
+
             for (full_name, f) in &self.functions {
-                if full_name.ends_with(&suffix) && (full_name.contains(&mod_pattern1) || full_name.starts_with(&mod_pattern2)) {
+                if full_name.ends_with(&suffix)
+                    && (full_name.contains(&mod_pattern1) || full_name.starts_with(&mod_pattern2))
+                {
                     candidates.push((full_name, f));
                 }
             }
-            
+
             if candidates.len() == 1 {
                 let (_full_name, f) = candidates[0];
                 return Some((f.decl.clone(), f.module_prefix.clone()));
@@ -996,7 +1079,7 @@ impl NyxVm {
         }
 
         self.trace_call(&decl.name, &args, module_prefix);
-        
+
         let out = (|| {
             for stmt in &decl.body {
                 match self.eval_stmt_raw(decl, module_prefix, stmt, &mut locals)? {
@@ -1046,7 +1129,9 @@ impl NyxVm {
         self.last_span = Some(*stmt.span());
         self.gas = self.gas.saturating_sub(1);
         if self.gas == 0 && self.max_gas != u64::MAX {
-            return Err(EvalError::new("Gas limit exceeded (infinite loop or resource exhaustion)"));
+            return Err(EvalError::new(
+                "Gas limit exceeded (infinite loop or resource exhaustion)",
+            ));
         }
 
         match stmt {
@@ -1145,8 +1230,8 @@ impl NyxVm {
                 span,
             } => {
                 // Aero-Loops Optimization Tier 1 & 2
-                use crate::runtime::execution::loop_optimizer::{LoopAnalysis, AeroOptimizer};
                 use crate::runtime::execution::aero_jit::AeroJit;
+                use crate::runtime::execution::loop_optimizer::{AeroOptimizer, LoopAnalysis};
 
                 match AeroOptimizer::analyze_while(condition, body, locals) {
                     LoopAnalysis::Deterministic(updates) => {
@@ -1236,7 +1321,7 @@ impl NyxVm {
             }
             Stmt::InlineAsm { code, .. } => {
                 // Extreme Level Zero: Emulated assembly execution.
-                // In a real JIT this would emit machine code. 
+                // In a real JIT this would emit machine code.
                 // Here we bridge it to an emulated hypercall or log it.
                 println!("[nyx-vm] inline asm: {}", code);
                 Ok(Control::Continue)
@@ -1291,7 +1376,9 @@ impl NyxVm {
                 for decl in declarations {
                     map.insert(decl.property, Value::Str(decl.value));
                 }
-                Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(map))))
+                Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(
+                    map,
+                ))))
             }
             Expr::CharLiteral { value: c, .. } => Ok(Value::Str(c.to_string())),
             Expr::Identifier { name, .. } => Ok(locals
@@ -1307,7 +1394,11 @@ impl NyxVm {
                     if let Some((decl, prefix)) = self.resolve_function(name, &cp) {
                         Value::Closure(Box::new(ClosureValue {
                             params: decl.params.iter().map(|p| p.name.clone()).collect(),
-                            body: Expr::Block { stmts: decl.body.clone(), tail_expr: None, span: Span::default() },
+                            body: Expr::Block {
+                                stmts: decl.body.clone(),
+                                tail_expr: None,
+                                span: Span::default(),
+                            },
                             captured: HashMap::new(),
                             module_prefix: prefix,
                         }))
@@ -1315,35 +1406,43 @@ impl NyxVm {
                         Value::Null
                     }
                 })),
-            Expr::Path { segments: parts, .. } => {
+            Expr::Path {
+                segments: parts, ..
+            } => {
                 let mut parts = parts.clone();
                 if !parts.is_empty() {
                     if let Some(imported) = self.imports.get(&parts[0]) {
                         parts[0] = imported.replace('/', "::");
                     }
                 }
-                
+
                 let full = parts.join("::");
                 if let Some(v) = self.globals.get(&full) {
                     return Ok(v.clone());
                 }
-                
+
                 let mut current_val = None;
                 let mut full_path = String::new();
                 for (i, part) in parts.iter().enumerate() {
-                    if i > 0 { full_path.push_str("::"); }
+                    if i > 0 {
+                        full_path.push_str("::");
+                    }
                     full_path.push_str(part);
-                    
+
                     if i == 0 {
                         current_val = self.globals.get(&full_path).cloned();
                     } else if let Some(Value::Object(map_rc)) = current_val {
-                        current_val = map_rc.read().unwrap_or_else(|e| e.into_inner()).get(part).cloned();
+                        current_val = map_rc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .get(part)
+                            .cloned();
                     } else {
                         current_val = None;
                         break;
                     }
                 }
-                
+
                 if let Some(v) = current_val {
                     Ok(v)
                 } else {
@@ -1351,7 +1450,11 @@ impl NyxVm {
                     if let Some((decl, prefix)) = self.resolve_function(&full, &cp) {
                         Ok(Value::Closure(Box::new(ClosureValue {
                             params: decl.params.iter().map(|p| p.name.clone()).collect(),
-                            body: Expr::Block { stmts: decl.body.clone(), tail_expr: None, span: Span::default() },
+                            body: Expr::Block {
+                                stmts: decl.body.clone(),
+                                tail_expr: None,
+                                span: Span::default(),
+                            },
                             captured: HashMap::new(),
                             module_prefix: prefix,
                         })))
@@ -1360,12 +1463,19 @@ impl NyxVm {
                     }
                 }
             }
-            Expr::TupleLiteral { elements: items, .. } | Expr::ArrayLiteral { elements: items, .. } => {
+            Expr::TupleLiteral {
+                elements: items, ..
+            }
+            | Expr::ArrayLiteral {
+                elements: items, ..
+            } => {
                 let mut out = Vec::with_capacity(items.len());
                 for it in items {
                     out.push(self.eval_expr(it, locals)?);
                 }
-                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(out))))
+                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                    out,
+                ))))
             }
             Expr::ArrayRepeat { value, len, .. } => {
                 let repeated = self.eval_expr(value, locals)?;
@@ -1374,15 +1484,23 @@ impl NyxVm {
                     Value::Int(i) if i > 0 => i as usize,
                     _ => 0,
                 };
-                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(vec![repeated; count]))))
+                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                    vec![repeated; count],
+                ))))
             }
-            Expr::BlockLiteral { items, .. } => Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(eval_fields(self, items, locals)?)))),
+            Expr::BlockLiteral { items, .. } => Ok(Value::Object(std::sync::Arc::new(
+                std::sync::RwLock::new(eval_fields(self, items, locals)?),
+            ))),
             Expr::StructLiteral { name, fields, .. } => {
                 let mut obj = eval_field_inits(self, fields, locals)?;
                 obj.insert("__type".to_string(), Value::Str(name.clone()));
-                Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(obj))))
+                Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(
+                    obj,
+                ))))
             }
-            Expr::Binary { left, op, right, .. } => {
+            Expr::Binary {
+                left, op, right, ..
+            } => {
                 let l = self.eval_expr(left, locals)?;
                 let r = self.eval_expr(right, locals)?;
                 eval_binary(&l, op, &r)
@@ -1404,7 +1522,9 @@ impl NyxVm {
                     _ => Ok(Value::Null),
                 }
             }
-            Expr::Reference { mutable: _, expr, .. } => {
+            Expr::Reference {
+                mutable: _, expr, ..
+            } => {
                 // Address-of optimization: if it's a Bytes buffer, return its actual pointer.
                 let val = self.eval_expr(expr, locals)?;
                 match val {
@@ -1416,7 +1536,7 @@ impl NyxVm {
                     _ => {
                         // In a real JIT/Compiler we'd get the stack/heap address.
                         // In the interpreter, we can't safely return a pointer to the HashMap entry.
-                        Ok(Value::Pointer(0)) 
+                        Ok(Value::Pointer(0))
                     }
                 }
             }
@@ -1440,10 +1560,13 @@ impl NyxVm {
                     _ => Ok(val),
                 }
             }
-            Expr::TryOp { expr, .. } => {
-                self.eval_expr(expr, locals)
-            }
-            Expr::Ternary { condition, then_expr, else_expr, .. } => {
+            Expr::TryOp { expr, .. } => self.eval_expr(expr, locals),
+            Expr::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+                ..
+            } => {
                 let cond = self.eval_expr(condition, locals)?;
                 if cond.is_truthy() {
                     self.eval_expr(then_expr, locals)
@@ -1451,7 +1574,11 @@ impl NyxVm {
                     self.eval_expr(else_expr, locals)
                 }
             }
-            Expr::IfExpr { branches, else_body, .. } => {
+            Expr::IfExpr {
+                branches,
+                else_body,
+                ..
+            } => {
                 for br in branches {
                     let cond = self.eval_expr(&br.condition, locals)?;
                     if cond.is_truthy() {
@@ -1521,7 +1648,12 @@ impl NyxVm {
                     }
                 }
             }
-            Expr::MethodCall { receiver, method, args, .. } => {
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
                 let rv = self.eval_expr(receiver, locals)?;
                 let mut av = Vec::with_capacity(args.len());
                 for a in args {
@@ -1538,7 +1670,11 @@ impl NyxVm {
                     module_prefix: self.current_module_prefix.clone(),
                 })))
             }
-            Expr::Block { stmts, tail_expr: tail, .. } => {
+            Expr::Block {
+                stmts,
+                tail_expr: tail,
+                ..
+            } => {
                 // Parser ambiguity: `{}` is sometimes used as an empty attribute map.
                 if stmts.is_empty() && tail.is_none() {
                     return Ok(Value::object(HashMap::new()));
@@ -1558,7 +1694,11 @@ impl NyxVm {
                 };
                 let prefix = self.current_module_prefix.clone();
                 for st in stmts {
-                    if let Control::Return(v) = self.eval_stmt_raw(&dummy_fn, &prefix, st, &mut inner)? { return Ok(v) }
+                    if let Control::Return(v) =
+                        self.eval_stmt_raw(&dummy_fn, &prefix, st, &mut inner)?
+                    {
+                        return Ok(v);
+                    }
                 }
                 if let Some(t) = tail {
                     return self.eval_expr(t, &mut inner);
@@ -1581,7 +1721,11 @@ impl NyxVm {
                 };
                 let prefix = self.current_module_prefix.clone();
                 for st in body {
-                    if let Control::Return(v) = self.eval_stmt_raw(&dummy_fn, &prefix, st, &mut inner)? { return Ok(v) }
+                    if let Control::Return(v) =
+                        self.eval_stmt_raw(&dummy_fn, &prefix, st, &mut inner)?
+                    {
+                        return Ok(v);
+                    }
                 }
                 Ok(Value::Null)
             }
@@ -1616,25 +1760,44 @@ impl NyxVm {
                 let o = self.eval_expr(object, locals)?;
                 let i = self.eval_expr(index, locals)?;
                 match (&o, &i) {
-                    (Value::Array(v_rc), Value::Int(idx)) => {
-                        Ok(v_rc.read().unwrap_or_else(|e| e.into_inner()).get(*idx as usize).cloned().unwrap_or(Value::Null))
-                    }
-                    (Value::FloatArray(f_rc), Value::Int(idx)) => {
-                        Ok(f_rc.read().unwrap_or_else(|e| e.into_inner()).get(*idx as usize).cloned().map(|v| Value::Float(v as f64)).unwrap_or(Value::Null))
-                    }
-                    (Value::DoubleArray(d_rc), Value::Int(idx)) => {
-                        Ok(d_rc.read().unwrap_or_else(|e| e.into_inner()).get(*idx as usize).cloned().map(Value::Float).unwrap_or(Value::Null))
-                    }
-                    (Value::Object(m_rc), Value::Int(idx)) => {
-                        Ok(m_rc.read().unwrap_or_else(|e| e.into_inner()).get(&idx.to_string()).cloned().unwrap_or(Value::Null))
-                    }
-                    (Value::Object(m_rc), Value::Str(s)) => {
-                        Ok(m_rc.read().unwrap_or_else(|e| e.into_inner()).get(s).cloned().unwrap_or(Value::Null))
-                    }
+                    (Value::Array(v_rc), Value::Int(idx)) => Ok(v_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(*idx as usize)
+                        .cloned()
+                        .unwrap_or(Value::Null)),
+                    (Value::FloatArray(f_rc), Value::Int(idx)) => Ok(f_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(*idx as usize)
+                        .cloned()
+                        .map(|v| Value::Float(v as f64))
+                        .unwrap_or(Value::Null)),
+                    (Value::DoubleArray(d_rc), Value::Int(idx)) => Ok(d_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(*idx as usize)
+                        .cloned()
+                        .map(Value::Float)
+                        .unwrap_or(Value::Null)),
+                    (Value::Object(m_rc), Value::Int(idx)) => Ok(m_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&idx.to_string())
+                        .cloned()
+                        .unwrap_or(Value::Null)),
+                    (Value::Object(m_rc), Value::Str(s)) => Ok(m_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(s)
+                        .cloned()
+                        .unwrap_or(Value::Null)),
                     _ => Ok(Value::Null),
                 }
             }
-            Expr::Slice { object, start, end, .. } => {
+            Expr::Slice {
+                object, start, end, ..
+            } => {
                 let o = self.eval_expr(object, locals)?;
                 let start_v = start
                     .as_ref()
@@ -1657,7 +1820,9 @@ impl NyxVm {
                         let v = v_rc.read().unwrap_or_else(|e| e.into_inner());
                         let end_idx = end_idx.unwrap_or(v.len()).min(v.len());
                         let start_idx = start_idx.min(end_idx);
-                        Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(v[start_idx..end_idx].to_vec()))))
+                        Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                            v[start_idx..end_idx].to_vec(),
+                        ))))
                     }
                     Value::Str(s) => {
                         let chars: Vec<char> = s.chars().collect();
@@ -1740,7 +1905,11 @@ impl NyxVm {
         })
     }
 
-    pub fn call_closure(&mut self, clo: &ClosureValue, args: Vec<Value>) -> Result<Value, EvalError> {
+    pub fn call_closure(
+        &mut self,
+        clo: &ClosureValue,
+        args: Vec<Value>,
+    ) -> Result<Value, EvalError> {
         let prev_prefix =
             std::mem::replace(&mut self.current_module_prefix, clo.module_prefix.clone());
         let mut locals = clo.captured.clone();
@@ -1765,7 +1934,10 @@ impl NyxVm {
             Expr::FieldAccess { object, field, .. } => {
                 let obj = self.eval_expr(object, locals)?;
                 if let Value::Object(map_rc) = obj {
-                    map_rc.write().unwrap_or_else(|e| e.into_inner()).insert(field.clone(), value);
+                    map_rc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(field.clone(), value);
                 }
             }
             Expr::Index { object, index, .. } => {
@@ -1795,10 +1967,16 @@ impl NyxVm {
                         }
                     }
                     (Value::Object(map_rc), Value::Int(i)) => {
-                        map_rc.write().unwrap_or_else(|e| e.into_inner()).insert(i.to_string(), value);
+                        map_rc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .insert(i.to_string(), value);
                     }
                     (Value::Object(map_rc), Value::Str(s)) => {
-                        map_rc.write().unwrap_or_else(|e| e.into_inner()).insert(s.clone(), value);
+                        map_rc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .insert(s.clone(), value);
                     }
                     _ => {}
                 }
@@ -1836,7 +2014,9 @@ impl NyxVm {
         };
         let prefix = self.current_module_prefix.clone();
         for st in stmts {
-            if let Control::Return(v) = self.eval_stmt_raw(&dummy_fn, &prefix, st, locals)? { return Ok(v) }
+            if let Control::Return(v) = self.eval_stmt_raw(&dummy_fn, &prefix, st, locals)? {
+                return Ok(v);
+            }
         }
         Ok(Value::Null)
     }
@@ -1903,12 +2083,13 @@ fn qualify(prefix: &str, name: &str) -> String {
     }
 }
 
-
 #[allow(dead_code)]
 fn expr_ident(e: &Expr) -> Option<String> {
     match e {
         Expr::Identifier { name: n, .. } => Some(n.clone()),
-        Expr::Path { segments: parts, .. } => Some(parts.join("::")),
+        Expr::Path {
+            segments: parts, ..
+        } => Some(parts.join("::")),
         _ => None,
     }
 }
@@ -1916,7 +2097,9 @@ fn expr_ident(e: &Expr) -> Option<String> {
 fn expr_callee_name(e: &Expr) -> String {
     match e {
         Expr::Identifier { name: n, .. } => n.clone(),
-        Expr::Path { segments: parts, .. } => parts.join("::"),
+        Expr::Path {
+            segments: parts, ..
+        } => parts.join("::"),
         _ => "unknown".to_string(),
     }
 }
@@ -1951,7 +2134,9 @@ fn eval_binary(left: &Value, op: &str, right: &Value) -> Result<Value, EvalError
                 let mut left_vec = a.read().unwrap_or_else(|e| e.into_inner()).clone();
                 let right_vec = b.read().unwrap_or_else(|e| e.into_inner());
                 left_vec.extend(right_vec.iter().cloned());
-                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(left_vec))))
+                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                    left_vec,
+                ))))
             }
             _ => Ok(Value::Str(format!(
                 "{}{}",
@@ -1993,11 +2178,15 @@ fn eval_binary(left: &Value, op: &str, right: &Value) -> Result<Value, EvalError
                 Ok(Value::Float(a / b))
             }
             (Value::Float(a), Value::Int(b)) => {
-                if *b == 0 { return Err(EvalError::new("division by zero".to_string())); }
+                if *b == 0 {
+                    return Err(EvalError::new("division by zero".to_string()));
+                }
                 Ok(Value::Float(a / *b as f64))
             }
             (Value::Int(a), Value::Float(b)) => {
-                if *b == 0.0 { return Err(EvalError::new("division by zero".to_string())); }
+                if *b == 0.0 {
+                    return Err(EvalError::new("division by zero".to_string()));
+                }
                 Ok(Value::Float(*a as f64 / b))
             }
             _ => Ok(Value::Null),
@@ -2015,13 +2204,24 @@ fn eval_binary(left: &Value, op: &str, right: &Value) -> Result<Value, EvalError
             }
         }
         "in" => match right {
-            Value::Array(items_rc) => Ok(Value::Bool(items_rc.read().unwrap_or_else(|e| e.into_inner()).iter().any(|v| values_equal(v, left)))),
+            Value::Array(items_rc) => Ok(Value::Bool(
+                items_rc
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .iter()
+                    .any(|v| values_equal(v, left)),
+            )),
             Value::Str(s) => match left {
                 Value::Str(needle) => Ok(Value::Bool(s.contains(needle))),
                 _ => Ok(Value::Bool(false)),
             },
             Value::Object(map_rc) => match left {
-                Value::Str(key) => Ok(Value::Bool(map_rc.read().unwrap_or_else(|e| e.into_inner()).contains_key(key))),
+                Value::Str(key) => Ok(Value::Bool(
+                    map_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .contains_key(key),
+                )),
                 _ => Ok(Value::Bool(false)),
             },
             _ => Ok(Value::Bool(false)),
@@ -2064,8 +2264,12 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::Bytes(x), Value::Bytes(y)) => std::sync::Arc::ptr_eq(x, y),
         (Value::Pointer(x), Value::Pointer(y)) => x == y,
         (Value::Promise(a), Value::Promise(b)) => std::sync::Arc::ptr_eq(a, b),
-        (Value::Tensor(TensorStorage::Gpu(a), _), Value::Tensor(TensorStorage::Gpu(b), _)) => std::sync::Arc::ptr_eq(a, b),
-        (Value::Tensor(TensorStorage::Cpu(a), _), Value::Tensor(TensorStorage::Cpu(b), _)) => std::sync::Arc::ptr_eq(a, b),
+        (Value::Tensor(TensorStorage::Gpu(a), _), Value::Tensor(TensorStorage::Gpu(b), _)) => {
+            std::sync::Arc::ptr_eq(a, b)
+        }
+        (Value::Tensor(TensorStorage::Cpu(a), _), Value::Tensor(TensorStorage::Cpu(b), _)) => {
+            std::sync::Arc::ptr_eq(a, b)
+        }
         (Value::FloatArray(a), Value::FloatArray(b)) => std::sync::Arc::ptr_eq(a, b),
         (Value::DoubleArray(a), Value::DoubleArray(b)) => std::sync::Arc::ptr_eq(a, b),
         _ => false,
@@ -2105,10 +2309,12 @@ fn eval_method(
                     let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
                     map.values().next().cloned().unwrap_or(Value::Null)
                 }
-                Value::Null => return Err(EvalError {
-                    message: "called unwrap() on a Null value".to_string(),
-                    stack: vec![],
-                }),
+                Value::Null => {
+                    return Err(EvalError {
+                        message: "called unwrap() on a Null value".to_string(),
+                        stack: vec![],
+                    })
+                }
                 _ => receiver,
             });
         }
@@ -2144,7 +2350,13 @@ fn eval_method(
                 }
             }
             "remove" => {
-                let idx = args.first().and_then(|v| if let Value::Int(i) = v { Some(*i as usize) } else { None });
+                let idx = args.first().and_then(|v| {
+                    if let Value::Int(i) = v {
+                        Some(*i as usize)
+                    } else {
+                        None
+                    }
+                });
                 let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                 if let Some(i) = idx {
                     if i < arr.len() {
@@ -2185,7 +2397,16 @@ fn eval_method(
                 Ok(Value::Array(arr_rc.clone()))
             }
             "join" => {
-                let sep = args.first().and_then(|v| if let Value::Str(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
+                let sep = args
+                    .first()
+                    .and_then(|v| {
+                        if let Value::Str(s) = v {
+                            Some(s.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or("");
                 let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
                 let parts: Vec<String> = arr.iter().map(to_stringish).collect();
                 Ok(Value::Str(parts.join(sep)))
@@ -2196,8 +2417,23 @@ fn eval_method(
                 Ok(Value::Array(arr_rc.clone()))
             }
             "slice" => {
-                let start = args.first().and_then(|v| if let Value::Int(i) = v { Some(*i as isize) } else { None }).unwrap_or(0);
-                let end = args.get(1).and_then(|v| if let Value::Int(i) = v { Some(*i as isize) } else { None });
+                let start = args
+                    .first()
+                    .and_then(|v| {
+                        if let Value::Int(i) = v {
+                            Some(*i as isize)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0);
+                let end = args.get(1).and_then(|v| {
+                    if let Value::Int(i) = v {
+                        Some(*i as isize)
+                    } else {
+                        None
+                    }
+                });
                 let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
                 let len = arr.len() as isize;
                 let mut s_idx = start.max(0).min(len) as usize;
@@ -2206,22 +2442,42 @@ fn eval_method(
                     std::mem::swap(&mut s_idx, &mut e_idx);
                 }
                 let sliced = arr[s_idx..e_idx].to_vec();
-                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(sliced))))
+                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                    sliced,
+                ))))
             }
             "clear" => {
                 arr_rc.write().unwrap_or_else(|e| e.into_inner()).clear();
                 Ok(Value::Array(arr_rc.clone()))
             }
-            "len" | "length" => Ok(Value::Int(arr_rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64)),
+            "len" | "length" => Ok(Value::Int(
+                arr_rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64,
+            )),
             "get" | "nth" | "at" => {
                 let idx = args.first().and_then(|v| {
-                    if let Value::Int(i) = v { Some(*i as usize) } else { None }
+                    if let Value::Int(i) = v {
+                        Some(*i as usize)
+                    } else {
+                        None
+                    }
                 });
-                Ok(idx.and_then(|i| arr_rc.read().unwrap_or_else(|e| e.into_inner()).get(i).cloned()).unwrap_or(Value::Null))
+                Ok(idx
+                    .and_then(|i| {
+                        arr_rc
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .get(i)
+                            .cloned()
+                    })
+                    .unwrap_or(Value::Null))
             }
             "at_put" | "set" => {
                 let idx = args.first().and_then(|v| {
-                    if let Value::Int(i) = v { Some(*i as usize) } else { None }
+                    if let Value::Int(i) = v {
+                        Some(*i as usize)
+                    } else {
+                        None
+                    }
                 });
                 if let (Some(i), Some(v)) = (idx, args.get(1)) {
                     let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
@@ -2238,7 +2494,9 @@ fn eval_method(
                     for x in arr.iter() {
                         res.push(vm.call_closure(clo, vec![x.clone()])?);
                     }
-                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(res))))
+                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                        res,
+                    ))))
                 } else {
                     Ok(Value::Array(arr_rc.clone()))
                 }
@@ -2252,7 +2510,9 @@ fn eval_method(
                             res.push(x.clone());
                         }
                     }
-                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(res))))
+                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                        res,
+                    ))))
                 } else {
                     Ok(Value::Array(arr_rc.clone()))
                 }
@@ -2289,75 +2549,121 @@ fn eval_method(
             }
 
             match method {
-            "get" => {
-                let key = args.first().and_then(|v| {
-                    if let Value::Str(s) = v { Some(s.clone()) } else { None }
-                });
-                Ok(key.and_then(|k| map_rc.read().unwrap_or_else(|e| e.into_inner()).get(&k).cloned()).unwrap_or(Value::Null))
-            }
-            "set" | "insert" => {
-                if let (Some(Value::Str(k)), Some(v)) = (args.first(), args.get(1)) {
-                    map_rc.write().unwrap_or_else(|e| e.into_inner()).insert(k.clone(), v.clone());
+                "get" => {
+                    let key = args.first().and_then(|v| {
+                        if let Value::Str(s) = v {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    });
+                    Ok(key
+                        .and_then(|k| {
+                            map_rc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .get(&k)
+                                .cloned()
+                        })
+                        .unwrap_or(Value::Null))
                 }
-                Ok(Value::Null)
-            }
-            "remove" => {
-                if let Some(Value::Str(k)) = args.first() {
-                    Ok(map_rc.write().unwrap_or_else(|e| e.into_inner()).remove(k).unwrap_or(Value::Null))
-                } else {
+                "set" | "insert" => {
+                    if let (Some(Value::Str(k)), Some(v)) = (args.first(), args.get(1)) {
+                        map_rc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .insert(k.clone(), v.clone());
+                    }
                     Ok(Value::Null)
                 }
-            }
-            "contains" | "has" => {
-                if let Some(Value::Str(k)) = args.first() {
-                    Ok(Value::Bool(map_rc.read().unwrap_or_else(|e| e.into_inner()).contains_key(k)))
-                } else {
-                    Ok(Value::Bool(false))
+                "remove" => {
+                    if let Some(Value::Str(k)) = args.first() {
+                        Ok(map_rc
+                            .write()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .remove(k)
+                            .unwrap_or(Value::Null))
+                    } else {
+                        Ok(Value::Null)
+                    }
                 }
-            }
-            "keys" => Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
-                map_rc.read().unwrap_or_else(|e| e.into_inner()).keys().map(|k| Value::Str(k.clone())).collect()
-            )))),
-            "values" => Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
-                map_rc.read().unwrap_or_else(|e| e.into_inner()).values().cloned().collect()
-            )))),
-            "length" | "len" => Ok(Value::Int(map_rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64)),
-            "clear" => {
-                map_rc.write().unwrap_or_else(|e| e.into_inner()).clear();
-                Ok(Value::Object(map_rc.clone()))
-            }
-            "entries" => {
-                let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
-                let mut entries = Vec::new();
-                for (k, v) in map.iter() {
-                    let mut entry = Vec::new();
-                    entry.push(Value::Str(k.clone()));
-                    entry.push(v.clone());
-                    entries.push(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(entry))));
+                "contains" | "has" => {
+                    if let Some(Value::Str(k)) = args.first() {
+                        Ok(Value::Bool(
+                            map_rc
+                                .read()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .contains_key(k),
+                        ))
+                    } else {
+                        Ok(Value::Bool(false))
+                    }
                 }
-                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(entries))))
-            }
-            "typeof" => Ok(Value::Str("Object".to_string())),
-            "fields" => {
-                let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
-                let keys: Vec<Value> = map.keys().map(|k| Value::Str(k.clone())).collect();
-                Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(keys))))
-            }
-            _ => {
-                eval_ufcs(vm, Value::Object(map_rc), method, args)
+                "keys" => Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                    map_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .keys()
+                        .map(|k| Value::Str(k.clone()))
+                        .collect(),
+                )))),
+                "values" => Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                    map_rc
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .values()
+                        .cloned()
+                        .collect(),
+                )))),
+                "length" | "len" => Ok(Value::Int(
+                    map_rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64,
+                )),
+                "clear" => {
+                    map_rc.write().unwrap_or_else(|e| e.into_inner()).clear();
+                    Ok(Value::Object(map_rc.clone()))
+                }
+                "entries" => {
+                    let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
+                    let mut entries = Vec::new();
+                    for (k, v) in map.iter() {
+                        let mut entry = Vec::new();
+                        entry.push(Value::Str(k.clone()));
+                        entry.push(v.clone());
+                        entries.push(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                            entry,
+                        ))));
+                    }
+                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                        entries,
+                    ))))
+                }
+                "typeof" => Ok(Value::Str("Object".to_string())),
+                "fields" => {
+                    let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
+                    let keys: Vec<Value> = map.keys().map(|k| Value::Str(k.clone())).collect();
+                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                        keys,
+                    ))))
+                }
+                _ => eval_ufcs(vm, Value::Object(map_rc), method, args),
             }
         }
-        },
         Value::Str(s) => match method {
             "len" | "length" => Ok(Value::Int(s.chars().count() as i64)),
             "chars" => Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
-                s.chars().map(|c| Value::Str(c.to_string())).collect()
+                s.chars().map(|c| Value::Str(c.to_string())).collect(),
             )))),
             "get" | "nth" | "at" | "char_at" => {
                 let idx = args.first().and_then(|v| {
-                    if let Value::Int(i) = v { Some(*i as usize) } else { None }
+                    if let Value::Int(i) = v {
+                        Some(*i as usize)
+                    } else {
+                        None
+                    }
                 });
-                Ok(idx.and_then(|i| s.chars().nth(i).map(|c| Value::Str(c.to_string()))).unwrap_or(Value::Null))
+                Ok(idx
+                    .and_then(|i| s.chars().nth(i).map(|c| Value::Str(c.to_string())))
+                    .unwrap_or(Value::Null))
             }
             "contains" => {
                 if let Some(Value::Str(needle)) = args.first() {
@@ -2382,15 +2688,35 @@ fn eval_method(
             }
             "split" => {
                 if let Some(Value::Str(delim)) = args.first() {
-                    let parts: Vec<Value> = s.split(delim).map(|p| Value::Str(p.to_string())).collect();
-                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(parts))))
+                    let parts: Vec<Value> =
+                        s.split(delim).map(|p| Value::Str(p.to_string())).collect();
+                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                        parts,
+                    ))))
                 } else {
-                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(Vec::new()))))
+                    Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(
+                        Vec::new(),
+                    ))))
                 }
             }
             "substring" => {
-                let start = args.first().and_then(|v| if let Value::Int(i) = v { Some(*i as isize) } else { None }).unwrap_or(0);
-                let end = args.get(1).and_then(|v| if let Value::Int(i) = v { Some(*i as isize) } else { None });
+                let start = args
+                    .first()
+                    .and_then(|v| {
+                        if let Value::Int(i) = v {
+                            Some(*i as isize)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0);
+                let end = args.get(1).and_then(|v| {
+                    if let Value::Int(i) = v {
+                        Some(*i as isize)
+                    } else {
+                        None
+                    }
+                });
                 let chars: Vec<char> = s.chars().collect();
                 let len = chars.len() as isize;
                 let mut s_idx = start.max(0).min(len) as usize;
@@ -2422,26 +2748,71 @@ fn eval_method(
                 Ok(Value::Int(byte))
             }
             "replace" => {
-                let target = args.first().and_then(|v| if let Value::Str(t) = v { Some(t.as_str()) } else { None }).unwrap_or("");
-                let replacement = args.get(1).and_then(|v| if let Value::Str(r) = v { Some(r.as_str()) } else { None }).unwrap_or("");
+                let target = args
+                    .first()
+                    .and_then(|v| {
+                        if let Value::Str(t) = v {
+                            Some(t.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or("");
+                let replacement = args
+                    .get(1)
+                    .and_then(|v| {
+                        if let Value::Str(r) = v {
+                            Some(r.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or("");
                 Ok(Value::Str(s.replace(target, replacement)))
             }
             "repeat" => {
-                let count = args.first().and_then(|v| if let Value::Int(c) = v { Some(*c as usize) } else { None }).unwrap_or(0);
+                let count = args
+                    .first()
+                    .and_then(|v| {
+                        if let Value::Int(c) = v {
+                            Some(*c as usize)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0);
                 Ok(Value::Str(s.repeat(count)))
             }
             "to_string" => Ok(Value::Str(s.clone())),
             "trim" => Ok(Value::Str(s.trim().to_string())),
             "trim_matches" => {
-                let pat = args.first().and_then(|v| {
-                    if let Value::Str(p) = v { Some(p.as_str()) } else { None }
-                }).unwrap_or("");
+                let pat = args
+                    .first()
+                    .and_then(|v| {
+                        if let Value::Str(p) = v {
+                            Some(p.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or("");
                 let pat_chars: Vec<char> = pat.chars().collect();
-                Ok(Value::Str(s.trim_matches(|c| pat_chars.contains(&c)).to_string()))
+                Ok(Value::Str(
+                    s.trim_matches(|c| pat_chars.contains(&c)).to_string(),
+                ))
             }
-            "is_alphabetic" => Ok(Value::Bool(s.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false))),
-            "is_digit" => Ok(Value::Bool(s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))),
-            "is_whitespace" => Ok(Value::Bool(s.chars().next().map(|c| c.is_whitespace()).unwrap_or(false))),
+            "is_alphabetic" => Ok(Value::Bool(
+                s.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false),
+            )),
+            "is_digit" => Ok(Value::Bool(
+                s.chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false),
+            )),
+            "is_whitespace" => Ok(Value::Bool(
+                s.chars().next().map(|c| c.is_whitespace()).unwrap_or(false),
+            )),
             _ => {
                 // If s looks like a module path (contains dots), try to resolve as a static call
                 // net.http.HttpServer(...) -> net::http::HttpServer(...)
@@ -2453,22 +2824,33 @@ fn eval_method(
             }
         },
         Value::FloatArray(rc) => match method {
-            "len" | "count" => Ok(Value::Int(rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64)),
+            "len" | "count" => Ok(Value::Int(
+                rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64,
+            )),
             _ => eval_ufcs(vm, Value::FloatArray(rc), method, args),
         },
         Value::DoubleArray(rc) => match method {
-            "len" | "count" => Ok(Value::Int(rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64)),
+            "len" | "count" => Ok(Value::Int(
+                rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64,
+            )),
             _ => eval_ufcs(vm, Value::DoubleArray(rc), method, args),
         },
         Value::Bytes(rc) => match method {
-            "len" | "count" => Ok(Value::Int(rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64)),
+            "len" | "count" => Ok(Value::Int(
+                rc.read().unwrap_or_else(|e| e.into_inner()).len() as i64,
+            )),
             _ => eval_ufcs(vm, Value::Bytes(rc), method, args),
         },
         other => eval_ufcs(vm, other, method, args),
     }
 }
 
-fn eval_ufcs(vm: &mut NyxVm, receiver: Value, method: &str, args: &[Value]) -> Result<Value, EvalError> {
+fn eval_ufcs(
+    vm: &mut NyxVm,
+    receiver: Value,
+    method: &str,
+    args: &[Value],
+) -> Result<Value, EvalError> {
     let mut resolved_name = None;
 
     // 1. Try bare method name
@@ -2500,13 +2882,12 @@ fn eval_ufcs(vm: &mut NyxVm, receiver: Value, method: &str, args: &[Value]) -> R
         };
 
         if let Some(origin) = origin {
-            
             // Try in the same module
             let qualified = qualify(&origin, method);
             if vm.resolve_function(&qualified, "").is_some() {
                 resolved_name = Some(qualified);
             }
-            
+
             if resolved_name.is_none() {
                 // Try in parent modules
                 let mut parts: Vec<&str> = origin.split("::").collect();
@@ -2529,7 +2910,11 @@ fn eval_ufcs(vm: &mut NyxVm, receiver: Value, method: &str, args: &[Value]) -> R
             let type_name = {
                 let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
                 map.get("__type").and_then(|v| {
-                    if let Value::Str(s) = v { Some(s.clone()) } else { None }
+                    if let Value::Str(s) = v {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
                 })
             };
             if let Some(tn) = type_name {
@@ -2612,7 +2997,12 @@ pub fn to_stringish(v: &Value) -> String {
         Value::BigInt(n) => n.clone(),
         Value::Str(s) => s.clone(),
         Value::Array(a_rc) => {
-            let parts: Vec<String> = a_rc.read().unwrap_or_else(|e| e.into_inner()).iter().map(to_stringish).collect();
+            let parts: Vec<String> = a_rc
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .map(to_stringish)
+                .collect();
             format!("[{}]", parts.join(", "))
         }
         Value::Object(o_rc) => {
@@ -2624,7 +3014,10 @@ pub fn to_stringish(v: &Value) -> String {
             parts.sort();
             format!("{{{}}}", parts.join(", "))
         }
-        Value::Bytes(b) => format!("<bytes len={}>", b.read().unwrap_or_else(|e| e.into_inner()).len()),
+        Value::Bytes(b) => format!(
+            "<bytes len={}>",
+            b.read().unwrap_or_else(|e| e.into_inner()).len()
+        ),
         Value::Pointer(p) => format!("*0x{:016x}", p),
         Value::Promise(p) => {
             let state = p.read().unwrap_or_else(|e| e.into_inner());
@@ -2636,8 +3029,14 @@ pub fn to_stringish(v: &Value) -> String {
         }
         Value::Closure(_) => "<closure>".to_string(),
         Value::Node(n) => render_node(n),
-        Value::FloatArray(rc) => format!("[f32; {}]", rc.read().unwrap_or_else(|e| e.into_inner()).len()),
-        Value::DoubleArray(rc) => format!("[f64; {}]", rc.read().unwrap_or_else(|e| e.into_inner()).len()),
+        Value::FloatArray(rc) => format!(
+            "[f32; {}]",
+            rc.read().unwrap_or_else(|e| e.into_inner()).len()
+        ),
+        Value::DoubleArray(rc) => format!(
+            "[f64; {}]",
+            rc.read().unwrap_or_else(|e| e.into_inner()).len()
+        ),
         Value::Tensor(_, shape) => format!("<Tensor{:?}>", shape),
     }
 }
@@ -2785,10 +3184,7 @@ pub fn format_eval_error(e: &EvalError) -> String {
     if !e.stack.is_empty() {
         out.push_str("\n\nstack:");
         for fr in e.stack.iter().rev() {
-            out.push_str(&format!(
-                "\n  at {}",
-                fr
-            ));
+            out.push_str(&format!("\n  at {}", fr));
         }
     }
     out
@@ -2798,7 +3194,11 @@ pub fn engine_root_from_repo() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/engines/ui_engine"))
 }
 
-fn matches_pattern(val: &Value, pattern: &MatchPattern, locals: &mut HashMap<String, Value>) -> bool {
+fn matches_pattern(
+    val: &Value,
+    pattern: &MatchPattern,
+    locals: &mut HashMap<String, Value>,
+) -> bool {
     match pattern {
         MatchPattern::Wildcard => true,
         MatchPattern::Literal(e) => {
@@ -2829,8 +3229,13 @@ fn matches_pattern(val: &Value, pattern: &MatchPattern, locals: &mut HashMap<Str
     }
 }
 
-fn serialize_array<S>(val: &std::sync::Arc<std::sync::RwLock<Vec<Value>>>, serializer: S) -> Result<S::Ok, S::Error>
-where S: serde::Serializer {
+fn serialize_array<S>(
+    val: &std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
     use serde::ser::SerializeSeq;
     let arr = val.read().map_err(serde::ser::Error::custom)?;
     let mut seq = serializer.serialize_seq(Some(arr.len()))?;
@@ -2840,14 +3245,23 @@ where S: serde::Serializer {
     seq.end()
 }
 
-fn deserialize_array<'de, D>(deserializer: D) -> Result<std::sync::Arc<std::sync::RwLock<Vec<Value>>>, D::Error>
-where D: serde::Deserializer<'de> {
+fn deserialize_array<'de, D>(
+    deserializer: D,
+) -> Result<std::sync::Arc<std::sync::RwLock<Vec<Value>>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
     let items: Vec<Value> = serde::Deserialize::deserialize(deserializer)?;
     Ok(std::sync::Arc::new(std::sync::RwLock::new(items)))
 }
 
-fn serialize_object<S>(val: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Value>>>, serializer: S) -> Result<S::Ok, S::Error>
-where S: serde::Serializer {
+fn serialize_object<S>(
+    val: &std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Value>>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
     use serde::ser::SerializeMap;
     let obj = val.read().map_err(serde::ser::Error::custom)?;
     let mut map = serializer.serialize_map(Some(obj.len()))?;
@@ -2857,9 +3271,14 @@ where S: serde::Serializer {
     map.end()
 }
 
-fn deserialize_object<'de, D>(deserializer: D) -> Result<std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Value>>>, D::Error>
-where D: serde::Deserializer<'de> {
-    let items: std::collections::HashMap<String, Value> = serde::Deserialize::deserialize(deserializer)?;
+fn deserialize_object<'de, D>(
+    deserializer: D,
+) -> Result<std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, Value>>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let items: std::collections::HashMap<String, Value> =
+        serde::Deserialize::deserialize(deserializer)?;
     Ok(std::sync::Arc::new(std::sync::RwLock::new(items)))
 }
 

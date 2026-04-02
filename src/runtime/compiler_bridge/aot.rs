@@ -23,12 +23,16 @@ impl AotCompiler {
     /// Lowers the module into an object file (.o) completely excluding the Nyx-VM interpreter.
     pub fn compile_to_object(&self, _module_name: &str) -> Result<Vec<u8>, String> {
         // Hook into cranelift-codegen to produce pure object instructions
-        let fake_object_code = vec![0x7f, b'E', b'L', b'F']; 
+        let fake_object_code = vec![0x7f, b'E', b'L', b'F'];
         Ok(fake_object_code)
     }
 
     /// Invokes the system linker (gcc/ld/lld) to output a stand-alone static binary.
-    pub fn link_static_binary(&self, _objects: Vec<Vec<u8>>, _output_file: &str) -> std::io::Result<()> {
+    pub fn link_static_binary(
+        &self,
+        _objects: Vec<Vec<u8>>,
+        _output_file: &str,
+    ) -> std::io::Result<()> {
         println!("[AOT] Linking stand-alone static binary without VM overhead...");
         Ok(())
     }

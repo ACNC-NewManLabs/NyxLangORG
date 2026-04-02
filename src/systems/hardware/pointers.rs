@@ -1,5 +1,5 @@
 //! Raw Pointer Types Module
-//! 
+//!
 //! Provides raw pointer types for direct memory access in systems programming.
 
 use std::fmt;
@@ -382,7 +382,7 @@ mod tests {
     fn test_ptr_operations() {
         let value = 42;
         let ptr = Ptr::new(&value);
-        
+
         unsafe {
             assert_eq!(*ptr.as_ref(), 42);
             assert!(!ptr.is_null());
@@ -393,7 +393,7 @@ mod tests {
     fn test_ptr_mut_operations() {
         let mut value = 42;
         let mut ptr = PtrMut::new(&mut value);
-        
+
         unsafe {
             ptr.write(100);
             assert_eq!(*ptr.as_mut(), 100);

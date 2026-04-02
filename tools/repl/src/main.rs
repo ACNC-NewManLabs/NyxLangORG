@@ -1,18 +1,29 @@
-use std::io::{self, Write};
-use std::collections::HashMap;
 use colored::*;
-use nyx::runtime::execution::{NyxVm, VmConfig, Value, eval_repl_line};
+use nyx::runtime::execution::{eval_repl_line, NyxVm, Value, VmConfig};
+use std::collections::HashMap;
+use std::io::{self, Write};
 
 fn main() {
-    println!("{}", "============================================================".blue());
-    println!("{}", "                    NYX INTERACTIVE REPL                    ".bold().blue());
-    println!("{}", "============================================================".blue());
+    println!(
+        "{}",
+        "============================================================".blue()
+    );
+    println!(
+        "{}",
+        "                    NYX INTERACTIVE REPL                    "
+            .bold()
+            .blue()
+    );
+    println!(
+        "{}",
+        "============================================================".blue()
+    );
     println!("Type your code and press Enter. Type 'exit' to quit.");
     println!("State is now persistent across lines.");
     println!();
 
     let vm_config = VmConfig::default();
-        // config.debug = false;
+    // config.debug = false;
     let mut vm = NyxVm::new(vm_config);
     let _locals = HashMap::<String, Value>::new();
 
@@ -55,8 +66,10 @@ fn main() {
             }
             if !trimmed.ends_with(';') && !trimmed.ends_with('}') && !trimmed.is_empty() {
                 // If it doesn't look like a complete statement and it's not the first line, keep buffering
-                if !buffer.contains('\n') || !trimmed.chars().last().unwrap_or(' ').is_alphanumeric() {
-                     // continue; // Defer to a smarter check if needed
+                if !buffer.contains('\n')
+                    || !trimmed.chars().last().unwrap_or(' ').is_alphanumeric()
+                {
+                    // continue; // Defer to a smarter check if needed
                 }
             }
         }
@@ -66,9 +79,11 @@ fn main() {
         }
 
         match eval_repl_line(&mut vm, &buffer) {
-            Ok(val) => if !matches!(val, nyx::runtime::execution::Value::Null) {
-                println!("=> {}", format!("{}", val).yellow());
-            },
+            Ok(val) => {
+                if !matches!(val, nyx::runtime::execution::Value::Null) {
+                    println!("=> {}", format!("{}", val).yellow());
+                }
+            }
             Err(e) => eprintln!("{}: {:?}", "Error".red(), e),
         }
 

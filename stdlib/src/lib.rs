@@ -1,14 +1,14 @@
 //! NYX Standard Library™
-//! 
+//!
 //! **Copyright (c) 2026 SURYA SEKHAR ROY. All Rights Reserved.**
-//! 
+//!
 //! A comprehensive, production-grade standard library for the NYX™ programming language.
 //! Designed for 100+ year stability with strict modular layering.
-//! 
+//!
 //! # Architecture
-//! 
+//!
 //! The library is organized into 30 layers, each building upon the previous:
-//! 
+//!
 //! - `nyx.core` - [Layer 1] Core types and traits (no-std)
 //! - `nyx.mem` - [Layer 2] Memory utilities
 //! - `nyx.alloc` - [Layer 3] Allocation systems
@@ -40,61 +40,61 @@
 //! - `nyx.galactic` - [Layer 28] Deep Space Protocols
 //! - `nyx.evolution` - [Layer 29] Self-Modifying Code Safeties
 //! - `nyx.meta` - [Layer 30] Reflection & Metaprogramming
-//! 
+//!
 //! # Version
-//! 
+//!
 //! This is NYX Standard Library version 2.0.0 (God-Tier Edition)
 
 // Re-export all public modules
 // Foundation Layers (1-14)
-pub mod core;
-pub mod mem;
+pub mod ai;
 pub mod alloc;
 pub mod collections;
 pub mod concurrent;
-pub mod io;
-pub mod os;
-pub mod time;
-pub mod error;
-pub mod iter;
-pub mod primitive;
-pub mod format;
+pub mod core;
 pub mod crypto;
-pub mod ai;
+pub mod error;
+pub mod format;
+pub mod io;
+pub mod iter;
+pub mod mem;
+pub mod os;
+pub mod primitive;
+pub mod time;
 
 // Domain Layers (15-30)
-pub mod web;
-pub mod net;
-pub mod db;
-pub mod serialization;
-pub mod ui;
-pub mod graphics;
-pub mod science;
-pub mod distributed;
 pub mod compiler;
-pub mod security;
-pub mod media;
+pub mod db;
+pub mod distributed;
+pub mod evolution;
+pub mod galactic;
+pub mod graphics;
 pub mod hardware;
 pub mod kernel;
-pub mod quantum;
-pub mod galactic;
-pub mod evolution;
+pub mod media;
 pub mod meta;
+pub mod net;
+pub mod quantum;
+pub mod science;
+pub mod security;
+pub mod serialization;
+pub mod ui;
+pub mod web;
 
 // Re-export commonly used types
-pub use core::Option;
-pub use core::Result;
-pub use collections::vec::Vec;
-pub use collections::string::String;
 pub use collections::hash_map::HashMap;
 pub use collections::hash_set::HashSet;
+pub use collections::string::String;
+pub use collections::vec::Vec;
+pub use core::Option;
+pub use core::Result;
 
 // Version information
 pub const VERSION: &str = "2.0.0";
 pub const NAME: &str = "NYX Standard Library";
 
 /// Initialize the standard library
-/// 
+///
 /// This function must be called before using any NYX standard library features.
 pub fn init() {
     // Initialize core subsystems
@@ -102,7 +102,7 @@ pub fn init() {
 }
 
 /// Shutdown the standard library
-/// 
+///
 /// This function cleans up all resources used by the standard library.
 pub fn shutdown() {
     // Cleanup

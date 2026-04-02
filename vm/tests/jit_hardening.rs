@@ -1,9 +1,9 @@
-use nyx_vm::{BytecodeModule, Function, Instruction, OpCode, Value, NyxVm, VmConfig, VmError};
+use nyx_vm::{BytecodeModule, Function, Instruction, NyxVm, OpCode, Value, VmConfig, VmError};
 
 #[test]
 fn test_jit_arity_mismatch() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     // Function: add(a, b)
     let add_fn = Function {
         name: "add".to_string(),
@@ -38,7 +38,7 @@ fn test_jit_arity_mismatch() {
 #[test]
 fn test_jit_ip_tracking_on_trap() {
     let mut module = BytecodeModule::new("main".to_string());
-    
+
     // Function that traps at IP 2
     let trap_fn = Function {
         name: "main".to_string(),

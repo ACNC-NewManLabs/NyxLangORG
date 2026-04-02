@@ -1,8 +1,6 @@
 //! NYX Core Primitive Extensions Module
-//! 
+//!
 //! Extension methods for primitive types that work without an OS.
-
-
 
 // =============================================================================
 // Integer Extensions
@@ -124,7 +122,9 @@ impl UIntExt for u8 {
 
     #[inline]
     fn bytes_needed(self) -> usize {
-        if self == 0 { return 1; }
+        if self == 0 {
+            return 1;
+        }
         ((self as f64).log2().floor() as usize) / 8 + 1
     }
 
@@ -188,7 +188,9 @@ impl UIntExt for u16 {
 
     #[inline]
     fn bytes_needed(self) -> usize {
-        if self == 0 { return 1; }
+        if self == 0 {
+            return 1;
+        }
         ((self as f64).log2().floor() as usize) / 8 + 1
     }
 
@@ -252,7 +254,9 @@ impl UIntExt for u32 {
 
     #[inline]
     fn bytes_needed(self) -> usize {
-        if self == 0 { return 1; }
+        if self == 0 {
+            return 1;
+        }
         ((self as f64).log2().floor() as usize) / 8 + 1
     }
 
@@ -316,7 +320,9 @@ impl UIntExt for u64 {
 
     #[inline]
     fn bytes_needed(self) -> usize {
-        if self == 0 { return 1; }
+        if self == 0 {
+            return 1;
+        }
         ((self as f64).log2().floor() as usize) / 8 + 1
     }
 
@@ -380,7 +386,9 @@ impl UIntExt for usize {
 
     #[inline]
     fn bytes_needed(self) -> usize {
-        if self == 0 { return 1; }
+        if self == 0 {
+            return 1;
+        }
         ((self as f64).log2().floor() as usize) / 8 + 1
     }
 
@@ -716,156 +724,256 @@ pub trait FloatExt: Sized + Copy {
 
 impl FloatExt for f32 {
     #[inline]
-    fn max_value() -> Self { Self::MAX }
+    fn max_value() -> Self {
+        Self::MAX
+    }
 
     #[inline]
-    fn min_value() -> Self { Self::MIN }
+    fn min_value() -> Self {
+        Self::MIN
+    }
 
     #[inline]
-    fn infinity() -> Self { Self::INFINITY }
+    fn infinity() -> Self {
+        Self::INFINITY
+    }
 
     #[inline]
-    fn neg_infinity() -> Self { Self::NEG_INFINITY }
+    fn neg_infinity() -> Self {
+        Self::NEG_INFINITY
+    }
 
     #[inline]
-    fn nan() -> Self { Self::NAN }
+    fn nan() -> Self {
+        Self::NAN
+    }
 
     #[inline]
-    fn is_infinite(self) -> bool { self.is_infinite() }
+    fn is_infinite(self) -> bool {
+        self.is_infinite()
+    }
 
     #[inline]
-    fn is_finite(self) -> bool { self.is_finite() }
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
 
     #[inline]
-    fn is_nan(self) -> bool { self.is_nan() }
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
 
     #[inline]
-    fn is_normal(self) -> bool { self.is_normal() }
+    fn is_normal(self) -> bool {
+        self.is_normal()
+    }
 
     #[inline]
-    fn floor(self) -> Self { self.floor() }
+    fn floor(self) -> Self {
+        self.floor()
+    }
 
     #[inline]
-    fn ceil(self) -> Self { self.ceil() }
+    fn ceil(self) -> Self {
+        self.ceil()
+    }
 
     #[inline]
-    fn round(self) -> Self { self.round() }
+    fn round(self) -> Self {
+        self.round()
+    }
 
     #[inline]
-    fn trunc(self) -> Self { self.trunc() }
+    fn trunc(self) -> Self {
+        self.trunc()
+    }
 
     #[inline]
-    fn fract(self) -> Self { self.fract() }
+    fn fract(self) -> Self {
+        self.fract()
+    }
 
     #[inline]
-    fn abs(self) -> Self { self.abs() }
+    fn abs(self) -> Self {
+        self.abs()
+    }
 
     #[inline]
-    fn powf(self, y: Self) -> Self { self.powf(y) }
+    fn powf(self, y: Self) -> Self {
+        self.powf(y)
+    }
 
     #[inline]
-    fn sqrt(self) -> Self { self.sqrt() }
+    fn sqrt(self) -> Self {
+        self.sqrt()
+    }
 
     #[inline]
-    fn cbrt(self) -> Self { self.cbrt() }
+    fn cbrt(self) -> Self {
+        self.cbrt()
+    }
 
     #[inline]
-    fn exp(self) -> Self { self.exp() }
+    fn exp(self) -> Self {
+        self.exp()
+    }
 
     #[inline]
-    fn exp2(self) -> Self { self.exp2() }
+    fn exp2(self) -> Self {
+        self.exp2()
+    }
 
     #[inline]
-    fn ln(self) -> Self { self.ln() }
+    fn ln(self) -> Self {
+        self.ln()
+    }
 
     #[inline]
-    fn log2(self) -> Self { self.log2() }
+    fn log2(self) -> Self {
+        self.log2()
+    }
 
     #[inline]
-    fn log10(self) -> Self { self.log10() }
+    fn log10(self) -> Self {
+        self.log10()
+    }
 
     #[inline]
-    fn max(self, other: Self) -> Self { self.max(other) }
+    fn max(self, other: Self) -> Self {
+        self.max(other)
+    }
 
     #[inline]
-    fn min(self, other: Self) -> Self { self.min(other) }
+    fn min(self, other: Self) -> Self {
+        self.min(other)
+    }
 }
 
 impl FloatExt for f64 {
     #[inline]
-    fn max_value() -> Self { Self::MAX }
+    fn max_value() -> Self {
+        Self::MAX
+    }
 
     #[inline]
-    fn min_value() -> Self { Self::MIN }
+    fn min_value() -> Self {
+        Self::MIN
+    }
 
     #[inline]
-    fn infinity() -> Self { Self::INFINITY }
+    fn infinity() -> Self {
+        Self::INFINITY
+    }
 
     #[inline]
-    fn neg_infinity() -> Self { Self::NEG_INFINITY }
+    fn neg_infinity() -> Self {
+        Self::NEG_INFINITY
+    }
 
     #[inline]
-    fn nan() -> Self { Self::NAN }
+    fn nan() -> Self {
+        Self::NAN
+    }
 
     #[inline]
-    fn is_infinite(self) -> bool { self.is_infinite() }
+    fn is_infinite(self) -> bool {
+        self.is_infinite()
+    }
 
     #[inline]
-    fn is_finite(self) -> bool { self.is_finite() }
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
 
     #[inline]
-    fn is_nan(self) -> bool { self.is_nan() }
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
 
     #[inline]
-    fn is_normal(self) -> bool { self.is_normal() }
+    fn is_normal(self) -> bool {
+        self.is_normal()
+    }
 
     #[inline]
-    fn floor(self) -> Self { self.floor() }
+    fn floor(self) -> Self {
+        self.floor()
+    }
 
     #[inline]
-    fn ceil(self) -> Self { self.ceil() }
+    fn ceil(self) -> Self {
+        self.ceil()
+    }
 
     #[inline]
-    fn round(self) -> Self { self.round() }
+    fn round(self) -> Self {
+        self.round()
+    }
 
     #[inline]
-    fn trunc(self) -> Self { self.trunc() }
+    fn trunc(self) -> Self {
+        self.trunc()
+    }
 
     #[inline]
-    fn fract(self) -> Self { self.fract() }
+    fn fract(self) -> Self {
+        self.fract()
+    }
 
     #[inline]
-    fn abs(self) -> Self { self.abs() }
+    fn abs(self) -> Self {
+        self.abs()
+    }
 
     #[inline]
-    fn powf(self, y: Self) -> Self { self.powf(y) }
+    fn powf(self, y: Self) -> Self {
+        self.powf(y)
+    }
 
     #[inline]
-    fn sqrt(self) -> Self { self.sqrt() }
+    fn sqrt(self) -> Self {
+        self.sqrt()
+    }
 
     #[inline]
-    fn cbrt(self) -> Self { self.cbrt() }
+    fn cbrt(self) -> Self {
+        self.cbrt()
+    }
 
     #[inline]
-    fn exp(self) -> Self { self.exp() }
+    fn exp(self) -> Self {
+        self.exp()
+    }
 
     #[inline]
-    fn exp2(self) -> Self { self.exp2() }
+    fn exp2(self) -> Self {
+        self.exp2()
+    }
 
     #[inline]
-    fn ln(self) -> Self { self.ln() }
+    fn ln(self) -> Self {
+        self.ln()
+    }
 
     #[inline]
-    fn log2(self) -> Self { self.log2() }
+    fn log2(self) -> Self {
+        self.log2()
+    }
 
     #[inline]
-    fn log10(self) -> Self { self.log10() }
+    fn log10(self) -> Self {
+        self.log10()
+    }
 
     #[inline]
-    fn max(self, other: Self) -> Self { self.max(other) }
+    fn max(self, other: Self) -> Self {
+        self.max(other)
+    }
 
     #[inline]
-    fn min(self, other: Self) -> Self { self.min(other) }
+    fn min(self, other: Self) -> Self {
+        self.min(other)
+    }
 }
 
 // =============================================================================
@@ -884,12 +992,20 @@ pub trait BoolExt {
 impl BoolExt for bool {
     #[inline]
     fn as_option<T>(self, value: T) -> Option<T> {
-        if self { Some(value) } else { None }
+        if self {
+            Some(value)
+        } else {
+            None
+        }
     }
 
     #[inline]
     fn as_result<T, E>(self, ok: T, err: E) -> Result<T, E> {
-        if self { Ok(ok) } else { Err(err) }
+        if self {
+            Ok(ok)
+        } else {
+            Err(err)
+        }
     }
 }
 
@@ -1036,7 +1152,10 @@ impl<'a> Iterator for SplitWhitespace<'a> {
         if self.s.is_empty() {
             return std::option::Option::None;
         }
-        let idx = self.s.find(|c: char| c.is_whitespace()).unwrap_or(self.s.len());
+        let idx = self
+            .s
+            .find(|c: char| c.is_whitespace())
+            .unwrap_or(self.s.len());
         let result = &self.s[..idx];
         self.s = &self.s[idx..];
         std::option::Option::Some(result)
@@ -1146,7 +1265,11 @@ impl<T> SliceExt<T> for [T] {
 
     #[inline]
     fn last(&self) -> Option<&T> {
-        if self.is_empty() { None } else { Some(&self[self.len() - 1]) }
+        if self.is_empty() {
+            None
+        } else {
+            Some(&self[self.len() - 1])
+        }
     }
 
     #[inline]
@@ -1228,7 +1351,7 @@ mod tests {
         assert_eq!(s.trim(), "hello world");
         assert!(s.starts_with("  "));
         assert!(s.ends_with("  "));
-        
+
         let parts: Vec<_> = "a b c".split_whitespace().collect();
         assert_eq!(parts, vec!["a", "b", "c"]);
     }
@@ -1238,10 +1361,9 @@ mod tests {
         let arr = [1, 2, 3];
         assert_eq!(arr.first(), Some(&1));
         assert_eq!(arr.last(), Some(&3));
-        
+
         let (first, rest) = arr.split_first().unwrap();
         assert_eq!(first, &1);
         assert_eq!(rest, &[2, 3]);
     }
 }
-

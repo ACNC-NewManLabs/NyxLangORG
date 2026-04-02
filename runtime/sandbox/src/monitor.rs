@@ -1,5 +1,5 @@
 //! Resource Monitor
-//! 
+//!
 //! This module provides resource monitoring for sandbox execution.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -123,20 +123,20 @@ mod tests {
     #[test]
     fn test_monitor() {
         let monitor = ResourceMonitor::new();
-        
+
         assert!(!monitor.is_active());
-        
+
         monitor.start();
         assert!(monitor.is_active());
-        
+
         monitor.record_alloc(1000);
         assert_eq!(monitor.memory_used(), 1000);
-        
+
         monitor.record_dealloc(500);
         assert_eq!(monitor.memory_used(), 500);
-        
+
         assert_eq!(monitor.ops_count(), 1);
-        
+
         monitor.stop();
         assert!(!monitor.is_active());
     }
@@ -145,9 +145,8 @@ mod tests {
     fn test_monitor_clone() {
         let monitor = ResourceMonitor::new();
         let cloned = monitor.clone();
-        
+
         monitor.start();
         assert!(cloned.is_active());
     }
 }
-

@@ -1,7 +1,7 @@
-use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::runtime::execution::sql_planner::SqlPlanner;
 use crate::runtime::execution::df_engine::{create_physical_plan, export_to_arrow};
+use crate::runtime::execution::sql_planner::SqlPlanner;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 
 pub struct NyxServer;
 
@@ -11,7 +11,10 @@ impl NyxServer {
     /// and streams back results in standard Apache Arrow IPC format.
     pub async fn start(port: u16) -> tokio::io::Result<()> {
         let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
-        println!("[Nyx-Server] Production Arrow-over-TCP server listening on port {}", port);
+        println!(
+            "[Nyx-Server] Production Arrow-over-TCP server listening on port {}",
+            port
+        );
 
         loop {
             match listener.accept().await {
@@ -19,7 +22,10 @@ impl NyxServer {
                     println!("[Nyx-Server] Accepted connection from {}", addr);
                     tokio::spawn(async move {
                         if let Err(e) = Self::process_connection(&mut stream).await {
-                            eprintln!("[Nyx-Server] Error processing connection from {}: {}", addr, e);
+                            eprintln!(
+                                "[Nyx-Server] Error processing connection from {}: {}",
+                                addr, e
+                            );
                         }
                     });
                 }
@@ -32,7 +38,9 @@ impl NyxServer {
         let mut buffer = [0u8; 8192];
         loop {
             let n = stream.read(&mut buffer).await?;
-            if n == 0 { break; } // Connection closed
+            if n == 0 {
+                break;
+            } // Connection closed
 
             let sql = String::from_utf8_lossy(&buffer[..n]);
             println!("[Nyx-Server] Received SQL: {}", sql.trim());
@@ -54,7 +62,7 @@ impl NyxServer {
     async fn execute_and_serialize(sql: &str) -> Result<Vec<u8>, String> {
         let mut planner = SqlPlanner::new();
         let logical_plan = planner.plan(sql)?;
-        
+
         let mut ctx = crate::runtime::execution::df_engine::ExecutionContext {
             sources: std::collections::HashMap::new(),
         };
@@ -66,8 +74,8 @@ impl NyxServer {
         }
 
         if chunks.is_empty() {
-             // Return an empty Arrow stream with correct schema
-             return export_to_arrow(&[], &physical_plan.schema());
+            // Return an empty Arrow stream with correct schema
+            return export_to_arrow(&[], &physical_plan.schema());
         }
 
         export_to_arrow(&chunks, &physical_plan.schema())

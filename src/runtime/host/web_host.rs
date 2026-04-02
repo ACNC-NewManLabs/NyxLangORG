@@ -13,8 +13,10 @@ use std::time::Duration;
 use notify::{RecursiveMode, Watcher};
 
 use crate::devtools::protocol::DevtoolsEnvelope;
+use crate::runtime::execution::nyx_vm::{
+    render_node as vm_render_node, to_stringish, Value as VmValue,
+};
 use crate::runtime::execution::session::RuntimeSession;
-use crate::runtime::execution::nyx_vm::{render_node as vm_render_node, to_stringish, Value as VmValue};
 use crate::runtime::host::asset_host::AssetHost;
 use crate::runtime::host::dev_host::DevWatcher;
 use crate::runtime::host::runtime_host::{
@@ -127,9 +129,9 @@ struct RuntimeState {
 /// Start web dev server
 pub fn dev(opts: WebDevOptions) -> Result<(), String> {
     let url = format!("http://localhost:{}", opts.port);
-    
+
     print_dev_banner(&opts.input, opts.port, &url, opts.hot_reload);
-    
+
     if opts.open_browser {
         if let Err(err) = open_browser(&url) {
             eprintln!("note: could not auto-open browser: {err}");
@@ -138,7 +140,7 @@ pub fn dev(opts: WebDevOptions) -> Result<(), String> {
 
     let version = Arc::new(AtomicU64::new(0));
     let (_watcher, rx) = start_watcher(&opts.input, opts.hot_reload)?;
-    
+
     if opts.hot_reload {
         let next_version = version.clone();
         std::thread::spawn(move || {
@@ -159,10 +161,10 @@ pub fn dev(opts: WebDevOptions) -> Result<(), String> {
         engine_root: PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/engines/ui_engine")),
         runtime_name: "web".to_string(),
     };
-    
+
     let mut session = RuntimeSession::new(config).map_err(|e| e.message)?;
     session.initialize().map_err(|e| e.message)?;
-    
+
     let state = Arc::new(RuntimeState {
         session: Mutex::new(session),
         hot_reload: opts.hot_reload,
@@ -193,12 +195,12 @@ pub fn build(opts: WebBuildOptions) -> Result<(), String> {
         engine_root: PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/engines/ui_engine")),
         runtime_name: "web".to_string(),
     };
-    
+
     let mut session = RuntimeSession::new(config).map_err(|e| e.message)?;
     session.initialize().map_err(|e| e.message)?;
-    
+
     let value = session.render_route("/").map_err(|e| e.message)?;
-    
+
     std::fs::create_dir_all(&opts.out_dir).map_err(|e| e.to_string())?;
     std::fs::write(
         opts.out_dir.join("index.html"),
@@ -227,10 +229,10 @@ pub fn serve(opts: WebDevOptions) -> Result<(), String> {
     println!("Directory: {}", opts.input.display());
     println!("Port: {}", opts.port);
     println!("URL: {url}");
-    
+
     let listener = std::net::TcpListener::bind(format!("{}:{}", opts.host, opts.port))
         .map_err(|e| e.to_string())?;
-    
+
     let asset_host = Arc::new(AssetHost::new(opts.input));
 
     loop {
@@ -246,9 +248,12 @@ pub fn serve(opts: WebDevOptions) -> Result<(), String> {
     }
 }
 
-fn handle_connection(stream: &mut std::net::TcpStream, state: Arc<RuntimeState>) -> Result<(), String> {
+fn handle_connection(
+    stream: &mut std::net::TcpStream,
+    state: Arc<RuntimeState>,
+) -> Result<(), String> {
     use std::io::Read;
-    
+
     let mut buf = [0u8; 16 * 1024];
     let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
     if n == 0 {
@@ -274,9 +279,17 @@ fn handle_connection(stream: &mut std::net::TcpStream, state: Arc<RuntimeState>)
 
     // Static asset fallback from asset root (via RuntimeSession config)
     {
-        let asset_path = if path == "/" { "index.html" } else { path.trim_start_matches('/') };
+        let asset_path = if path == "/" {
+            "index.html"
+        } else {
+            path.trim_start_matches('/')
+        };
         let session = state.session.lock().unwrap();
-        let root = session.config().entry_file.parent().unwrap_or(&session.config().entry_file);
+        let root = session
+            .config()
+            .entry_file
+            .parent()
+            .unwrap_or(&session.config().entry_file);
         let full_path = root.join(asset_path);
         if full_path.exists() && full_path.is_file() {
             return serve_static_file(stream, &full_path);
@@ -287,26 +300,49 @@ fn handle_connection(stream: &mut std::net::TcpStream, state: Arc<RuntimeState>)
     write_html(stream, &html)
 }
 
-fn handle_static_connection(stream: &mut std::net::TcpStream, assets: &AssetHost) -> Result<(), String> {
+fn handle_static_connection(
+    stream: &mut std::net::TcpStream,
+    assets: &AssetHost,
+) -> Result<(), String> {
     use std::io::Read;
     let mut buf = [0u8; 8 * 1024];
     let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
-    if n == 0 { return Ok(()); }
-    
+    if n == 0 {
+        return Ok(());
+    }
+
     let req = String::from_utf8_lossy(&buf[..n]);
-    let path = req.lines().next().unwrap_or("").split_whitespace().nth(1).unwrap_or("/");
-    
-    let asset_id = if path == "/" { "index.html" } else { path.trim_start_matches('/') };
+    let path = req
+        .lines()
+        .next()
+        .unwrap_or("")
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("/");
+
+    let asset_id = if path == "/" {
+        "index.html"
+    } else {
+        path.trim_start_matches('/')
+    };
     let full_path = assets.root.join(asset_id);
-    
+
     if full_path.exists() && full_path.is_file() {
         serve_static_file(stream, &full_path)
     } else {
-        write_response(stream, "404 Not Found", "text/html", "<h1>404 Not Found</h1>".as_bytes())
+        write_response(
+            stream,
+            "404 Not Found",
+            "text/html",
+            "<h1>404 Not Found</h1>".as_bytes(),
+        )
     }
 }
 
-fn serve_static_file(stream: &mut std::net::TcpStream, path: &std::path::Path) -> Result<(), String> {
+fn serve_static_file(
+    stream: &mut std::net::TcpStream,
+    path: &std::path::Path,
+) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let mime = get_mime_type(path.to_str().unwrap_or(""));
     write_response(stream, "200 OK", mime, &bytes)
@@ -329,25 +365,40 @@ fn get_mime_type(path: &str) -> &'static str {
     }
 }
 
-fn write_response(stream: &mut std::net::TcpStream, status: &str, mime: &str, body: &[u8]) -> Result<(), String> {
+fn write_response(
+    stream: &mut std::net::TcpStream,
+    status: &str,
+    mime: &str,
+    body: &[u8],
+) -> Result<(), String> {
     use std::io::Write;
     let headers = format!(
         "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        status, mime, body.len()
+        status,
+        mime,
+        body.len()
     );
-    stream.write_all(headers.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(headers.as_bytes())
+        .map_err(|e| e.to_string())?;
     stream.write_all(body).map_err(|e| e.to_string())
 }
 
 fn render_request(state: &RuntimeState, path: &str) -> Result<String, String> {
-    let mut session = state.session.lock().map_err(|_| "session lock poisoned".to_string())?;
+    let mut session = state
+        .session
+        .lock()
+        .map_err(|_| "session lock poisoned".to_string())?;
     maybe_patch_runtime(&mut session, state)?;
     let value = session.render_route(path).map_err(|e| e.message)?;
     Ok(finalize_html(value, state.hot_reload, FontMode::DevServer))
 }
 
 fn render_fragment(state: &RuntimeState) -> Result<String, String> {
-    let mut session = state.session.lock().map_err(|_| "session lock poisoned".to_string())?;
+    let mut session = state
+        .session
+        .lock()
+        .map_err(|_| "session lock poisoned".to_string())?;
     maybe_patch_runtime(&mut session, state)?;
     session.render_fragment().map_err(|e| e.message)
 }
@@ -412,7 +463,7 @@ fn print_dev_banner(file: &PathBuf, port: u16, url: &str, watch: bool) {
 
 fn sse_reload(stream: &mut std::net::TcpStream, version: Arc<AtomicU64>) -> Result<(), String> {
     use std::io::Write;
-    
+
     stream
         .write_all(
             b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n",
@@ -472,7 +523,9 @@ fn finalize_html(v: VmValue, include_reload: bool, font_mode: FontMode) -> Strin
 
 fn strip_external_font_imports(css: &str) -> String {
     css.lines()
-        .filter(|line| !line.contains("fonts.googleapis.com") && !line.contains("fonts.gstatic.com"))
+        .filter(|line| {
+            !line.contains("fonts.googleapis.com") && !line.contains("fonts.gstatic.com")
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -490,7 +543,7 @@ body{{font-family:'Inter',sans-serif;}}"
 
 fn write_html(stream: &mut std::net::TcpStream, body: &str) -> Result<(), String> {
     use std::io::Write;
-    
+
     let resp = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         body.len(),
@@ -501,8 +554,11 @@ fn write_html(stream: &mut std::net::TcpStream, body: &str) -> Result<(), String
 
 fn serve_font(stream: &mut std::net::TcpStream, path: &str) -> Result<(), String> {
     use std::io::Write;
-    
-    let bytes = match path.trim_start_matches(FONT_ROUTE_PREFIX).trim_start_matches('/') {
+
+    let bytes = match path
+        .trim_start_matches(FONT_ROUTE_PREFIX)
+        .trim_start_matches('/')
+    {
         "inter_300.woff2" => INTER_300,
         "inter_400.woff2" => INTER_400,
         "inter_600.woff2" => INTER_600,
@@ -513,7 +569,9 @@ fn serve_font(stream: &mut std::net::TcpStream, path: &str) -> Result<(), String
         "HTTP/1.1 200 OK\r\nContent-Type: font/woff2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         bytes.len()
     );
-    stream.write_all(headers.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(headers.as_bytes())
+        .map_err(|e| e.to_string())?;
     stream.write_all(bytes).map_err(|e| e.to_string())
 }
 
@@ -540,7 +598,12 @@ fn escape(input: &str) -> String {
 
 fn is_relevant_fs_event(event: &notify::Result<notify::Event>) -> bool {
     if let Ok(event) = event {
-        matches!(event.kind, notify::EventKind::Create(_) | notify::EventKind::Modify(_) | notify::EventKind::Remove(_))
+        matches!(
+            event.kind,
+            notify::EventKind::Create(_)
+                | notify::EventKind::Modify(_)
+                | notify::EventKind::Remove(_)
+        )
     } else {
         false
     }

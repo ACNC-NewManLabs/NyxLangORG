@@ -1,19 +1,19 @@
 //! Nyx Sandbox Runtime™
-//! 
+//!
 //! **Copyright (c) 2026 SURYA SEKHAR ROY. All Rights Reserved.**
-//! 
+//!
 //! This module provides a secure execution sandbox with resource limits,
 //! syscall filtering, and process isolation.
 
-pub mod manager;
-pub mod policy;
 pub mod limits;
+pub mod manager;
 pub mod monitor;
+pub mod policy;
 
+pub use limits::{CpuLimit, MemoryLimit, ResourceLimits};
 pub use manager::SandboxManager;
-pub use policy::{SandboxPolicy, PolicyConfig, FilesystemPolicy, NetworkPolicy};
-pub use limits::{ResourceLimits, MemoryLimit, CpuLimit};
 pub use monitor::ResourceMonitor;
+pub use policy::{FilesystemPolicy, NetworkPolicy, PolicyConfig, SandboxPolicy};
 
 /// Sandbox version
 pub const SANDBOX_VERSION: &str = "1.0.0";
@@ -45,7 +45,9 @@ impl std::fmt::Display for SandboxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SandboxError::PolicyViolation(msg) => write!(f, "Policy violation: {}", msg),
-            SandboxError::ResourceLimitExceeded(msg) => write!(f, "Resource limit exceeded: {}", msg),
+            SandboxError::ResourceLimitExceeded(msg) => {
+                write!(f, "Resource limit exceeded: {}", msg)
+            }
             SandboxError::SystemError(msg) => write!(f, "System error: {}", msg),
             SandboxError::PermissionDenied(msg) => write!(f, "Permission denied: {}", msg),
             SandboxError::InvalidConfig(msg) => write!(f, "Invalid configuration: {}", msg),
@@ -68,4 +70,3 @@ mod tests {
         assert!(init().is_ok());
     }
 }
-

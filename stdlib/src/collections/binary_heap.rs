@@ -8,17 +8,31 @@ pub struct BinaryHeap<T> {
 
 impl<T: Ord> BinaryHeap<T> {
     pub fn new() -> BinaryHeap<T> {
-        BinaryHeap { inner: StdBinaryHeap::new() }
+        BinaryHeap {
+            inner: StdBinaryHeap::new(),
+        }
     }
-    pub fn push(&mut self, value: T) { self.inner.push(value); }
-    pub fn pop(&mut self) -> Option<T> { self.inner.pop() }
-    pub fn peek(&self) -> Option<&T> { self.inner.peek() }
-    pub fn len(&self) -> usize { self.inner.len() }
-    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn push(&mut self, value: T) {
+        self.inner.push(value);
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        self.inner.pop()
+    }
+    pub fn peek(&self) -> Option<&T> {
+        self.inner.peek()
+    }
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 impl<T: Ord> Default for BinaryHeap<T> {
-    fn default() -> BinaryHeap<T> { BinaryHeap::new() }
+    fn default() -> BinaryHeap<T> {
+        BinaryHeap::new()
+    }
 }
 
 #[cfg(test)]

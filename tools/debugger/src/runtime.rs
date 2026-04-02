@@ -67,7 +67,7 @@ impl DebugRuntime {
             breakpoint_hits: 0,
         }
     }
-    
+
     /// Start execution
     pub fn start(&mut self, entry: &str) {
         self.state = RuntimeState::Running;
@@ -79,31 +79,31 @@ impl DebugRuntime {
             return_address: None,
         });
     }
-    
+
     /// Pause execution
     pub fn pause(&mut self) {
         if self.state == RuntimeState::Running || self.state == RuntimeState::Stepping {
             self.state = RuntimeState::Paused;
         }
     }
-    
+
     /// Resume execution
     pub fn resume(&mut self) {
         if self.state == RuntimeState::Paused {
             self.state = RuntimeState::Running;
         }
     }
-    
+
     /// Step to next line
     pub fn step(&mut self) {
         self.state = RuntimeState::Stepping;
     }
-    
+
     /// Step over function call
     pub fn next(&mut self) {
         self.state = RuntimeState::Stepping;
     }
-    
+
     /// Step out of function
     pub fn step_out(&mut self) {
         if !self.call_stack.is_empty() {
@@ -111,13 +111,13 @@ impl DebugRuntime {
         }
         self.state = RuntimeState::Running;
     }
-    
+
     /// Stop execution
     pub fn stop(&mut self) {
         self.state = RuntimeState::Finished;
         self.call_stack.clear();
     }
-    
+
     /// Record current position in history
     pub fn record_position(&mut self, file: &str, line: usize, function: &str) {
         self.history.push(ExecutionPoint {
@@ -125,24 +125,22 @@ impl DebugRuntime {
             line,
             function: function.to_string(),
         });
-        
+
         // Limit history size
         if self.history.len() > 1000 {
             self.history.remove(0);
         }
     }
-    
+
     /// Get backtrace
     pub fn backtrace(&self) -> Vec<String> {
         self.call_stack
             .iter()
             .enumerate()
-            .map(|(i, frame)| {
-                format!("#{} {} at {}:{}", i, frame.function, frame.file, frame.line)
-            })
+            .map(|(i, frame)| format!("#{} {} at {}:{}", i, frame.function, frame.file, frame.line))
             .collect()
     }
-    
+
     /// Check if should stop (breakpoint or step complete)
     pub fn should_stop(&self) -> bool {
         matches!(
@@ -150,7 +148,7 @@ impl DebugRuntime {
             RuntimeState::Paused | RuntimeState::Finished | RuntimeState::Error
         )
     }
-    
+
     /// Set current line
     pub fn set_line(&mut self, line: usize) {
         self.current_line = line;
@@ -158,12 +156,12 @@ impl DebugRuntime {
             frame.line = line;
         }
     }
-    
+
     /// Set error state
     pub fn set_error(&mut self) {
         self.state = RuntimeState::Error;
     }
-    
+
     /// Get state as string
     pub fn state_string(&self) -> &'static str {
         match self.state {
@@ -175,7 +173,7 @@ impl DebugRuntime {
             RuntimeState::Error => "error",
         }
     }
-    
+
     /// Increment breakpoint hits
     pub fn hit_breakpoint(&mut self) {
         self.breakpoint_hits += 1;
@@ -218,37 +216,37 @@ impl DebugConfig {
             verbose: false,
         }
     }
-    
+
     /// Add a source file
     pub fn with_source(mut self, path: PathBuf) -> Self {
         self.sources.push(path);
         self
     }
-    
+
     /// Set working directory
     pub fn with_work_dir(mut self, dir: PathBuf) -> Self {
         self.work_dir = dir;
         self
     }
-    
+
     /// Add environment variable
     pub fn with_env(mut self, key: &str, value: &str) -> Self {
         self.env.insert(key.to_string(), value.to_string());
         self
     }
-    
+
     /// Add argument
     pub fn with_arg(mut self, arg: &str) -> Self {
         self.args.push(arg.to_string());
         self
     }
-    
+
     /// Set timeout
     pub fn with_timeout(mut self, seconds: u64) -> Self {
         self.timeout = Some(seconds);
         self
     }
-    
+
     /// Enable verbose output
     pub fn verbose(mut self) -> Self {
         self.verbose = true;
@@ -265,33 +263,33 @@ impl Default for DebugConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_runtime_state() {
         let mut runtime = DebugRuntime::new();
         assert_eq!(runtime.state, RuntimeState::NotStarted);
-        
+
         runtime.start("main");
         assert_eq!(runtime.state, RuntimeState::Running);
-        
+
         runtime.pause();
         assert_eq!(runtime.state, RuntimeState::Paused);
-        
+
         runtime.resume();
         assert_eq!(runtime.state, RuntimeState::Running);
-        
+
         runtime.step();
         assert_eq!(runtime.state, RuntimeState::Stepping);
-        
+
         runtime.stop();
         assert_eq!(runtime.state, RuntimeState::Finished);
     }
-    
+
     #[test]
     fn test_backtrace() {
         let mut runtime = DebugRuntime::new();
         runtime.start("main");
-        
+
         let bt = runtime.backtrace();
         assert!(!bt.is_empty());
     }

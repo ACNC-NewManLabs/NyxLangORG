@@ -5,14 +5,14 @@
 //! - Step execution
 //! - Variable inspection
 
-use std::path::PathBuf;
+use crate::breakpoints::BreakpointManager;
+use crate::inspector::VariableInspector;
+use crate::runtime::{DebugRuntime, RuntimeState};
 use clap::{Parser, Subcommand};
 use colored::*;
 use nyx::applications::compiler::compiler_main::Compiler;
 use nyx_vm::VmConfig;
-use crate::breakpoints::BreakpointManager;
-use crate::inspector::VariableInspector;
-use crate::runtime::{DebugRuntime, RuntimeState};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 mod breakpoints;
@@ -88,9 +88,20 @@ fn main() {
 
 /// Run the interactive debugger
 fn run_debugger(file: PathBuf) {
-    println!("{}", "═══════════════════════════════════════════════════════════".magenta());
-    println!("{}", "                    Nyx Debugger v1.0 [PRODUCTION]".bold().cyan());
-    println!("{}", "═══════════════════════════════════════════════════════════".magenta());
+    println!(
+        "{}",
+        "═══════════════════════════════════════════════════════════".magenta()
+    );
+    println!(
+        "{}",
+        "                    Nyx Debugger v1.0 [PRODUCTION]"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "═══════════════════════════════════════════════════════════".magenta()
+    );
     println!();
     println!("{} Debugging: {}", "🛰".cyan(), file.display());
 
@@ -99,34 +110,39 @@ fn run_debugger(file: PathBuf) {
         return;
     }
 
-    let mut compiler = match Compiler::from_registry_files("registry/language.json", "registry/engines.json") {
-         Ok(c) => c,
-         Err(_) => {
-             eprintln!("{} Failed to load registries.", "Critical:".red());
-             return;
-         }
-    };
+    let mut compiler =
+        match Compiler::from_registry_files("registry/language.json", "registry/engines.json") {
+            Ok(c) => c,
+            Err(_) => {
+                eprintln!("{} Failed to load registries.", "Critical:".red());
+                return;
+            }
+        };
 
     println!("{} Compiling project...", "🔨".yellow());
     let bytecode_module = match compiler.compile_to_bytecode(&file) {
         Ok(m) => m,
         Err(e) => {
-             eprintln!("{} Compilation failed: {}", "Error:".red(), e);
-             return;
+            eprintln!("{} Compilation failed: {}", "Error:".red(), e);
+            return;
         }
     };
 
-    println!("{} Application ready. Found {} entry points.", "✓".green(), bytecode_module.functions.len());
+    println!(
+        "{} Application ready. Found {} entry points.",
+        "✓".green(),
+        bytecode_module.functions.len()
+    );
 
     // --- Industrial Debugger State ---
     let bpm = Arc::new(Mutex::new(BreakpointManager::new()));
     let inspector = Arc::new(Mutex::new(VariableInspector::new()));
     let runtime = Arc::new(Mutex::new(DebugRuntime::new()));
-    
+
     let mut config = VmConfig::default();
     config.debug = true;
-    config.enable_jit = false; 
-    
+    config.enable_jit = false;
+
     let bpm_clone = Arc::clone(&bpm);
     let runtime_clone = Arc::clone(&runtime);
     let _inspector_clone = Arc::clone(&inspector);
@@ -135,10 +151,10 @@ fn run_debugger(file: PathBuf) {
     config.on_step = Some(Box::new(move |vm, instr, _ip| {
         let mut rt = runtime_clone.lock().unwrap();
         let mut bpm = bpm_clone.lock().unwrap();
-        
+
         let file_path = file_clone.to_str().unwrap_or("unknown");
         let current_line = instr.line;
-        
+
         // 1. Check Breakpoints
         let is_breakpoint = bpm.has_breakpoint_at(file_path, current_line);
         let is_stepping = rt.state == RuntimeState::Stepping;
@@ -149,16 +165,16 @@ fn run_debugger(file: PathBuf) {
             }
             rt.state = RuntimeState::Paused;
             rt.set_line(current_line);
-            
+
             // 2. Interactive Loop
             loop {
                 print!("{}", "(nyx-db) > ".bold().yellow());
                 std::io::Write::flush(&mut std::io::stdout()).unwrap();
-                
+
                 let mut input = String::new();
                 std::io::stdin().read_line(&mut input).unwrap();
                 let cmd = input.trim();
-                
+
                 match cmd {
                     "c" | "continue" => {
                         rt.state = RuntimeState::Running;
@@ -190,9 +206,17 @@ fn run_debugger(file: PathBuf) {
                             for i in start..end {
                                 let line_idx = i + 1;
                                 if line_idx == current_line {
-                                    println!("{} | {}", format!("{:>3} ►", line_idx).yellow().bold(), lines[i].bold());
+                                    println!(
+                                        "{} | {}",
+                                        format!("{:>3} ►", line_idx).yellow().bold(),
+                                        lines[i].bold()
+                                    );
                                 } else {
-                                    println!("{} | {}", format!("{:>3}  ", line_idx).dimmed(), lines[i].dimmed());
+                                    println!(
+                                        "{} | {}",
+                                        format!("{:>3}  ", line_idx).dimmed(),
+                                        lines[i].dimmed()
+                                    );
                                 }
                             }
                         } else {
@@ -225,13 +249,13 @@ fn run_debugger(file: PathBuf) {
                 }
             }
         }
-        
+
         Ok(())
     }));
 
     let mut vm = nyx_vm::NyxVm::new(config);
     vm.load(bytecode_module);
-    
+
     // Register standard IO
     vm.register("print", 1, |args| {
         if let Some(arg) = args.first() {
@@ -240,9 +264,12 @@ fn run_debugger(file: PathBuf) {
         Ok(nyx_vm::bytecode::Value::Null)
     });
 
-    println!("{}", "\n🚀 Starting execution... (Type 'h' for help when paused)".cyan());
+    println!(
+        "{}",
+        "\n🚀 Starting execution... (Type 'h' for help when paused)".cyan()
+    );
     runtime.lock().unwrap().start("main");
-    
+
     match vm.run("main") {
         Ok(v) => println!("\n{} Program exited with: {:?}", "🏁".green(), v),
         Err(e) => eprintln!("\n{} Execution Trap: {:?}", "💥".red(), e),

@@ -8,7 +8,9 @@ pub struct BTreeSet<T> {
 
 impl<T: Ord> BTreeSet<T> {
     pub fn new() -> BTreeSet<T> {
-        BTreeSet { inner: StdBTreeSet::new() }
+        BTreeSet {
+            inner: StdBTreeSet::new(),
+        }
     }
     pub fn insert(&mut self, value: T) -> bool {
         self.inner.insert(value)
@@ -19,12 +21,18 @@ impl<T: Ord> BTreeSet<T> {
     pub fn remove(&mut self, value: &T) -> bool {
         self.inner.remove(value)
     }
-    pub fn len(&self) -> usize { self.inner.len() }
-    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 impl<T: Ord> Default for BTreeSet<T> {
-    fn default() -> BTreeSet<T> { BTreeSet::new() }
+    fn default() -> BTreeSet<T> {
+        BTreeSet::new()
+    }
 }
 
 #[cfg(test)]

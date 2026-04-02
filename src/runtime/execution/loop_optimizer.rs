@@ -1,6 +1,6 @@
-use crate::core::ast::ast_nodes::{Expr, Stmt, Item, ItemKind, Program, ModuleDecl};
-use crate::runtime::execution::nyx_vm::Value;
+use crate::core::ast::ast_nodes::{Expr, Item, ItemKind, ModuleDecl, Program, Stmt};
 use crate::runtime::execution::bytecode_compiler::BytecodeCompiler;
+use crate::runtime::execution::nyx_vm::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -68,7 +68,12 @@ impl AeroOptimizer {
 
     fn optimize_stmt(stmt: &mut Stmt, symbols: &mut HashMap<String, Value>) {
         match stmt {
-            Stmt::Let { name, expr, mutable, .. } => {
+            Stmt::Let {
+                name,
+                expr,
+                mutable,
+                ..
+            } => {
                 Self::optimize_expr(expr, symbols);
                 if !*mutable {
                     if let Some(val) = Self::expr_to_value(expr) {
@@ -78,7 +83,11 @@ impl AeroOptimizer {
             }
             Stmt::Assign { value, .. } => Self::optimize_expr(value, symbols),
             Stmt::CompoundAssign { value, .. } => Self::optimize_expr(value, symbols),
-            Stmt::If { branches, else_body, .. } => {
+            Stmt::If {
+                branches,
+                else_body,
+                ..
+            } => {
                 let mut i = 0;
                 while i < branches.len() {
                     Self::optimize_expr(&mut branches[i].condition, symbols);
@@ -101,7 +110,9 @@ impl AeroOptimizer {
                     Self::optimize_block(eb, &mut symbols.clone());
                 }
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 Self::optimize_expr(condition, symbols);
                 Self::optimize_block(body, &mut symbols.clone());
             }
@@ -116,7 +127,9 @@ impl AeroOptimizer {
 
     pub fn optimize_expr(expr: &mut Expr, symbols: &HashMap<String, Value>) {
         match expr {
-            Expr::Binary { left, op, right, .. } => {
+            Expr::Binary {
+                left, op, right, ..
+            } => {
                 Self::optimize_expr(left, symbols);
                 Self::optimize_expr(right, symbols);
                 if let Some(folded) = Self::try_fold_binary(left, op, right) {
@@ -125,7 +138,9 @@ impl AeroOptimizer {
                     Self::try_strength_reduction(expr);
                 }
             }
-            Expr::Unary { right: inner, op, .. } => {
+            Expr::Unary {
+                right: inner, op, ..
+            } => {
                 Self::optimize_expr(inner, symbols);
                 if let Some(folded) = Self::try_fold_unary(op, inner) {
                     *expr = folded;
@@ -138,20 +153,32 @@ impl AeroOptimizer {
                     }
                 }
             }
-            Expr::Ternary { condition, then_expr, else_expr, .. } => {
+            Expr::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+                ..
+            } => {
                 Self::optimize_expr(condition, symbols);
                 Self::optimize_expr(then_expr, symbols);
                 Self::optimize_expr(else_expr, symbols);
                 if let Expr::BoolLiteral { value, .. } = condition.as_ref() {
                     let branch = if *value { then_expr } else { else_expr };
-                    let boxed = std::mem::replace(branch, Box::new(Expr::NullLiteral { span: crate::core::lexer::token::Span::default() }));
+                    let boxed = std::mem::replace(
+                        branch,
+                        Box::new(Expr::NullLiteral {
+                            span: crate::core::lexer::token::Span::default(),
+                        }),
+                    );
                     *expr = *boxed;
                 }
             }
             Expr::Index { object, index, .. } => {
                 Self::optimize_expr(object, symbols);
                 Self::optimize_expr(index, symbols);
-                if let (Expr::ArrayLiteral { elements, .. }, Expr::IntLiteral { value: idx, .. }) = (object.as_ref(), index.as_ref()) {
+                if let (Expr::ArrayLiteral { elements, .. }, Expr::IntLiteral { value: idx, .. }) =
+                    (object.as_ref(), index.as_ref())
+                {
                     if *idx >= 0 && (*idx as usize) < elements.len() {
                         let mut item = elements[*idx as usize].clone();
                         Self::optimize_expr(&mut item, symbols);
@@ -188,7 +215,9 @@ impl AeroOptimizer {
         locals: &HashMap<String, Value>,
     ) -> Option<HashMap<String, Value>> {
         let (ind_var, n) = match condition {
-            Expr::Binary { left, op, right, .. } if op == "<" => {
+            Expr::Binary {
+                left, op, right, ..
+            } if op == "<" => {
                 let left_name = if let Expr::Identifier { name, .. } = left.as_ref() {
                     name
                 } else {
@@ -196,12 +225,10 @@ impl AeroOptimizer {
                 };
 
                 let limit = match right.as_ref() {
-                    Expr::Identifier { name, .. } => {
-                        match locals.get(name) {
-                            Some(Value::Int(v)) => *v,
-                            _ => return None,
-                        }
-                    }
+                    Expr::Identifier { name, .. } => match locals.get(name) {
+                        Some(Value::Int(v)) => *v,
+                        _ => return None,
+                    },
                     Expr::IntLiteral { value, .. } => *value,
                     _ => return None,
                 };
@@ -210,7 +237,9 @@ impl AeroOptimizer {
             _ => return None,
         };
 
-        if body.len() != 2 { return None; }
+        if body.len() != 2 {
+            return None;
+        }
 
         let mut acc_var = None;
         let mut ind_increment = None;
@@ -220,19 +249,43 @@ impl AeroOptimizer {
                 if let Expr::Identifier { name, .. } = target {
                     if name == ind_var {
                         ind_increment = match value {
-                            Expr::Binary { left, op, right, .. } if op == "+" => {
-                                if let (Expr::Identifier { name: l_name, .. }, Expr::IntLiteral { value: r_val, .. }) = (left.as_ref(), right.as_ref()) {
-                                    if l_name == ind_var { Some(*r_val) } else { None }
-                                } else { None }
+                            Expr::Binary {
+                                left, op, right, ..
+                            } if op == "+" => {
+                                if let (
+                                    Expr::Identifier { name: l_name, .. },
+                                    Expr::IntLiteral { value: r_val, .. },
+                                ) = (left.as_ref(), right.as_ref())
+                                {
+                                    if l_name == ind_var {
+                                        Some(*r_val)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
                             }
                             _ => None,
                         };
                     } else {
                         acc_var = match value {
-                            Expr::Binary { left, op, right, .. } if op == "+" => {
-                                if let (Expr::Identifier { name: l_name, .. }, Expr::Identifier { name: r_name, .. }) = (left.as_ref(), right.as_ref()) {
-                                    if l_name == name && r_name == ind_var { Some(name.clone()) } else { None }
-                                } else { None }
+                            Expr::Binary {
+                                left, op, right, ..
+                            } if op == "+" => {
+                                if let (
+                                    Expr::Identifier { name: l_name, .. },
+                                    Expr::Identifier { name: r_name, .. },
+                                ) = (left.as_ref(), right.as_ref())
+                                {
+                                    if l_name == name && r_name == ind_var {
+                                        Some(name.clone())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
                             }
                             _ => None,
                         };
@@ -264,28 +317,57 @@ impl AeroOptimizer {
         None
     }
 
-    fn is_jit_compilable(condition: &Expr, body: &[Stmt], _locals: &HashMap<String, Value>) -> bool {
+    fn is_jit_compilable(
+        condition: &Expr,
+        body: &[Stmt],
+        _locals: &HashMap<String, Value>,
+    ) -> bool {
         // Broadly, if the loop contains only arithmetic, branches, and supported stmts, it can be JIT'd.
         // We'll use the BytecodeCompiler as our verifier.
         let test_compiler = BytecodeCompiler::new();
         let mut test_locals = HashMap::new();
         // Assume variables exist for the test pass
-        if let Expr::Identifier { name, .. } = condition { test_locals.insert(name.clone(), 0); }
-        
-        test_compiler.compile_loop_fragment(condition, body, &test_locals).is_ok()
+        if let Expr::Identifier { name, .. } = condition {
+            test_locals.insert(name.clone(), 0);
+        }
+
+        test_compiler
+            .compile_loop_fragment(condition, body, &test_locals)
+            .is_ok()
     }
 
     fn try_fold_binary(left: &Expr, op: &str, right: &Expr) -> Option<Expr> {
         match (left, right) {
             (Expr::IntLiteral { value: l_val, span }, Expr::IntLiteral { value: r_val, .. }) => {
                 match op {
-                    "+" => Some(Expr::IntLiteral { value: l_val + r_val, span: *span }),
-                    "-" => Some(Expr::IntLiteral { value: l_val - r_val, span: *span }),
-                    "*" => Some(Expr::IntLiteral { value: l_val * r_val, span: *span }),
-                    "/" if *r_val != 0 => Some(Expr::IntLiteral { value: l_val / r_val, span: *span }),
-                    ">" => Some(Expr::BoolLiteral { value: l_val > r_val, span: *span }),
-                    "<" => Some(Expr::BoolLiteral { value: l_val < r_val, span: *span }),
-                    "==" => Some(Expr::BoolLiteral { value: l_val == r_val, span: *span }),
+                    "+" => Some(Expr::IntLiteral {
+                        value: l_val + r_val,
+                        span: *span,
+                    }),
+                    "-" => Some(Expr::IntLiteral {
+                        value: l_val - r_val,
+                        span: *span,
+                    }),
+                    "*" => Some(Expr::IntLiteral {
+                        value: l_val * r_val,
+                        span: *span,
+                    }),
+                    "/" if *r_val != 0 => Some(Expr::IntLiteral {
+                        value: l_val / r_val,
+                        span: *span,
+                    }),
+                    ">" => Some(Expr::BoolLiteral {
+                        value: l_val > r_val,
+                        span: *span,
+                    }),
+                    "<" => Some(Expr::BoolLiteral {
+                        value: l_val < r_val,
+                        span: *span,
+                    }),
+                    "==" => Some(Expr::BoolLiteral {
+                        value: l_val == r_val,
+                        span: *span,
+                    }),
                     _ => None,
                 }
             }
@@ -295,21 +377,37 @@ impl AeroOptimizer {
 
     fn try_fold_unary(op: &str, inner: &Expr) -> Option<Expr> {
         match inner {
-            Expr::IntLiteral { value, span } if op == "-" => Some(Expr::IntLiteral { value: -value, span: *span }),
-            Expr::BoolLiteral { value, span } if op == "!" => Some(Expr::BoolLiteral { value: !value, span: *span }),
+            Expr::IntLiteral { value, span } if op == "-" => Some(Expr::IntLiteral {
+                value: -value,
+                span: *span,
+            }),
+            Expr::BoolLiteral { value, span } if op == "!" => Some(Expr::BoolLiteral {
+                value: !value,
+                span: *span,
+            }),
             _ => None,
         }
     }
 
     fn try_strength_reduction(expr: &mut Expr) {
-        if let Expr::Binary { left, op, right, span, .. } = expr {
+        if let Expr::Binary {
+            left,
+            op,
+            right,
+            span,
+            ..
+        } = expr
+        {
             if *op == "*" {
                 if let Expr::IntLiteral { value: 2, .. } = right.as_ref() {
                     let l = std::mem::replace(left.as_mut(), Expr::NullLiteral { span: *span });
                     *expr = Expr::Binary {
                         left: Box::new(l),
                         op: "<<".to_string(),
-                        right: Box::new(Expr::IntLiteral { value: 1, span: *span }),
+                        right: Box::new(Expr::IntLiteral {
+                            value: 1,
+                            span: *span,
+                        }),
                         span: *span,
                     };
                 }
@@ -338,6 +436,9 @@ impl AeroOptimizer {
     }
 
     fn is_terminator(stmt: &Stmt) -> bool {
-        matches!(stmt, Stmt::Return { .. } | Stmt::Break { .. } | Stmt::Continue { .. })
+        matches!(
+            stmt,
+            Stmt::Return { .. } | Stmt::Break { .. } | Stmt::Continue { .. }
+        )
     }
 }

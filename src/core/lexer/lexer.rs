@@ -116,7 +116,9 @@ impl Lexer {
     }
 
     /// Kept for registry-layer compatibility (returns an empty-source lexer).
-    pub fn from_registry(registry: &crate::core::registry::language_registry::LanguageRegistry) -> Self {
+    pub fn from_registry(
+        registry: &crate::core::registry::language_registry::LanguageRegistry,
+    ) -> Self {
         let _ = registry;
         Self::from_source(String::new())
     }
@@ -279,14 +281,12 @@ impl Lexer {
         let mut depth = 1usize;
         while depth > 0 {
             if self.is_at_end() {
-                return Err(
-                    LexerError::new(
-                        codes::LEXER_UNTERMINATED_COMMENT,
-                        "unterminated block comment",
-                        Span::new(start, self.current_position()),
-                    )
-                    .with_suggestion("add a closing '*/' to end the block comment"),
-                );
+                return Err(LexerError::new(
+                    codes::LEXER_UNTERMINATED_COMMENT,
+                    "unterminated block comment",
+                    Span::new(start, self.current_position()),
+                )
+                .with_suggestion("add a closing '*/' to end the block comment"));
             }
             let c = self.advance();
             match c {
@@ -311,40 +311,34 @@ impl Lexer {
         let mut value = String::new();
         loop {
             if self.is_at_end() {
-                return Err(
-                    LexerError::new(
-                        codes::LEXER_UNTERMINATED_STRING,
-                        "unterminated string literal",
-                        Span::new(start, self.current_position()),
-                    )
-                    .with_suggestion("add a closing '\"' to end the string literal"),
-                );
+                return Err(LexerError::new(
+                    codes::LEXER_UNTERMINATED_STRING,
+                    "unterminated string literal",
+                    Span::new(start, self.current_position()),
+                )
+                .with_suggestion("add a closing '\"' to end the string literal"));
             }
             let c = self.advance();
             match c {
                 '"' => break,
                 '\n' => {
-                    return Err(
-                        LexerError::new(
-                            codes::LEXER_EOF_IN_STRING,
-                            "newline in string literal",
-                            Span::new(start, self.current_position()),
-                        )
-                        .with_suggestion("close the string before the newline or use '\\n'"),
-                    );
+                    return Err(LexerError::new(
+                        codes::LEXER_EOF_IN_STRING,
+                        "newline in string literal",
+                        Span::new(start, self.current_position()),
+                    )
+                    .with_suggestion("close the string before the newline or use '\\n'"));
                 }
                 '\\' => {
                     if self.is_at_end() {
-                        return Err(
-                            LexerError::new(
-                                codes::LEXER_INVALID_ESCAPE,
-                                "unterminated escape sequence in string literal",
-                                Span::new(start, self.current_position()),
-                            )
-                            .with_suggestion(
-                                "complete the escape sequence (e.g. \\\\n, \\\\t, \\\\u{...})",
-                            ),
-                        );
+                        return Err(LexerError::new(
+                            codes::LEXER_INVALID_ESCAPE,
+                            "unterminated escape sequence in string literal",
+                            Span::new(start, self.current_position()),
+                        )
+                        .with_suggestion(
+                            "complete the escape sequence (e.g. \\\\n, \\\\t, \\\\u{...})",
+                        ));
                     }
                     let esc = self.advance();
                     match esc {
@@ -358,40 +352,34 @@ impl Lexer {
                         'u' => {
                             // Unicode escape \u{XXXX}
                             if !self.match_char('{') {
-                                return Err(
-                                    LexerError::new(
-                                        codes::LEXER_INVALID_ESCAPE,
-                                        "invalid unicode escape: expected '{' after \\u",
-                                        Span::new(start, self.current_position()),
-                                    )
-                                    .with_suggestion("use a unicode escape like \\u{1F600}"),
-                                );
+                                return Err(LexerError::new(
+                                    codes::LEXER_INVALID_ESCAPE,
+                                    "invalid unicode escape: expected '{' after \\u",
+                                    Span::new(start, self.current_position()),
+                                )
+                                .with_suggestion("use a unicode escape like \\u{1F600}"));
                             }
                             let mut hex = String::new();
                             while !self.is_at_end() && self.peek() != '}' {
                                 hex.push(self.advance());
                             }
                             if !self.match_char('}') {
-                                return Err(
-                                    LexerError::new(
-                                        codes::LEXER_INVALID_ESCAPE,
-                                        "unterminated unicode escape",
-                                        Span::new(start, self.current_position()),
-                                    )
-                                    .with_suggestion("close the unicode escape with '}'"),
-                                );
+                                return Err(LexerError::new(
+                                    codes::LEXER_INVALID_ESCAPE,
+                                    "unterminated unicode escape",
+                                    Span::new(start, self.current_position()),
+                                )
+                                .with_suggestion("close the unicode escape with '}'"));
                             }
                             if hex.is_empty() {
-                                return Err(
-                                    LexerError::new(
-                                        codes::LEXER_INVALID_ESCAPE,
-                                        "empty unicode escape",
-                                        Span::new(start, self.current_position()),
-                                    )
-                                    .with_suggestion(
-                                        "provide at least one hex digit inside \\u{...}",
-                                    ),
-                                );
+                                return Err(LexerError::new(
+                                    codes::LEXER_INVALID_ESCAPE,
+                                    "empty unicode escape",
+                                    Span::new(start, self.current_position()),
+                                )
+                                .with_suggestion(
+                                    "provide at least one hex digit inside \\u{...}",
+                                ));
                             }
                             let code = u32::from_str_radix(&hex, 16).map_err(|_| {
                                 LexerError::new(
@@ -423,7 +411,6 @@ impl Lexer {
         Ok(self.make_token(TokenKind::String, value, start))
     }
 
-
     fn scan_backtick_string(&mut self, start: Position) -> Result<Token, LexerError> {
         self.advance(); // opening `
         let mut value = String::new();
@@ -431,14 +418,12 @@ impl Lexer {
             value.push(self.advance());
         }
         if self.is_at_end() {
-            return Err(
-                LexerError::new(
-                    codes::LEXER_UNTERMINATED_STRING,
-                    "unterminated backtick string",
-                    Span::new(start, self.current_position()),
-                )
-                .with_suggestion("add a closing '`' to end the raw string"),
-            );
+            return Err(LexerError::new(
+                codes::LEXER_UNTERMINATED_STRING,
+                "unterminated backtick string",
+                Span::new(start, self.current_position()),
+            )
+            .with_suggestion("add a closing '`' to end the raw string"));
         }
         self.advance(); // closing `
         Ok(self.make_token(TokenKind::String, value, start))
@@ -461,27 +446,23 @@ impl Lexer {
                 c => c,
             }
         } else if self.is_at_end() {
-            return Err(
-                LexerError::new(
-                    codes::LEXER_UNTERMINATED_STRING,
-                    "unterminated char literal",
-                    Span::new(start, self.current_position()),
-                )
-                .with_suggestion("add a closing '\\'' to end the character literal"),
-            );
+            return Err(LexerError::new(
+                codes::LEXER_UNTERMINATED_STRING,
+                "unterminated char literal",
+                Span::new(start, self.current_position()),
+            )
+            .with_suggestion("add a closing '\\'' to end the character literal"));
         } else {
             self.advance()
         };
 
         if self.peek() != '\'' {
-            return Err(
-                LexerError::new(
-                    codes::LEXER_MALFORMED_TOKEN,
-                    "expected closing ' after char literal",
-                    Span::new(start, self.current_position()),
-                )
-                .with_suggestion("add a closing '\\'' after the character"),
-            );
+            return Err(LexerError::new(
+                codes::LEXER_MALFORMED_TOKEN,
+                "expected closing ' after char literal",
+                Span::new(start, self.current_position()),
+            )
+            .with_suggestion("add a closing '\\'' after the character"));
         }
         self.advance(); // closing '
         Ok(self.make_token(TokenKind::Char, ch.to_string(), start))
@@ -508,14 +489,12 @@ impl Lexer {
                         }
                     }
                     if digits == 0 {
-                        return Err(
-                            LexerError::new(
-                                codes::LEXER_INVALID_NUMBER,
-                                "expected hex digits after 0x",
-                                Span::new(start, self.current_position()),
-                            )
-                            .with_suggestion("add at least one hex digit after 0x"),
-                        );
+                        return Err(LexerError::new(
+                            codes::LEXER_INVALID_NUMBER,
+                            "expected hex digits after 0x",
+                            Span::new(start, self.current_position()),
+                        )
+                        .with_suggestion("add at least one hex digit after 0x"));
                     }
                     return Ok(self.make_token(TokenKind::Integer, value, start));
                 }
@@ -531,14 +510,12 @@ impl Lexer {
                         }
                     }
                     if digits == 0 {
-                        return Err(
-                            LexerError::new(
-                                codes::LEXER_INVALID_NUMBER,
-                                "expected binary digits after 0b",
-                                Span::new(start, self.current_position()),
-                            )
-                            .with_suggestion("add at least one binary digit after 0b"),
-                        );
+                        return Err(LexerError::new(
+                            codes::LEXER_INVALID_NUMBER,
+                            "expected binary digits after 0b",
+                            Span::new(start, self.current_position()),
+                        )
+                        .with_suggestion("add at least one binary digit after 0b"));
                     }
                     return Ok(self.make_token(TokenKind::Integer, value, start));
                 }
@@ -554,14 +531,12 @@ impl Lexer {
                         }
                     }
                     if digits == 0 {
-                        return Err(
-                            LexerError::new(
-                                codes::LEXER_INVALID_NUMBER,
-                                "expected octal digits after 0o",
-                                Span::new(start, self.current_position()),
-                            )
-                            .with_suggestion("add at least one octal digit after 0o"),
-                        );
+                        return Err(LexerError::new(
+                            codes::LEXER_INVALID_NUMBER,
+                            "expected octal digits after 0o",
+                            Span::new(start, self.current_position()),
+                        )
+                        .with_suggestion("add at least one octal digit after 0o"));
                     }
                     return Ok(self.make_token(TokenKind::Integer, value, start));
                 }
@@ -602,14 +577,12 @@ impl Lexer {
                 exp_digits += 1;
             }
             if exp_digits == 0 {
-                return Err(
-                    LexerError::new(
-                        codes::LEXER_INVALID_NUMBER,
-                        "expected digits in exponent",
-                        Span::new(start, self.current_position()),
-                    )
-                    .with_suggestion("add exponent digits, e.g. 1.0e10"),
-                );
+                return Err(LexerError::new(
+                    codes::LEXER_INVALID_NUMBER,
+                    "expected digits in exponent",
+                    Span::new(start, self.current_position()),
+                )
+                .with_suggestion("add exponent digits, e.g. 1.0e10"));
             }
         }
 
@@ -662,14 +635,12 @@ impl Lexer {
         let mut depth = 0usize; // track ${ ... } nesting
         loop {
             if self.is_at_end() {
-                return Err(
-                    LexerError::new(
-                        codes::LEXER_UNTERMINATED_STRING,
-                        "unterminated css`` literal",
-                        Span::new(start, self.current_position()),
-                    )
-                    .with_suggestion("add a closing backtick to end the css literal"),
-                );
+                return Err(LexerError::new(
+                    codes::LEXER_UNTERMINATED_STRING,
+                    "unterminated css`` literal",
+                    Span::new(start, self.current_position()),
+                )
+                .with_suggestion("add a closing backtick to end the css literal"));
             }
             let c = self.peek();
             match c {
@@ -880,14 +851,12 @@ impl Lexer {
             }
 
             other => {
-                return Err(
-                    LexerError::new(
-                        codes::LEXER_ILLEGAL_CHARACTER,
-                        format!("unexpected character '{other}'"),
-                        Span::new(start, self.current_position()),
-                    )
-                    .with_suggestion("remove the character or replace it with valid syntax"),
-                );
+                return Err(LexerError::new(
+                    codes::LEXER_ILLEGAL_CHARACTER,
+                    format!("unexpected character '{other}'"),
+                    Span::new(start, self.current_position()),
+                )
+                .with_suggestion("remove the character or replace it with valid syntax"));
             }
         };
 

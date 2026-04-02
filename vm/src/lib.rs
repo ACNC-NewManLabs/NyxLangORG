@@ -1,5 +1,5 @@
 //! Nyx Bytecode Virtual Machine
-//! 
+//!
 //! This module provides a stack-based bytecode VM for executing Nyx programs.
 //! The VM executes bytecode generated.
 // from Nyx IR!
@@ -8,15 +8,15 @@
 
 pub mod bytecode;
 pub mod emitter;
-pub mod runtime;
-pub mod loader;
-pub mod jit;
 pub mod hypervisor;
+pub mod jit;
+pub mod loader;
+pub mod runtime;
 
-pub use bytecode::{BytecodeModule, Function, BytecodeInstr as Instruction, OpCode, Value};
+pub use bytecode::{BytecodeInstr as Instruction, BytecodeModule, Function, OpCode, Value};
 pub use emitter::BytecodeEmitter;
-pub use runtime::NyxVm;
 pub use loader::BytecodeLoader;
+pub use runtime::NyxVm;
 
 /// VM version
 pub const VM_VERSION: &str = "1.0.0";
@@ -56,7 +56,15 @@ pub struct VmConfig {
     pub debug: bool,
     /// Optional hook to call before executing each instruction
     #[allow(clippy::type_complexity)]
-    pub on_step: Option<Box<dyn FnMut(&crate::runtime::NyxVm, &crate::bytecode::BytecodeInstr, usize) -> Result<(), crate::VmError>>>,
+    pub on_step: Option<
+        Box<
+            dyn FnMut(
+                &crate::runtime::NyxVm,
+                &crate::bytecode::BytecodeInstr,
+                usize,
+            ) -> Result<(), crate::VmError>,
+        >,
+    >,
 }
 
 impl std::fmt::Debug for VmConfig {
@@ -137,8 +145,12 @@ impl std::fmt::Display for VmError {
             VmError::UndefinedFunction(name) => write!(f, "Undefined function: {}", name),
             VmError::TypeError(msg) => write!(f, "Type error: {}", msg),
             VmError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
-            VmError::InstructionLimitExceeded(limit) => write!(f, "Instruction limit exceeded: {}", limit),
-            VmError::TimeLimitExceeded(limit) => write!(f, "Execution time limit exceeded: {}ms", limit),
+            VmError::InstructionLimitExceeded(limit) => {
+                write!(f, "Instruction limit exceeded: {}", limit)
+            }
+            VmError::TimeLimitExceeded(limit) => {
+                write!(f, "Execution time limit exceeded: {}ms", limit)
+            }
             VmError::IoError(msg) => write!(f, "I/O error: {}", msg),
             VmError::Breakpoint(line) => write!(f, "Breakpoint at line {}", line),
         }

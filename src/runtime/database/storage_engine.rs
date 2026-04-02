@@ -1,8 +1,8 @@
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write, Seek, SeekFrom};
-use std::path::Path;
-use serde::{Serialize, Deserialize};
 use crate::runtime::execution::df_engine::DataChunk;
+use serde::{Deserialize, Serialize};
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PageHeader {
@@ -61,8 +61,11 @@ impl NyxBlockStorage {
 
         loop {
             let mut header_buf = [0u8; 17]; // Size of serialized PageHeader
-            if file.read_exact(&mut header_buf).is_err() { break; }
-            let header: PageHeader = bincode::deserialize(&header_buf).map_err(std::io::Error::other)?;
+            if file.read_exact(&mut header_buf).is_err() {
+                break;
+            }
+            let header: PageHeader =
+                bincode::deserialize(&header_buf).map_err(std::io::Error::other)?;
 
             let mut body_buf = vec![0u8; header.chunk_size as usize];
             file.read_exact(&mut body_buf)?;
@@ -71,11 +74,15 @@ impl NyxBlockStorage {
             if header.checksum != 0 && calc_checksum != header.checksum {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("CRC mismatch in chunk database! Expected: {}, Calc: {}", header.checksum, calc_checksum)
+                    format!(
+                        "CRC mismatch in chunk database! Expected: {}, Calc: {}",
+                        header.checksum, calc_checksum
+                    ),
                 ));
             }
 
-            let chunk: DataChunk = bincode::deserialize(&body_buf).map_err(std::io::Error::other)?;
+            let chunk: DataChunk =
+                bincode::deserialize(&body_buf).map_err(std::io::Error::other)?;
             chunks.push(chunk);
         }
 

@@ -1,4 +1,4 @@
-use crate::systems::ir::nyx_ir::{BinaryOp, IrType, Instruction, Module, StructDef, Value};
+use crate::systems::ir::nyx_ir::{BinaryOp, Instruction, IrType, Module, StructDef, Value};
 use std::collections::HashMap;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
@@ -47,7 +47,9 @@ impl LlvmBackend {
             // Header length: 16 bytes
             // Checksum: -(0xE85250D6 + 0 + 16) = 0x17ADAF1A (397250330)
             out.push_str("@multiboot_header = dso_local constant { i32, i32, i32, i32 } { ");
-            out.push_str("i32 -397250346, i32 0, i32 16, i32 397250330 }, section \".multiboot\", align 8\n");
+            out.push_str(
+                "i32 -397250346, i32 0, i32 16, i32 397250330 }, section \".multiboot\", align 8\n",
+            );
         }
 
         out.push_str("@.fmt_i64 = private unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\"\n");
@@ -56,7 +58,7 @@ impl LlvmBackend {
         for def in strings.definitions() {
             out.push_str(def.as_str());
         }
-        
+
         if !matches!(target, Target::FreestandingX86_64) {
             out.push_str("declare i32 @printf(ptr noundef, ...)\n");
             out.push_str("declare ptr @malloc(i64)\n");
@@ -76,8 +78,7 @@ impl LlvmBackend {
         for arr in &array_types {
             out.push_str(&format!(
                 "%{} = type {{ {}*, i64 }}\n",
-                arr.name,
-                arr.elem_ty
+                arr.name, arr.elem_ty
             ));
         }
         out.push('\n');
@@ -99,10 +100,7 @@ impl LlvmBackend {
         }
 
         for (name, _arity) in extern_decls {
-            out.push_str(&format!(
-                "declare i64 {}(...)\n",
-                llvm_global_ident(&name)
-            ));
+            out.push_str(&format!("declare i64 {}(...)\n", llvm_global_ident(&name)));
         }
         if !out.ends_with('\n') {
             out.push('\n');
@@ -164,10 +162,7 @@ impl LlvmBackend {
                                 out.push_str(&format!("  {reg} = add i64 0, {}\n", rhs.repr));
                             }
                             LlvmType::F64 => {
-                                out.push_str(&format!(
-                                    "  {reg} = fadd double 0.0, {}\n",
-                                    rhs.repr
-                                ));
+                                out.push_str(&format!("  {reg} = fadd double 0.0, {}\n", rhs.repr));
                             }
                             LlvmType::Ptr => {
                                 out.push_str(&format!(
@@ -175,9 +170,7 @@ impl LlvmBackend {
                                     rhs.repr
                                 ));
                             }
-                            LlvmType::Struct(_)
-                            | LlvmType::F32
-                            | LlvmType::Vector(_, _) => {}
+                            LlvmType::Struct(_) | LlvmType::F32 | LlvmType::Vector(_, _) => {}
                         }
                         locals.insert(
                             name.clone(),
@@ -254,7 +247,7 @@ impl LlvmBackend {
                             BinaryOp::Not => {
                                 if rhs_s.ty != LlvmType::I64 {
                                     return Err(
-                                        "logical not requires integer/boolean operand".into(),
+                                        "logical not requires integer/boolean operand".into()
                                     );
                                 }
                                 let bool_reg = format!("%v{ids}");
@@ -282,13 +275,7 @@ impl LlvmBackend {
                                         format!("unsupported binary op during LLVM lowering: {e}")
                                     })?;
                                 out.push_str(&line);
-                                locals.insert(
-                                    dst.clone(),
-                                    TypedValue {
-                                        repr: reg,
-                                        ty,
-                                    },
-                                );
+                                locals.insert(dst.clone(), TypedValue { repr: reg, ty });
                             }
                         }
                     }
@@ -298,9 +285,7 @@ impl LlvmBackend {
                             LlvmType::I64 => "@.fmt_i64",
                             LlvmType::F64 => "@.fmt_f64",
                             LlvmType::Ptr => "@.fmt_str",
-                            LlvmType::Struct(_)
-                            | LlvmType::F32
-                            | LlvmType::Vector(_, _) => {
+                            LlvmType::Struct(_) | LlvmType::F32 | LlvmType::Vector(_, _) => {
                                 return Err("cannot print non-scalar values".into());
                             }
                         };
@@ -308,9 +293,9 @@ impl LlvmBackend {
                             LlvmType::I64 => format!("i64 noundef {}", val.repr),
                             LlvmType::F64 => format!("double noundef {}", val.repr),
                             LlvmType::Ptr => format!("ptr noundef {}", val.repr),
-                            LlvmType::Struct(_)
-                            | LlvmType::F32
-                            | LlvmType::Vector(_, _) => unreachable!(),
+                            LlvmType::Struct(_) | LlvmType::F32 | LlvmType::Vector(_, _) => {
+                                unreachable!()
+                            }
                         };
                         out.push_str(&format!(
                             "  %p{ids} = call i32 (ptr, ...) @printf(ptr noundef {fmt}, {arg})\n"
@@ -350,7 +335,10 @@ impl LlvmBackend {
                     Instruction::Jump(label) => {
                         // Attach loop vectorization metadata to back-edges (identified by label patterns)
                         if label.contains("cond") || label.contains("loop") {
-                            out.push_str(&format!("  br label %{}, !llvm.loop !0\n", label_name(label, &labels)));
+                            out.push_str(&format!(
+                                "  br label %{}, !llvm.loop !0\n",
+                                label_name(label, &labels)
+                            ));
                         } else {
                             out.push_str(&format!("  br label %{}\n", label_name(label, &labels)));
                         }
@@ -366,10 +354,7 @@ impl LlvmBackend {
                         }
                         let cond_reg = format!("%v{ids}");
                         ids += 1;
-                        out.push_str(&format!(
-                            "  {cond_reg} = icmp ne i64 {}, 0\n",
-                            cv.repr
-                        ));
+                        out.push_str(&format!("  {cond_reg} = icmp ne i64 {}, 0\n", cv.repr));
 
                         out.push_str(&format!(
                             "  br i1 {cond_reg}, label %{}, label %{}\n",
@@ -382,128 +367,218 @@ impl LlvmBackend {
                             if callee == "std::kernel::ports::outb" && args.len() == 2 {
                                 let port = value_to_llvm(&args[0], &locals, &strings)?;
                                 let val = value_to_llvm(&args[1], &locals, &strings)?;
-                                
-                                let trunc_port = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {trunc_port} = trunc i64 {} to i16\n", port.repr));
-                                let trunc_val = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {trunc_val} = trunc i64 {} to i8\n", val.repr));
-                                
+
+                                let trunc_port = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {trunc_port} = trunc i64 {} to i16\n",
+                                    port.repr
+                                ));
+                                let trunc_val = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {trunc_val} = trunc i64 {} to i8\n",
+                                    val.repr
+                                ));
+
                                 out.push_str(&format!("  call void asm sideeffect \"outb $0, $1\", \"{{al}},{{dx}},~{{dirflag}},~{{fpsr}},~{{flags}}\"(i8 {trunc_val}, i16 {trunc_port})\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: "0".to_string(), ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: "0".to_string(),
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
                             } else if callee == "std::kernel::ports::inb" && args.len() == 1 {
                                 let port = value_to_llvm(&args[0], &locals, &strings)?;
-                                
-                                let trunc_port = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {trunc_port} = trunc i64 {} to i16\n", port.repr));
-                                
-                                let res_i8 = format!("%v{ids}"); ids += 1;
+
+                                let trunc_port = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {trunc_port} = trunc i64 {} to i16\n",
+                                    port.repr
+                                ));
+
+                                let res_i8 = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {res_i8} = call i8 asm sideeffect \"inb $1, $0\", \"={{al}},{{dx}},~{{dirflag}},~{{fpsr}},~{{flags}}\"(i16 {trunc_port})\n"));
-                                
-                                let reg = format!("%v{ids}"); ids += 1;
+
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {reg} = zext i8 {res_i8} to i64\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
-                            } else if callee == "std::kernel::memory::write_byte" && args.len() == 2 {
+                            } else if callee == "std::kernel::memory::write_byte" && args.len() == 2
+                            {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
                                 let val = value_to_llvm(&args[1], &locals, &strings)?;
-                                
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i8*\n", addr.repr));
-                                let trunc_val = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {trunc_val} = trunc i64 {} to i8\n", val.repr));
-                                
-                                out.push_str(&format!("  store volatile i8 {trunc_val}, i8* {ptr}\n"));
-                                
+
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = inttoptr i64 {} to i8*\n",
+                                    addr.repr
+                                ));
+                                let trunc_val = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {trunc_val} = trunc i64 {} to i8\n",
+                                    val.repr
+                                ));
+
+                                out.push_str(&format!(
+                                    "  store volatile i8 {trunc_val}, i8* {ptr}\n"
+                                ));
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: "0".to_string(), ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: "0".to_string(),
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
-                            } else if callee == "std::kernel::memory::read_byte" && args.len() == 1 {
+                            } else if callee == "std::kernel::memory::read_byte" && args.len() == 1
+                            {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
-                                
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i8*\n", addr.repr));
-                                
-                                let res_i8 = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {res_i8} = load volatile i8, i8* {ptr}\n"));
-                                
-                                let reg = format!("%v{ids}"); ids += 1;
+
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = inttoptr i64 {} to i8*\n",
+                                    addr.repr
+                                ));
+
+                                let res_i8 = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {res_i8} = load volatile i8, i8* {ptr}\n"
+                                ));
+
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {reg} = zext i8 {res_i8} to i64\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
                             } else if callee == "std::kernel::memory::read_u32" && args.len() == 1 {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
-                                
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i32*\n", addr.repr));
-                                
-                                let res_i32 = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {res_i32} = load volatile i32, i32* {ptr}\n"));
-                                
-                                let reg = format!("%v{ids}"); ids += 1;
+
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = inttoptr i64 {} to i32*\n",
+                                    addr.repr
+                                ));
+
+                                let res_i32 = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {res_i32} = load volatile i32, i32* {ptr}\n"
+                                ));
+
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {reg} = zext i32 {res_i32} to i64\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
-                            } else if callee == "std::kernel::memory::write_u32" && args.len() == 2 {
+                            } else if callee == "std::kernel::memory::write_u32" && args.len() == 2
+                            {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
                                 let val = value_to_llvm(&args[1], &locals, &strings)?;
-                                
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i32*\n", addr.repr));
-                                let trunc_val = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {trunc_val} = trunc i64 {} to i32\n", val.repr));
-                                
-                                out.push_str(&format!("  store volatile i32 {trunc_val}, i32* {ptr}\n"));
-                                
+
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = inttoptr i64 {} to i32*\n",
+                                    addr.repr
+                                ));
+                                let trunc_val = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {trunc_val} = trunc i64 {} to i32\n",
+                                    val.repr
+                                ));
+
+                                out.push_str(&format!(
+                                    "  store volatile i32 {trunc_val}, i32* {ptr}\n"
+                                ));
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: "0".to_string(), ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: "0".to_string(),
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
-                            } else if callee == "std::kernel::memory::write_u64" && args.len() == 2 {
+                            } else if callee == "std::kernel::memory::write_u64" && args.len() == 2
+                            {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
                                 let val = value_to_llvm(&args[1], &locals, &strings)?;
-                                
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i64*\n", addr.repr));
-                                
-                                out.push_str(&format!("  store volatile i64 {}, i64* {ptr}\n", val.repr));
-                                
+
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = inttoptr i64 {} to i64*\n",
+                                    addr.repr
+                                ));
+
+                                out.push_str(&format!(
+                                    "  store volatile i64 {}, i64* {ptr}\n",
+                                    val.repr
+                                ));
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: "0".to_string(), ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: "0".to_string(),
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
                             } else if callee == "std::kernel::memory::read_u64" && args.len() == 1 {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
-                                
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i64*\n", addr.repr));
-                                
-                                let reg = format!("%v{ids}"); ids += 1;
+
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = inttoptr i64 {} to i64*\n",
+                                    addr.repr
+                                ));
+
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {reg} = load volatile i64, i64* {ptr}\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
                             } else if callee == "std::kernel::cpu::cli" {
@@ -515,10 +590,12 @@ impl LlvmBackend {
                             } else if callee == "std::kernel::cpu::hlt" {
                                 out.push_str("  call void asm sideeffect \"hlt\", \"~{dirflag},~{fpsr},~{flags}\"()\n");
                                 continue;
-                            } else if callee == "std::kernel::cpu::context_switch" && args.len() == 2 {
+                            } else if callee == "std::kernel::cpu::context_switch"
+                                && args.len() == 2
+                            {
                                 let old_ptr = value_to_llvm(&args[0], &locals, &strings)?;
                                 let new_ptr = value_to_llvm(&args[1], &locals, &strings)?;
-                                
+
                                 // context_switch(*u64 old_stack_ptr, u64 new_stack_val)
                                 // We use a complex asm string to save/restore all callee-saved registers
                                 out.push_str(&format!(
@@ -532,20 +609,28 @@ impl LlvmBackend {
                                 continue;
                             } else if callee == "len" && args.len() == 1 {
                                 let val = value_to_llvm(&args[0], &locals, &strings)?;
-                                let reg = format!("%v{ids}"); ids += 1;
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 match &val.ty {
                                     LlvmType::Struct(name) if name.starts_with("nyx_array_") => {
-                                        out.push_str(&format!("  {reg} = extractvalue %{} {}, 1\n", name, val.repr));
+                                        out.push_str(&format!(
+                                            "  {reg} = extractvalue %{} {}, 1\n",
+                                            name, val.repr
+                                        ));
                                     }
                                     _ => {
                                         let ptr_val = if val.ty == LlvmType::I64 {
-                                            let p = format!("%v{ids}"); ids += 1;
-                                            out.push_str(&format!("  {p} = inttoptr i64 {} to ptr\n", val.repr));
+                                            let p = format!("%v{ids}");
+                                            ids += 1;
+                                            out.push_str(&format!(
+                                                "  {p} = inttoptr i64 {} to ptr\n",
+                                                val.repr
+                                            ));
                                             p
                                         } else {
                                             val.repr.clone()
                                         };
-                                        
+
                                         // String length logic (naive strlen in IR)
                                         let loop_label = format!("len_loop_{ids}");
                                         let end_label = format!("len_end_{ids}");
@@ -554,123 +639,200 @@ impl LlvmBackend {
                                         let cond_reg = format!("%cond_{ids}");
                                         let next_reg = format!("%next_{ids}");
                                         ids += 1;
-                                        
+
                                         out.push_str(&format!("  br label %{loop_label}\n"));
                                         out.push_str(&format!("{loop_label}:\n"));
                                         out.push_str(&format!("  {phi_reg} = phi i64 [ 0, %entry ], [ {next_reg}, %{loop_label} ]\n"));
                                         out.push_str(&format!("  {char_reg} = getelementptr i8, ptr {ptr_val}, i64 {phi_reg}\n"));
-                                        let load_reg = format!("%lch_{ids}"); ids += 1;
-                                        out.push_str(&format!("  {load_reg} = load i8, ptr {char_reg}\n"));
-                                        out.push_str(&format!("  {cond_reg} = icmp ne i8 {load_reg}, 0\n"));
-                                        out.push_str(&format!("  {next_reg} = add i64 {phi_reg}, 1\n"));
+                                        let load_reg = format!("%lch_{ids}");
+                                        ids += 1;
+                                        out.push_str(&format!(
+                                            "  {load_reg} = load i8, ptr {char_reg}\n"
+                                        ));
+                                        out.push_str(&format!(
+                                            "  {cond_reg} = icmp ne i8 {load_reg}, 0\n"
+                                        ));
+                                        out.push_str(&format!(
+                                            "  {next_reg} = add i64 {phi_reg}, 1\n"
+                                        ));
                                         out.push_str(&format!("  br i1 {cond_reg}, label %{loop_label}, label %{end_label}\n"));
                                         out.push_str(&format!("{end_label}:\n"));
                                         out.push_str(&format!("  {reg} = add i64 {phi_reg}, 0\n"));
                                     }
                                 }
-                                locals.insert(dst.clone(), TypedValue { repr: reg, ty: LlvmType::I64 });
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
+                                );
                                 continue;
                             } else if callee == "char_at" && args.len() == 2 {
                                 let str_val = value_to_llvm(&args[0], &locals, &strings)?;
                                 let idx = value_to_llvm(&args[1], &locals, &strings)?;
-                                
+
                                 let ptr_val = if str_val.ty == LlvmType::I64 {
-                                    let p = format!("%v{ids}"); ids += 1;
-                                    out.push_str(&format!("  {p} = inttoptr i64 {} to ptr\n", str_val.repr));
+                                    let p = format!("%v{ids}");
+                                    ids += 1;
+                                    out.push_str(&format!(
+                                        "  {p} = inttoptr i64 {} to ptr\n",
+                                        str_val.repr
+                                    ));
                                     p
                                 } else {
                                     str_val.repr.clone()
                                 };
-                                
-                                let reg = format!("%v{ids}"); ids += 1;
-                                let ptr = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {ptr} = getelementptr i8, ptr {ptr_val}, i64 {}\n", idx.repr));
+
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                let ptr = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {ptr} = getelementptr i8, ptr {ptr_val}, i64 {}\n",
+                                    idx.repr
+                                ));
                                 out.push_str(&format!("  {reg} = load i8, ptr {ptr}\n"));
-                                let res = format!("%v{ids}"); ids += 1;
+                                let res = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {res} = zext i8 {reg} to i64\n"));
-                                locals.insert(dst.clone(), TypedValue { repr: res, ty: LlvmType::I64 });
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: res,
+                                        ty: LlvmType::I64,
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::simd::f32x4_load" && args.len() == 1 {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
-                                let reg = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {reg} = load <4 x float>, ptr {}\n", addr.repr));
-                                locals.insert(dst.clone(), TypedValue { 
-                                    repr: reg, 
-                                    ty: LlvmType::Vector(Box::new(LlvmType::F32), 4) 
-                                });
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {reg} = load <4 x float>, ptr {}\n",
+                                    addr.repr
+                                ));
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::Vector(Box::new(LlvmType::F32), 4),
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::simd::f32x4_store" && args.len() == 2 {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
                                 let val = value_to_llvm(&args[1], &locals, &strings)?;
-                                out.push_str(&format!("  store <4 x float> {}, ptr {}\n", val.repr, addr.repr));
+                                out.push_str(&format!(
+                                    "  store <4 x float> {}, ptr {}\n",
+                                    val.repr, addr.repr
+                                ));
                                 continue;
                             } else if callee == "std::simd::f32x4_add" && args.len() == 2 {
                                 let v1 = value_to_llvm(&args[0], &locals, &strings)?;
                                 let v2 = value_to_llvm(&args[1], &locals, &strings)?;
-                                let reg = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {reg} = fadd <4 x float> {}, {}\n", v1.repr, v2.repr));
-                                locals.insert(dst.clone(), TypedValue { 
-                                    repr: reg, 
-                                    ty: LlvmType::Vector(Box::new(LlvmType::F32), 4) 
-                                });
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {reg} = fadd <4 x float> {}, {}\n",
+                                    v1.repr, v2.repr
+                                ));
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::Vector(Box::new(LlvmType::F32), 4),
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::simd::f32x4_sub" && args.len() == 2 {
                                 let v1 = value_to_llvm(&args[0], &locals, &strings)?;
                                 let v2 = value_to_llvm(&args[1], &locals, &strings)?;
-                                let reg = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {reg} = fsub <4 x float> {}, {}\n", v1.repr, v2.repr));
-                                locals.insert(dst.clone(), TypedValue { 
-                                    repr: reg, 
-                                    ty: LlvmType::Vector(Box::new(LlvmType::F32), 4) 
-                                });
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {reg} = fsub <4 x float> {}, {}\n",
+                                    v1.repr, v2.repr
+                                ));
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::Vector(Box::new(LlvmType::F32), 4),
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::simd::f32x4_mul" && args.len() == 2 {
                                 let v1 = value_to_llvm(&args[0], &locals, &strings)?;
                                 let v2 = value_to_llvm(&args[1], &locals, &strings)?;
-                                let reg = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {reg} = fmul <4 x float> {}, {}\n", v1.repr, v2.repr));
-                                locals.insert(dst.clone(), TypedValue { 
-                                    repr: reg, 
-                                    ty: LlvmType::Vector(Box::new(LlvmType::F32), 4) 
-                                });
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {reg} = fmul <4 x float> {}, {}\n",
+                                    v1.repr, v2.repr
+                                ));
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::Vector(Box::new(LlvmType::F32), 4),
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::kernel::memory::fence" {
                                 out.push_str("  fence seq_cst\n");
                                 continue;
                             } else if callee == "std::kernel::vm::get_fb_ptr" {
-                                let reg = format!("%v{ids}"); ids += 1;
-                                // Perform GetFbPtr hypercall (Rax=100, Opcode=0xF1) 
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                // Perform GetFbPtr hypercall (Rax=100, Opcode=0xF1)
                                 out.push_str(&format!("  {reg} = call i64 asm sideeffect \"mov $$100, %rax; .byte 0xf1\", \"={{rax}}\"()\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
                             } else if callee == "std::kernel::vm::get_input_ptr" {
-                                let reg = format!("%v{ids}"); ids += 1;
-                                // Perform GetInputPtr hypercall (Rax=101, Opcode=0xF1) 
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                // Perform GetInputPtr hypercall (Rax=101, Opcode=0xF1)
                                 out.push_str(&format!("  {reg} = call i64 asm sideeffect \"mov $$101, %rax; .byte 0xf1\", \"={{rax}}\"()\n"));
-                                
+
                                 locals.insert(
                                     dst.clone(),
-                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
                                 );
                                 continue;
                             } else if callee == "std::kernel::cpu::rdtsc" {
-                                let reg = format!("%v{ids}"); ids += 1;
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {reg} = call i64 asm sideeffect \"rdtsc; shl $32, %%rdx; or %%rdx, %%rax\", \"={{rax}},~{{rdx}},~{{dirflag}},~{{fpsr}},~{{flags}}\"()\n"));
-                                locals.insert(dst.clone(), TypedValue { repr: reg, ty: LlvmType::I64 });
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::kernel::cpu::cpuid_reg" && args.len() == 3 {
                                 let leaf = value_to_llvm(&args[0], &locals, &strings)?;
                                 let subleaf = value_to_llvm(&args[1], &locals, &strings)?;
                                 let _reg_idx = value_to_llvm(&args[2], &locals, &strings)?;
-                                
-                                let struct_reg = format!("%v{ids}"); ids += 1;
+
+                                let struct_reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {struct_reg} = call {{i32, i32, i32, i32}} asm sideeffect \"cpuid\", \"={{ax}},={{bx}},={{cx}},={{dx}},{{ax}},{{cx}},~{{dirflag}},~{{fpsr}},~{{flags}}\"(i32 {}, i32 {})\n", leaf.repr, subleaf.repr));
-                                
-                                let res_32 = format!("%v{ids}"); ids += 1;
+
+                                let res_32 = format!("%v{ids}");
+                                ids += 1;
                                 // Map reg_idx (0,1,2,3) to index in struct
                                 let idx_str = match &args[2] {
                                     Value::Int(0) => "0",
@@ -680,20 +842,35 @@ impl LlvmBackend {
                                     _ => "0", // Fallback
                                 };
                                 out.push_str(&format!("  {res_32} = extractvalue {{i32, i32, i32, i32}} {struct_reg}, {}\n", idx_str));
-                                let res_64 = format!("%v{ids}"); ids += 1;
+                                let res_64 = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {res_64} = zext i32 {res_32} to i64\n"));
-                                locals.insert(dst.clone(), TypedValue { repr: res_64, ty: LlvmType::I64 });
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: res_64,
+                                        ty: LlvmType::I64,
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::simd::f32x4_splat" && args.len() == 1 {
                                 let val = value_to_llvm(&args[0], &locals, &strings)?;
-                                let reg = format!("%v{ids}"); ids += 1;
-                                out.push_str(&format!("  {reg} = insertelement <4 x float> undef, float {}, i32 0\n", val.repr));
-                                let reg2 = format!("%v{ids}"); ids += 1;
+                                let reg = format!("%v{ids}");
+                                ids += 1;
+                                out.push_str(&format!(
+                                    "  {reg} = insertelement <4 x float> undef, float {}, i32 0\n",
+                                    val.repr
+                                ));
+                                let reg2 = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!("  {reg2} = shufflevector <4 x float> {reg}, <4 x float> undef, <4 x i32> zeroinitializer\n"));
-                                locals.insert(dst.clone(), TypedValue { 
-                                    repr: reg2, 
-                                    ty: LlvmType::Vector(Box::new(LlvmType::F32), 4) 
-                                });
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg2,
+                                        ty: LlvmType::Vector(Box::new(LlvmType::F32), 4),
+                                    },
+                                );
                                 continue;
                             } else if callee == "std::os::linux::syscall" && args.len() == 7 {
                                 let sys_no = value_to_llvm(&args[0], &locals, &strings)?;
@@ -703,13 +880,20 @@ impl LlvmBackend {
                                 let a4 = value_to_llvm(&args[4], &locals, &strings)?;
                                 let a5 = value_to_llvm(&args[5], &locals, &strings)?;
                                 let a6 = value_to_llvm(&args[6], &locals, &strings)?;
-                                
-                                let reg = format!("%v{ids}"); ids += 1;
+
+                                let reg = format!("%v{ids}");
+                                ids += 1;
                                 out.push_str(&format!(
                                     "  {} = call i64 asm sideeffect \"syscall\", \"={{rax}},{{rax}},{{rdi}},{{rsi}},{{rdx}},{{r10}},{{r8}},{{r9}},~{{rcx}},~{{r11}},~{{memory}},~{{dirflag}},~{{fpsr}},~{{flags}}\"(i64 {}, i64 {}, i64 {}, i64 {}, i64 {}, i64 {}, i64 {})\n",
                                     reg, sys_no.repr, a1.repr, a2.repr, a3.repr, a4.repr, a5.repr, a6.repr
                                 ));
-                                locals.insert(dst.clone(), TypedValue { repr: reg, ty: LlvmType::I64 });
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue {
+                                        repr: reg,
+                                        ty: LlvmType::I64,
+                                    },
+                                );
                                 continue;
                             }
                         }
@@ -721,8 +905,7 @@ impl LlvmBackend {
                                 Ok(match v.ty {
                                     LlvmType::I64 => format!("i64 {}", v.repr),
                                     LlvmType::F64 => format!("double {}", v.repr),
-                                    LlvmType::F32
-                                    | LlvmType::Vector(_, _) => {
+                                    LlvmType::F32 | LlvmType::Vector(_, _) => {
                                         format!("{} {}", llvm_type(&v.ty), v.repr)
                                     }
                                     LlvmType::Ptr => format!("ptr {}", v.repr),
@@ -850,9 +1033,7 @@ impl LlvmBackend {
                         ));
                         let size_i64 = format!("%v{ids}");
                         ids += 1;
-                        out.push_str(&format!(
-                            "  {size_i64} = ptrtoint ptr {size_ptr} to i64\n"
-                        ));
+                        out.push_str(&format!("  {size_i64} = ptrtoint ptr {size_ptr} to i64\n"));
                         let bytes = format!("%v{ids}");
                         ids += 1;
                         out.push_str(&format!(
@@ -864,9 +1045,7 @@ impl LlvmBackend {
                         out.push_str(&format!("  {raw} = call ptr @malloc(i64 {bytes})\n"));
                         let typed = format!("%v{ids}");
                         ids += 1;
-                        out.push_str(&format!(
-                            "  {typed} = bitcast ptr {raw} to {elem_ll}*\n"
-                        ));
+                        out.push_str(&format!("  {typed} = bitcast ptr {raw} to {elem_ll}*\n"));
                         let arr = format!("%v{ids}");
                         ids += 1;
                         out.push_str(&format!(
@@ -960,9 +1139,7 @@ impl LlvmBackend {
                         ));
                         let reg = format!("%v{ids}");
                         ids += 1;
-                        out.push_str(&format!(
-                            "  {reg} = load {elem_ll}, {elem_ll}* {gep}\n"
-                        ));
+                        out.push_str(&format!("  {reg} = load {elem_ll}, {elem_ll}* {gep}\n"));
                         locals.insert(
                             dst.clone(),
                             TypedValue {
@@ -1054,9 +1231,16 @@ impl LlvmBackend {
                 }
             }
 
-            if !out.trim_end().ends_with("ret i64 0") && !out.trim_end().ends_with("ret i32 0") && !out.trim_end().ends_with("ret void") && !out.trim_end().ends_with("ret i8 0") {
+            if !out.trim_end().ends_with("ret i64 0")
+                && !out.trim_end().ends_with("ret i32 0")
+                && !out.trim_end().ends_with("ret void")
+                && !out.trim_end().ends_with("ret i8 0")
+            {
                 let last_line = out.trim_end().lines().last().unwrap_or("");
-                if !last_line.contains("ret ") && !last_line.contains("br ") && !last_line.contains("switch ") {
+                if !last_line.contains("ret ")
+                    && !last_line.contains("br ")
+                    && !last_line.contains("switch ")
+                {
                     if is_main {
                         out.push_str("  ret i32 0\n");
                     } else {
@@ -1241,7 +1425,10 @@ fn collect_array_types(module: &Module) -> Vec<ArrayDef> {
                 | Instruction::ArraySet { elem_ty, .. } => {
                     let elem = llvm_type_from_ir(elem_ty);
                     let name = array_struct_name(&elem);
-                    out.entry(name.clone()).or_insert(ArrayDef { name, elem_ty: elem });
+                    out.entry(name.clone()).or_insert(ArrayDef {
+                        name,
+                        elem_ty: elem,
+                    });
                 }
                 _ => {}
             }
@@ -1346,10 +1533,7 @@ fn emit_binary(
                 _ => return Err(format!("unsupported float op: {op:?}")),
             };
             Ok((
-                format!(
-                    "  {dst} = {llvm_op} double {}, {}\n",
-                    lhs.repr, rhs.repr
-                ),
+                format!("  {dst} = {llvm_op} double {}, {}\n", lhs.repr, rhs.repr),
                 LlvmType::F64,
             ))
         }
@@ -1372,9 +1556,8 @@ impl StringTable {
         let symbol = format!("@.str.{id}");
         let escaped = escape_llvm_string(s);
         let len = s.len() + 1;
-        let def = format!(
-            "{symbol} = private unnamed_addr constant [{len} x i8] c\"{escaped}\\00\"\n"
-        );
+        let def =
+            format!("{symbol} = private unnamed_addr constant [{len} x i8] c\"{escaped}\\00\"\n");
         self.map.insert(s.to_string(), symbol.clone());
         self.defs.push(def);
         symbol

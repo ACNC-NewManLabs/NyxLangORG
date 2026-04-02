@@ -12,10 +12,7 @@ use crate::core::lexer::token::{Position, Span};
 // ───────────────────────────────────────────────────────────────────────────────
 
 fn make_span(sl: usize, sc: usize, el: usize, ec: usize) -> Span {
-    Span::new(
-        Position::new(sl, sc, 0),
-        Position::new(el, ec, 0),
-    )
+    Span::new(Position::new(sl, sc, 0), Position::new(el, ec, 0))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -153,36 +150,43 @@ fn test_nyx_error_new_defaults() {
 
 #[test]
 fn test_nyx_error_with_module() {
-    let e = NyxError::new(codes::UNDEFINED_SYMBOL, "undefined", ErrorCategory::Compiler)
-        .with_module("parser");
+    let e = NyxError::new(
+        codes::UNDEFINED_SYMBOL,
+        "undefined",
+        ErrorCategory::Compiler,
+    )
+    .with_module("parser");
     assert_eq!(e.module, "parser");
 }
 
 #[test]
 fn test_nyx_error_with_file() {
-    let e = NyxError::new(codes::TYPE_MISMATCH, "mismatch", ErrorCategory::Type)
-        .with_file("main.nyx");
+    let e =
+        NyxError::new(codes::TYPE_MISMATCH, "mismatch", ErrorCategory::Type).with_file("main.nyx");
     assert_eq!(e.details.file.as_deref(), Some("main.nyx"));
 }
 
 #[test]
 fn test_nyx_error_with_line() {
-    let e = NyxError::new(codes::MISSING_RETURN, "missing return", ErrorCategory::Compiler)
-        .with_line(42);
+    let e = NyxError::new(
+        codes::MISSING_RETURN,
+        "missing return",
+        ErrorCategory::Compiler,
+    )
+    .with_line(42);
     assert_eq!(e.details.line, Some(42));
 }
 
 #[test]
 fn test_nyx_error_with_column() {
-    let e = NyxError::new(codes::DUPLICATE_BINDING, "dup", ErrorCategory::Compiler)
-        .with_column(10);
+    let e = NyxError::new(codes::DUPLICATE_BINDING, "dup", ErrorCategory::Compiler).with_column(10);
     assert_eq!(e.details.column, Some(10));
 }
 
 #[test]
 fn test_nyx_error_with_location() {
-    let e = NyxError::new(codes::ARITY_MISMATCH, "arity", ErrorCategory::Compiler)
-        .with_location(5, 15);
+    let e =
+        NyxError::new(codes::ARITY_MISMATCH, "arity", ErrorCategory::Compiler).with_location(5, 15);
     assert_eq!(e.details.line, Some(5));
     assert_eq!(e.details.column, Some(15));
 }
@@ -200,8 +204,7 @@ fn test_nyx_error_with_span() {
 #[test]
 fn test_nyx_error_with_span_obj() {
     let span = make_span(10, 5, 10, 15);
-    let e = NyxError::new(codes::IR_ERROR, "ir", ErrorCategory::Compiler)
-        .with_span_obj(&span);
+    let e = NyxError::new(codes::IR_ERROR, "ir", ErrorCategory::Compiler).with_span_obj(&span);
     assert_eq!(e.details.line, Some(10));
     assert_eq!(e.details.column, Some(5));
     assert_eq!(e.details.end_line, Some(10));
@@ -221,8 +224,8 @@ fn test_nyx_error_with_note() {
 #[test]
 fn test_nyx_error_with_notes() {
     let notes = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-    let e = NyxError::new(codes::BORROW_VIOLATION, "msg", ErrorCategory::Compiler)
-        .with_notes(notes);
+    let e =
+        NyxError::new(codes::BORROW_VIOLATION, "msg", ErrorCategory::Compiler).with_notes(notes);
     assert_eq!(e.details.notes.len(), 3);
 }
 
@@ -244,8 +247,12 @@ fn test_nyx_error_with_suggestions() {
 
 #[test]
 fn test_nyx_error_recoverable() {
-    let e = NyxError::new(codes::PARSER_RECOVERABLE_ERROR, "rec", ErrorCategory::Syntax)
-        .recoverable(true);
+    let e = NyxError::new(
+        codes::PARSER_RECOVERABLE_ERROR,
+        "rec",
+        ErrorCategory::Syntax,
+    )
+    .recoverable(true);
     assert!(e.recoverable);
     let e2 = e.recoverable(false);
     assert!(!e2.recoverable);
@@ -260,32 +267,30 @@ fn test_nyx_error_with_severity() {
 
 #[test]
 fn test_nyx_error_context_prepends_message() {
-    let e = NyxError::new(codes::IR_ERROR, "bad IR", ErrorCategory::Internal)
-        .context("codegen");
+    let e = NyxError::new(codes::IR_ERROR, "bad IR", ErrorCategory::Internal).context("codegen");
     assert!(e.message.starts_with("codegen:"));
     assert!(e.message.contains("bad IR"));
 }
 
 #[test]
 fn test_nyx_error_context_empty_does_not_change_message() {
-    let e = NyxError::new(codes::IR_ERROR, "bad IR", ErrorCategory::Internal)
-        .context("");
+    let e = NyxError::new(codes::IR_ERROR, "bad IR", ErrorCategory::Internal).context("");
     assert_eq!(e.message, "bad IR");
 }
 
 #[test]
 fn test_nyx_error_code_category_ranges() {
     let cases = [
-        (codes::UNEXPECTED_TOKEN, "Compiler"),  // E001
-        (codes::LEXER_INVALID_CHAR, "Lexer"),   // E011
-        (codes::PARSER_SYNTAX_ERROR, "Parser"), // E022
-        (codes::SEMANTIC_REDEFINITION, "Semantic"), // E032
-        (codes::TYPE_MISMATCH_ERROR, "Type"),   // E041
+        (codes::UNEXPECTED_TOKEN, "Compiler"),        // E001
+        (codes::LEXER_INVALID_CHAR, "Lexer"),         // E011
+        (codes::PARSER_SYNTAX_ERROR, "Parser"),       // E022
+        (codes::SEMANTIC_REDEFINITION, "Semantic"),   // E032
+        (codes::TYPE_MISMATCH_ERROR, "Type"),         // E041
         (codes::RUNTIME_DIVISION_BY_ZERO, "Runtime"), // E051
-        (codes::IO_FILE_NOT_FOUND, "IO"),       // E061
-        (codes::NET_CONNECTION_FAILED, "Network"), // E071
-        (codes::SECURITY_AUTH_FAILED, "Security"), // E082
-        (codes::INTERNAL_COMPILER_BUG, "Internal"), // E091
+        (codes::IO_FILE_NOT_FOUND, "IO"),             // E061
+        (codes::NET_CONNECTION_FAILED, "Network"),    // E071
+        (codes::SECURITY_AUTH_FAILED, "Security"),    // E082
+        (codes::INTERNAL_COMPILER_BUG, "Internal"),   // E091
     ];
     for (code, expected) in cases {
         let e = NyxError::new(code, "test", ErrorCategory::Compiler);
@@ -302,7 +307,11 @@ fn test_nyx_error_code_category_unknown() {
 
 #[test]
 fn test_nyx_error_display_basic() {
-    let e = NyxError::new(codes::UNEXPECTED_TOKEN, "Unexpected '}'", ErrorCategory::Syntax);
+    let e = NyxError::new(
+        codes::UNEXPECTED_TOKEN,
+        "Unexpected '}'",
+        ErrorCategory::Syntax,
+    );
     let s = e.to_string();
     assert!(s.contains("E001"));
     assert!(s.contains("Unexpected '}'"));
@@ -358,8 +367,7 @@ fn test_nyx_error_implements_std_error() {
 fn test_nyx_error_source_chain() {
     use std::io;
     let io_err = io::Error::new(io::ErrorKind::NotFound, "file missing");
-    let e = NyxError::new(codes::IO_FILE_NOT_FOUND, "outer", ErrorCategory::Io)
-        .with_source(io_err);
+    let e = NyxError::new(codes::IO_FILE_NOT_FOUND, "outer", ErrorCategory::Io).with_source(io_err);
     // Access the struct field directly (avoids trait method ambiguity)
     assert!(e.source.is_some());
 }
@@ -380,20 +388,40 @@ fn test_nyx_error_with_stack_trace() {
 fn test_error_codes_format() {
     // Every code should start with 'E'
     let all = [
-        codes::UNEXPECTED_TOKEN, codes::TYPE_MISMATCH, codes::UNDEFINED_SYMBOL,
-        codes::BORROW_VIOLATION, codes::DUPLICATE_BINDING, codes::ARITY_MISMATCH,
-        codes::MISSING_RETURN, codes::INVALID_LITERAL, codes::INFINITE_LOOP,
-        codes::IR_ERROR, codes::LEXER_INVALID_CHAR, codes::LEXER_UNTERMINATED_STRING,
-        codes::PARSER_UNEXPECTED_TOKEN, codes::PARSER_SYNTAX_ERROR,
-        codes::SEMANTIC_UNDEFINED_SYMBOL, codes::TYPE_MISMATCH_ERROR,
-        codes::RUNTIME_DIVISION_BY_ZERO, codes::IO_FILE_NOT_FOUND,
-        codes::NET_CONNECTION_FAILED, codes::SECURITY_PERMISSION_DENIED,
+        codes::UNEXPECTED_TOKEN,
+        codes::TYPE_MISMATCH,
+        codes::UNDEFINED_SYMBOL,
+        codes::BORROW_VIOLATION,
+        codes::DUPLICATE_BINDING,
+        codes::ARITY_MISMATCH,
+        codes::MISSING_RETURN,
+        codes::INVALID_LITERAL,
+        codes::INFINITE_LOOP,
+        codes::IR_ERROR,
+        codes::LEXER_INVALID_CHAR,
+        codes::LEXER_UNTERMINATED_STRING,
+        codes::PARSER_UNEXPECTED_TOKEN,
+        codes::PARSER_SYNTAX_ERROR,
+        codes::SEMANTIC_UNDEFINED_SYMBOL,
+        codes::TYPE_MISMATCH_ERROR,
+        codes::RUNTIME_DIVISION_BY_ZERO,
+        codes::IO_FILE_NOT_FOUND,
+        codes::NET_CONNECTION_FAILED,
+        codes::SECURITY_PERMISSION_DENIED,
         codes::INTERNAL_COMPILER_BUG,
     ];
     for code in all {
-        assert!(code.starts_with('E'), "Code {:?} does not start with 'E'", code);
+        assert!(
+            code.starts_with('E'),
+            "Code {:?} does not start with 'E'",
+            code
+        );
         let num = &code[1..];
-        assert!(num.parse::<u32>().is_ok(), "Code {:?} suffix is not numeric", code);
+        assert!(
+            num.parse::<u32>().is_ok(),
+            "Code {:?} suffix is not numeric",
+            code
+        );
     }
 }
 
@@ -421,7 +449,11 @@ fn test_error_codes_values() {
 
 #[test]
 fn test_macro_error_generic() {
-    let e = error!(ErrorCategory::Compiler, codes::UNEXPECTED_TOKEN, "bad token");
+    let e = error!(
+        ErrorCategory::Compiler,
+        codes::UNEXPECTED_TOKEN,
+        "bad token"
+    );
     assert_eq!(e.category, ErrorCategory::Compiler);
     assert_eq!(e.code, codes::UNEXPECTED_TOKEN);
     assert_eq!(e.message, "bad token");
@@ -589,7 +621,11 @@ fn test_recoverable_success_ok() {
 
 #[test]
 fn test_recoverable_recovered_is_ok() {
-    let err = NyxError::new(codes::PARSER_RECOVERABLE_ERROR, "rec", ErrorCategory::Syntax);
+    let err = NyxError::new(
+        codes::PARSER_RECOVERABLE_ERROR,
+        "rec",
+        ErrorCategory::Syntax,
+    );
     let r: Recoverable<i32> = Recoverable::Recovered(99, err);
     assert!(r.is_ok());
     assert!(!r.is_err());
@@ -598,7 +634,11 @@ fn test_recoverable_recovered_is_ok() {
 
 #[test]
 fn test_recoverable_unrecoverable_is_err() {
-    let err = NyxError::new(codes::INTERNAL_COMPILER_BUG, "fatal", ErrorCategory::Internal);
+    let err = NyxError::new(
+        codes::INTERNAL_COMPILER_BUG,
+        "fatal",
+        ErrorCategory::Internal,
+    );
     let r: Recoverable<i32> = Recoverable::Unrecoverable(err);
     assert!(!r.is_ok());
     assert!(r.is_err());
@@ -785,7 +825,10 @@ fn test_log_error_on_err_does_not_panic() {
 #[test]
 fn test_log_error_silent_does_not_panic() {
     let e = NyxError::new(codes::UNEXPECTED_TOKEN, "tok", ErrorCategory::Compiler);
-    let cfg = LogConfig { level: LogLevel::Silent, ..LogConfig::default() };
+    let cfg = LogConfig {
+        level: LogLevel::Silent,
+        ..LogConfig::default()
+    };
     log_error_single(&e, &cfg); // should not panic
 }
 
@@ -804,13 +847,20 @@ fn test_log_errors_multiple_does_not_panic() {
             .with_severity(Severity::Warning),
         NyxError::new(codes::UNDEFINED_SYMBOL, "e3", ErrorCategory::Compiler),
     ];
-    let cfg = LogConfig { level: LogLevel::Warning, ..LogConfig::default() };
+    let cfg = LogConfig {
+        level: LogLevel::Warning,
+        ..LogConfig::default()
+    };
     log_errors(&errors, &cfg);
 }
 
 #[test]
 fn test_pretty_print_error_contains_code_and_message() {
-    let e = NyxError::new(codes::UNEXPECTED_TOKEN, "unexpected }", ErrorCategory::Syntax);
+    let e = NyxError::new(
+        codes::UNEXPECTED_TOKEN,
+        "unexpected }",
+        ErrorCategory::Syntax,
+    );
     let s = pretty_print_error(&e);
     assert!(s.contains("E001"));
     assert!(s.contains("unexpected }"));
@@ -856,9 +906,13 @@ fn test_pretty_print_error_contains_module() {
 
 #[test]
 fn test_pretty_print_error_multiline_span() {
-    let e = NyxError::new(codes::PARSER_SYNTAX_ERROR, "span test", ErrorCategory::Syntax)
-        .with_file("x.nyx")
-        .with_span((1, 1), (5, 10));
+    let e = NyxError::new(
+        codes::PARSER_SYNTAX_ERROR,
+        "span test",
+        ErrorCategory::Syntax,
+    )
+    .with_file("x.nyx")
+    .with_span((1, 1), (5, 10));
     let s = pretty_print_error(&e);
     // For multiline span (end_line != line), the format should include both
     assert!(s.contains("5"));
@@ -882,8 +936,7 @@ fn test_diagnostic_error_creation() {
 #[test]
 fn test_diagnostic_with_span() {
     let span = make_span(5, 2, 5, 8);
-    let d = Diagnostic::error(codes::TYPE_MISMATCH, "mismatch")
-        .with_span(span);
+    let d = Diagnostic::error(codes::TYPE_MISMATCH, "mismatch").with_span(span);
     assert!(d.span.is_some());
     let s = d.span.unwrap();
     assert_eq!(s.start.line, 5);
@@ -892,16 +945,14 @@ fn test_diagnostic_with_span() {
 
 #[test]
 fn test_diagnostic_with_note() {
-    let d = Diagnostic::error(codes::UNDEFINED_SYMBOL, "undef")
-        .with_note("check imports");
+    let d = Diagnostic::error(codes::UNDEFINED_SYMBOL, "undef").with_note("check imports");
     assert_eq!(d.notes.len(), 1);
     assert_eq!(d.notes[0], "check imports");
 }
 
 #[test]
 fn test_diagnostic_with_suggestion() {
-    let d = Diagnostic::error(codes::UNDEFINED_SYMBOL, "undef")
-        .with_suggestion("add `use foo;`");
+    let d = Diagnostic::error(codes::UNDEFINED_SYMBOL, "undef").with_suggestion("add `use foo;`");
     assert_eq!(d.suggestions.len(), 1);
     assert_eq!(d.suggestions[0], "add `use foo;`");
 }
@@ -1020,7 +1071,10 @@ fn test_diagnostic_engine_warning_count() {
 fn test_diagnostic_engine_error_count_multiple() {
     let mut eng = DiagnosticEngine::default();
     for i in 0..5 {
-        eng.emit(Diagnostic::error(codes::UNEXPECTED_TOKEN, format!("e{}", i)));
+        eng.emit(Diagnostic::error(
+            codes::UNEXPECTED_TOKEN,
+            format!("e{}", i),
+        ));
     }
     assert_eq!(eng.error_count(), 5);
 }
@@ -1039,7 +1093,11 @@ fn test_diagnostic_engine_has_any_errors_with_nyx_errors() {
 fn test_diagnostic_engine_clear() {
     let mut eng = DiagnosticEngine::default();
     eng.emit(Diagnostic::error(codes::UNEXPECTED_TOKEN, "e"));
-    eng.emit_error(NyxError::new(codes::IR_ERROR, "ir", ErrorCategory::Compiler));
+    eng.emit_error(NyxError::new(
+        codes::IR_ERROR,
+        "ir",
+        ErrorCategory::Compiler,
+    ));
     eng.clear();
     assert!(!eng.has_errors());
     assert_eq!(eng.error_count(), 0);
@@ -1052,7 +1110,11 @@ fn test_diagnostic_engine_into_nyx_errors() {
     let mut eng = DiagnosticEngine::default();
     eng.emit(Diagnostic::error(codes::UNEXPECTED_TOKEN, "d1"));
     eng.emit(Diagnostic::error(codes::TYPE_MISMATCH, "d2"));
-    eng.emit_error(NyxError::new(codes::IR_ERROR, "n1", ErrorCategory::Compiler));
+    eng.emit_error(NyxError::new(
+        codes::IR_ERROR,
+        "n1",
+        ErrorCategory::Compiler,
+    ));
     let errors = eng.into_nyx_errors();
     // 2 converted diagnostics + 1 original NyxError = 3 total
     assert_eq!(errors.len(), 3);
@@ -1062,7 +1124,11 @@ fn test_diagnostic_engine_into_nyx_errors() {
 fn test_diagnostic_engine_print_all_does_not_panic() {
     let mut eng = DiagnosticEngine::default();
     eng.emit(Diagnostic::error(codes::UNEXPECTED_TOKEN, "tok"));
-    eng.emit_error(NyxError::new(codes::IR_ERROR, "ir", ErrorCategory::Compiler));
+    eng.emit_error(NyxError::new(
+        codes::IR_ERROR,
+        "ir",
+        ErrorCategory::Compiler,
+    ));
     eng.print_all(); // prints to stderr, should not panic
 }
 
@@ -1070,10 +1136,14 @@ fn test_diagnostic_engine_print_all_does_not_panic() {
 fn test_diagnostic_engine_print_all_pretty_does_not_panic() {
     let mut eng = DiagnosticEngine::default();
     eng.emit_error(
-        NyxError::new(codes::TYPE_MISMATCH_ERROR, "type mismatch", ErrorCategory::Type)
-            .with_file("a.nyx")
-            .with_line(1)
-            .with_column(1)
+        NyxError::new(
+            codes::TYPE_MISMATCH_ERROR,
+            "type mismatch",
+            ErrorCategory::Type,
+        )
+        .with_file("a.nyx")
+        .with_line(1)
+        .with_column(1),
     );
     eng.print_all_pretty();
 }
@@ -1109,7 +1179,11 @@ fn test_default_mitigation_type_returns_abort() {
 #[test]
 fn test_default_mitigation_runtime_returns_abort() {
     let m = DefaultMitigation;
-    let e = NyxError::new(codes::RUNTIME_DIVISION_BY_ZERO, "dz", ErrorCategory::Runtime);
+    let e = NyxError::new(
+        codes::RUNTIME_DIVISION_BY_ZERO,
+        "dz",
+        ErrorCategory::Runtime,
+    );
     let s = m.mitigate(&e);
     assert!(matches!(s, RecoveryStrategy::Abort));
 }
@@ -1149,8 +1223,8 @@ fn test_default_mitigation_internal_returns_abort() {
 #[test]
 fn test_default_mitigation_can_mitigate_recoverable() {
     let m = DefaultMitigation;
-    let e = NyxError::new(codes::RUNTIME_CUSTOM_ERROR, "r", ErrorCategory::Runtime)
-        .recoverable(true);
+    let e =
+        NyxError::new(codes::RUNTIME_CUSTOM_ERROR, "r", ErrorCategory::Runtime).recoverable(true);
     assert!(m.can_mitigate(&e));
 }
 
@@ -1202,8 +1276,8 @@ fn test_apply_mitigation_err_recoverable_still_unrecoverable_without_value() {
     // The current implementation always returns Unrecoverable for non-Ok paths
     // because it cannot produce a T from context alone.
     let m = DefaultMitigation;
-    let e = NyxError::new(codes::PARSER_SYNTAX_ERROR, "syn", ErrorCategory::Syntax)
-        .recoverable(true);
+    let e =
+        NyxError::new(codes::PARSER_SYNTAX_ERROR, "syn", ErrorCategory::Syntax).recoverable(true);
     let result: Result<i32> = Err(e);
     let r = apply_mitigation(result, &m);
     // Per implementation, Skip/Default/Placeholder/Correct all return Unrecoverable for now
@@ -1245,9 +1319,12 @@ fn test_integration_full_error_flow() {
     engine.emit_error(lex_err);
 
     // Parser error
-    let parse_err = syntax_error!(codes::PARSER_UNEXPECTED_TOKEN, "expected ';' after expression")
-        .with_file("test.nyx")
-        .with_location(7, 20);
+    let parse_err = syntax_error!(
+        codes::PARSER_UNEXPECTED_TOKEN,
+        "expected ';' after expression"
+    )
+    .with_file("test.nyx")
+    .with_location(7, 20);
     engine.emit_error(parse_err);
 
     // Type error

@@ -14,8 +14,8 @@
 //! The plugin system allows loading external code at runtime to extend
 //! the compiler's capabilities. See the [`plugin_loader`] module for details.
 
-pub mod plugin_loader;
 pub mod interfaces;
+pub mod plugin_loader;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,17 +24,16 @@ use crate::core::diagnostics::{codes, ErrorCategory, NyxError};
 
 /// Re-export plugin types for convenient access
 pub use plugin_loader::{
-    Plugin, PluginConfig, PluginManager, PluginMetadata, PluginConfigBuilder, Version,
-    VersionRange,
+    Plugin, PluginConfig, PluginConfigBuilder, PluginManager, PluginMetadata, Version, VersionRange,
 };
 
 /// Re-export interface types for convenient access
 pub use interfaces::{
-    Bytecode, Capabilities, CompilationUnit, CompilationWarning, EngineConfig, EngineHandle,
-    EngineAPI, ModuleAPI, ModuleId, RuntimeAPI, Sandbox, SandboxConfig, SourceLocation,
-    Symbol, SymbolKind, TypeCheckResult, TypeError, TypeInfo, TypeKind, Value, ValueData,
-    Version as ApiVersion, CompilerAPI, ExtensionConfig, PluginConfig as InterfacePluginConfig,
-    RuntimeCapabilities, RuntimeConfig,
+    Bytecode, Capabilities, CompilationUnit, CompilationWarning, CompilerAPI, EngineAPI,
+    EngineConfig, EngineHandle, ExtensionConfig, ModuleAPI, ModuleId,
+    PluginConfig as InterfacePluginConfig, RuntimeAPI, RuntimeCapabilities, RuntimeConfig, Sandbox,
+    SandboxConfig, SourceLocation, Symbol, SymbolKind, TypeCheckResult, TypeError, TypeInfo,
+    TypeKind, Value, ValueData, Version as ApiVersion,
 };
 
 /// Extension point for compiler passes
@@ -460,7 +459,10 @@ impl ExtensionRegistry {
     }
 
     /// Register a runtime backend
-    pub fn register_runtime_backend(&mut self, backend: Box<dyn RuntimeBackend>) -> Result<(), NyxError> {
+    pub fn register_runtime_backend(
+        &mut self,
+        backend: Box<dyn RuntimeBackend>,
+    ) -> Result<(), NyxError> {
         let name = backend.name().to_string();
         if self.runtime_backends.contains_key(&name) {
             return Err(NyxError::new(
@@ -484,7 +486,10 @@ impl ExtensionRegistry {
     }
 
     /// Register a target backend
-    pub fn register_target_backend(&mut self, backend: Box<dyn TargetBackend>) -> Result<(), NyxError> {
+    pub fn register_target_backend(
+        &mut self,
+        backend: Box<dyn TargetBackend>,
+    ) -> Result<(), NyxError> {
         let triple = backend.target_triple().to_string();
         if self.target_backends.contains_key(&triple) {
             return Err(NyxError::new(
@@ -520,7 +525,7 @@ mod tests {
             version: ApiVersion::default(),
             target: String::new(),
         });
-        
+
         let ctx = ExecutionContext::new(bytecode, "main")
             .with_arg(Value {
                 type_info: TypeInfo {
@@ -541,7 +546,7 @@ mod tests {
     #[test]
     fn test_extension_registry() {
         let registry = ExtensionRegistry::new();
-        
+
         // Should be able to list empty registries
         assert!(registry.list_compiler_passes().is_empty());
         assert!(registry.list_runtime_backends().is_empty());

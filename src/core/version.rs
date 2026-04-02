@@ -178,9 +178,7 @@ impl Version {
     pub fn is_compatible(&self, other: &Version, policy: CompatibilityPolicy) -> bool {
         match policy {
             CompatibilityPolicy::Strict => self.major == other.major,
-            CompatibilityPolicy::Moderate => {
-                self.major == other.major && other.minor >= self.minor
-            }
+            CompatibilityPolicy::Moderate => self.major == other.major && other.minor >= self.minor,
             CompatibilityPolicy::Lenient => {
                 // Lenient: any version with same major is compatible,
                 // or any higher major version
@@ -218,15 +216,15 @@ impl Default for Version {
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)?;
-        
+
         if let Some(ref pre) = self.pre {
             write!(f, "-{}", pre)?;
         }
-        
+
         if let Some(ref build) = self.build {
             write!(f, "+{}", build)?;
         }
-        
+
         Ok(())
     }
 }
@@ -236,29 +234,32 @@ impl FromStr for Version {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
-        
+
         // Split on + first to separate version from build metadata
         let (version_part, build_part) = match s.find('+') {
             Some(idx) => (&s[..idx], Some(&s[idx + 1..])),
             None => (s, None),
         };
-        
+
         // Split on - to separate version from pre-release
         let (base_part, pre_part) = match version_part.find('-') {
             Some(idx) => (&version_part[..idx], Some(&version_part[idx + 1..])),
             None => (version_part, None),
         };
-        
+
         // Parse base version (major.minor.patch)
         let parts: Vec<&str> = base_part.split('.').collect();
         if parts.is_empty() || parts.len() > 3 {
             return Err(NyxError::new(
                 codes::VERSION_INVALID_FORMAT,
-                format!("Invalid version format: expected major.minor.patch, got '{}'", base_part),
+                format!(
+                    "Invalid version format: expected major.minor.patch, got '{}'",
+                    base_part
+                ),
                 ErrorCategory::Internal,
             ));
         }
-        
+
         let major = parts[0].parse().map_err(|_| {
             NyxError::new(
                 codes::VERSION_INVALID_FORMAT,
@@ -266,7 +267,7 @@ impl FromStr for Version {
                 ErrorCategory::Internal,
             )
         })?;
-        
+
         let minor = if parts.len() > 1 {
             parts[1].parse().map_err(|_| {
                 NyxError::new(
@@ -278,7 +279,7 @@ impl FromStr for Version {
         } else {
             0
         };
-        
+
         let patch = if parts.len() > 2 {
             parts[2].parse().map_err(|_| {
                 NyxError::new(
@@ -290,33 +291,43 @@ impl FromStr for Version {
         } else {
             0
         };
-        
+
         // Validate pre-release format (alphanumeric with dots, separated by -)
-        let pre = pre_part.map(|p| {
-            if !p.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-') {
-                Err(NyxError::new(
-                    codes::VERSION_INVALID_FORMAT,
-                    format!("Invalid pre-release identifier: '{}'", p),
-                    ErrorCategory::Internal,
-                ))
-            } else {
-                Ok(p.to_string())
-            }
-        }).transpose()?;
-        
+        let pre = pre_part
+            .map(|p| {
+                if !p
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '.' || c == '-')
+                {
+                    Err(NyxError::new(
+                        codes::VERSION_INVALID_FORMAT,
+                        format!("Invalid pre-release identifier: '{}'", p),
+                        ErrorCategory::Internal,
+                    ))
+                } else {
+                    Ok(p.to_string())
+                }
+            })
+            .transpose()?;
+
         // Validate build metadata format
-        let build = build_part.map(|b| {
-            if !b.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-') {
-                Err(NyxError::new(
-                    codes::VERSION_INVALID_FORMAT,
-                    format!("Invalid build metadata: '{}'", b),
-                    ErrorCategory::Internal,
-                ))
-            } else {
-                Ok(b.to_string())
-            }
-        }).transpose()?;
-        
+        let build = build_part
+            .map(|b| {
+                if !b
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '.' || c == '-')
+                {
+                    Err(NyxError::new(
+                        codes::VERSION_INVALID_FORMAT,
+                        format!("Invalid build metadata: '{}'", b),
+                        ErrorCategory::Internal,
+                    ))
+                } else {
+                    Ok(b.to_string())
+                }
+            })
+            .transpose()?;
+
         Ok(Self {
             major,
             minor,
@@ -336,13 +347,13 @@ impl PartialOrd for Version {
 impl Ord for Version {
     fn cmp(&self, other: &Version) -> Ordering {
         // Compare major.minor.patch first
-        let base_cmp = (self.major, self.minor, self.patch)
-            .cmp(&(other.major, other.minor, other.patch));
-        
+        let base_cmp =
+            (self.major, self.minor, self.patch).cmp(&(other.major, other.minor, other.patch));
+
         if base_cmp != Ordering::Equal {
             return base_cmp;
         }
-        
+
         // Pre-release versions have lower precedence
         // Per SemVer: 1.0.0-alpha < 1.0.0
         self.cmp_pre(other)
@@ -549,10 +560,7 @@ mod tests {
 
     #[test]
     fn test_version_range() {
-        let range = VersionRange::new(
-            Version::new(1, 0, 0),
-            Version::new(2, 0, 0)
-        );
+        let range = VersionRange::new(Version::new(1, 0, 0), Version::new(2, 0, 0));
 
         assert!(range.contains(&Version::new(1, 5, 0)));
         assert!(range.contains(&Version::new(1, 0, 0)));

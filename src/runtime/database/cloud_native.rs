@@ -31,7 +31,9 @@ impl CloudNativeScale {
 
     /// Evaluates if a scale-up or scale-down is required based on CPU/Memory pressure.
     pub fn evaluate_scaling_need(&mut self, cpu_usage: f64, mem_usage: f64) -> i32 {
-        if !self.auto_scaling_active { return 0; }
+        if !self.auto_scaling_active {
+            return 0;
+        }
 
         if cpu_usage > 0.8 || mem_usage > 0.85 {
             // Scale up: Return 1
@@ -81,6 +83,9 @@ mod tests {
     fn test_cloud_provider_endpoints() {
         let mut cloud = CloudNativeScale::new();
         cloud.set_provider(CloudProvider::GCP);
-        assert_eq!(cloud.get_blob_storage_endpoint(), "https://storage.googleapis.com");
+        assert_eq!(
+            cloud.get_blob_storage_endpoint(),
+            "https://storage.googleapis.com"
+        );
     }
 }

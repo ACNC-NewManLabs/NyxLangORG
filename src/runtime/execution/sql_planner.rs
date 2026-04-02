@@ -1,8 +1,11 @@
+use crate::core::ast::ast_nodes::Expr as NyxExpr;
+use crate::runtime::execution::df_engine::{AggregateOp, LogicalPlan};
+use sqlparser::ast::{
+    BinaryOperator, Expr as SqlExpr, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
+    TableWithJoins,
+};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
-use sqlparser::ast::{Statement, Query, SetExpr, Select, TableFactor, Expr as SqlExpr, BinaryOperator, SelectItem, TableWithJoins};
-use crate::runtime::execution::df_engine::{LogicalPlan, AggregateOp};
-use crate::core::ast::ast_nodes::Expr as NyxExpr;
 
 use std::collections::HashMap;
 
@@ -18,13 +21,15 @@ impl Default for SqlPlanner {
 
 impl SqlPlanner {
     pub fn new() -> Self {
-        Self { ctes: HashMap::new() }
+        Self {
+            ctes: HashMap::new(),
+        }
     }
 
     pub fn plan(&mut self, sql: &str) -> Result<LogicalPlan, String> {
         let dialect = GenericDialect {};
         let ast = Parser::parse_sql(&dialect, sql).map_err(|e| e.to_string())?;
-        
+
         if ast.is_empty() {
             return Err("Empty SQL statement".to_string());
         }
@@ -57,17 +62,19 @@ impl SqlPlanner {
                     Err("INSERT without source query not supported".to_string())
                 }
             }
-            Statement::Update { table, assignments, selection, .. } => {
+            Statement::Update {
+                table,
+                assignments,
+                selection,
+                ..
+            } => {
                 let mut planned_assignments = Vec::new();
                 for assignment in assignments {
                     let col_name = match &assignment.target {
                         sqlparser::ast::AssignmentTarget::ColumnName(name) => name.to_string(),
                         _ => return Err("Unsupported assignment target".to_string()),
                     };
-                    planned_assignments.push((
-                        col_name,
-                        self.map_expr(&assignment.value)?,
-                    ));
+                    planned_assignments.push((col_name, self.map_expr(&assignment.value)?));
                 }
                 Ok(LogicalPlan::Update {
                     table_name: table.relation.to_string(),
@@ -77,12 +84,18 @@ impl SqlPlanner {
             }
             Statement::Delete(delete) => {
                 let table_name = match &delete.from {
-                    sqlparser::ast::FromTable::WithFromKeyword(tables) => tables[0].relation.to_string(),
+                    sqlparser::ast::FromTable::WithFromKeyword(tables) => {
+                        tables[0].relation.to_string()
+                    }
                     _ => return Err("Unsupported DELETE FROM format".to_string()),
                 };
                 Ok(LogicalPlan::Delete {
                     table_name,
-                    selection: delete.selection.as_ref().map(|e| self.map_expr(e)).transpose()?,
+                    selection: delete
+                        .selection
+                        .as_ref()
+                        .map(|e| self.map_expr(e))
+                        .transpose()?,
                 })
             }
             _ => Err("Unsupported SQL statement".to_string()),
@@ -96,7 +109,9 @@ impl SqlPlanner {
             DataType::Int(_) | DataType::Integer(_) | DataType::BigInt(_) => Ok("i64".to_string()),
             DataType::Boolean => Ok("bool".to_string()),
             DataType::Varchar(_) | DataType::Text | DataType::String(_) => Ok("string".to_string()),
-            DataType::Custom(name, _) if name.to_string().to_uppercase() == "STR" => Ok("string".to_string()),
+            DataType::Custom(name, _) if name.to_string().to_uppercase() == "STR" => {
+                Ok("string".to_string())
+            }
             _ => Err(format!("Unsupported data type: {:?}", dt)),
         }
     }
@@ -116,40 +131,49 @@ impl SqlPlanner {
         }
     }
 
-    fn plan_select(&mut self, select: &Select, limit: Option<sqlparser::ast::Expr>) -> Result<LogicalPlan, String> {
+    fn plan_select(
+        &mut self,
+        select: &Select,
+        limit: Option<sqlparser::ast::Expr>,
+    ) -> Result<LogicalPlan, String> {
         // 1. FROM clause (Scan)
         let mut plan = if select.from.is_empty() {
             // Constant Select: SELECT 1 AS a, 2 AS b
             let mut row_exprs = Vec::new();
             let mut fields = Vec::new();
-            
+
             for item in &select.projection {
                 match item {
                     SelectItem::UnnamedExpr(expr) => {
                         let e = self.map_expr(expr)?;
                         row_exprs.push(e);
-                        fields.push(crate::runtime::database::core_types::Field { 
-                            name: expr.to_string(), 
-                            dtype: "dynamic".to_string(), 
-                            nullable: true 
+                        fields.push(crate::runtime::database::core_types::Field {
+                            name: expr.to_string(),
+                            dtype: "dynamic".to_string(),
+                            nullable: true,
                         });
                     }
                     SelectItem::ExprWithAlias { expr, alias } => {
                         let e = self.map_expr(expr)?;
                         row_exprs.push(e);
-                        fields.push(crate::runtime::database::core_types::Field { 
-                            name: alias.to_string(), 
-                            dtype: "dynamic".to_string(), 
-                            nullable: true 
+                        fields.push(crate::runtime::database::core_types::Field {
+                            name: alias.to_string(),
+                            dtype: "dynamic".to_string(),
+                            nullable: true,
                         });
                     }
-                    _ => return Err("Only UnnamedExpr and ExprWithAlias supported in constant selects".to_string()),
+                    _ => {
+                        return Err(
+                            "Only UnnamedExpr and ExprWithAlias supported in constant selects"
+                                .to_string(),
+                        )
+                    }
                 }
             }
-            
-            LogicalPlan::Values { 
-                rows: vec![row_exprs], 
-                schema: crate::runtime::database::core_types::Schema { fields }
+
+            LogicalPlan::Values {
+                rows: vec![row_exprs],
+                schema: crate::runtime::database::core_types::Schema { fields },
             }
         } else {
             self.plan_from(&select.from)?
@@ -196,9 +220,9 @@ impl SqlPlanner {
         if from.is_empty() {
             return Err("FROM clause is empty".to_string());
         }
-        
+
         let mut plan = self.plan_table_factor(&from[0].relation)?;
-        
+
         // Handle explicit JOINs in the first TableWithJoins
         for join in &from[0].joins {
             let right_plan = self.plan_table_factor(&join.relation)?;
@@ -218,7 +242,7 @@ impl SqlPlanner {
                 right: Box::new(current_right),
             };
         }
-        
+
         Ok(plan)
     }
 
@@ -237,22 +261,25 @@ impl SqlPlanner {
                     })
                 }
             }
-            TableFactor::Derived { subquery, .. } => {
-                self.plan_query(subquery)
-            }
+            TableFactor::Derived { subquery, .. } => self.plan_query(subquery),
             _ => Err(format!("Unsupported table factor: {:?}", factor)),
         }
     }
 
-    fn plan_join(&mut self, left: LogicalPlan, right: LogicalPlan, op: &sqlparser::ast::JoinOperator) -> Result<LogicalPlan, String> {
-        use sqlparser::ast::{JoinOperator, JoinConstraint};
+    fn plan_join(
+        &mut self,
+        left: LogicalPlan,
+        right: LogicalPlan,
+        op: &sqlparser::ast::JoinOperator,
+    ) -> Result<LogicalPlan, String> {
         use crate::runtime::execution::df_engine::JoinType;
+        use sqlparser::ast::{JoinConstraint, JoinOperator};
 
         match op {
-            JoinOperator::Inner(constraint) | 
-            JoinOperator::LeftOuter(constraint) | 
-            JoinOperator::RightOuter(constraint) | 
-            JoinOperator::FullOuter(constraint) => {
+            JoinOperator::Inner(constraint)
+            | JoinOperator::LeftOuter(constraint)
+            | JoinOperator::RightOuter(constraint)
+            | JoinOperator::FullOuter(constraint) => {
                 let join_type = match op {
                     JoinOperator::Inner(_) => JoinType::Inner,
                     JoinOperator::LeftOuter(_) => JoinType::Left,
@@ -265,11 +292,28 @@ impl SqlPlanner {
                     JoinConstraint::On(expr) => {
                         // For Production Zero: We only support simple BinaryExpr equality for ON
                         // Example: ON a.id = b.id
-                        if let sqlparser::ast::Expr::BinaryOp { left, op: sqlparser::ast::BinaryOperator::Eq, right } = expr {
-                            (left.to_string().split('.').next_back().unwrap_or("").to_string(), 
-                             right.to_string().split('.').next_back().unwrap_or("").to_string())
+                        if let sqlparser::ast::Expr::BinaryOp {
+                            left,
+                            op: sqlparser::ast::BinaryOperator::Eq,
+                            right,
+                        } = expr
+                        {
+                            (
+                                left.to_string()
+                                    .split('.')
+                                    .next_back()
+                                    .unwrap_or("")
+                                    .to_string(),
+                                right
+                                    .to_string()
+                                    .split('.')
+                                    .next_back()
+                                    .unwrap_or("")
+                                    .to_string(),
+                            )
                         } else {
-                            return Err("Only simple equality constraints supported in ON clause".to_string());
+                            return Err("Only simple equality constraints supported in ON clause"
+                                .to_string());
                         }
                     }
                     _ => return Err("Only ON constraint supported for Joins".to_string()),
@@ -283,17 +327,19 @@ impl SqlPlanner {
                     join_type,
                 })
             }
-            JoinOperator::CrossJoin => {
-                Ok(LogicalPlan::CrossJoin {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                })
-            }
+            JoinOperator::CrossJoin => Ok(LogicalPlan::CrossJoin {
+                left: Box::new(left),
+                right: Box::new(right),
+            }),
             _ => Err(format!("Unsupported join operator: {:?}", op)),
         }
     }
 
-    fn plan_projection(&mut self, input: LogicalPlan, projection: &[SelectItem]) -> Result<LogicalPlan, String> {
+    fn plan_projection(
+        &mut self,
+        input: LogicalPlan,
+        projection: &[SelectItem],
+    ) -> Result<LogicalPlan, String> {
         let mut exprs = Vec::new();
         let mut names = Vec::new();
 
@@ -323,10 +369,15 @@ impl SqlPlanner {
         })
     }
 
-    fn plan_aggregate(&mut self, input: LogicalPlan, group_by: &sqlparser::ast::GroupByExpr, projection: &[SelectItem]) -> Result<LogicalPlan, String> {
+    fn plan_aggregate(
+        &mut self,
+        input: LogicalPlan,
+        group_by: &sqlparser::ast::GroupByExpr,
+        projection: &[SelectItem],
+    ) -> Result<LogicalPlan, String> {
         let mut keys = Vec::new();
         let mut key_names = Vec::new();
-        
+
         match group_by {
             sqlparser::ast::GroupByExpr::Expressions(exprs, _) => {
                 for expr in exprs {
@@ -390,7 +441,12 @@ impl SqlPlanner {
                     BinaryOperator::Divide => "/".to_string(),
                     _ => return Err(format!("Unsupported binary operator: {:?}", op)),
                 };
-                Ok(NyxExpr::Binary { left: l, op: nyx_op, right: r, span: crate::core::diagnostics::Span::default() })
+                Ok(NyxExpr::Binary {
+                    left: l,
+                    op: nyx_op,
+                    right: r,
+                    span: crate::core::diagnostics::Span::default(),
+                })
             }
             SqlExpr::Value(val) => {
                 use sqlparser::ast::Value;
@@ -412,13 +468,19 @@ impl SqlPlanner {
                 let _plan = self.plan_query(subquery)?;
                 // For now, return a placeholder identifier to avoid crash
                 // Full scalar subquery integration requires VM support
-                Ok(NyxExpr::ident(format!("subquery_{}", uuid::Uuid::new_v4().simple())))
+                Ok(NyxExpr::ident(format!(
+                    "subquery_{}",
+                    uuid::Uuid::new_v4().simple()
+                )))
             }
             _ => Err(format!("Unsupported SQL expression: {:?}", expr)),
         }
     }
 
-    fn extract_aggregate(&mut self, expr: &SqlExpr) -> Result<Option<(NyxExpr, AggregateOp)>, String> {
+    fn extract_aggregate(
+        &mut self,
+        expr: &SqlExpr,
+    ) -> Result<Option<(NyxExpr, AggregateOp)>, String> {
         if let SqlExpr::Function(func) = expr {
             let name = func.name.to_string().to_uppercase();
             let op = match name.as_str() {
@@ -445,7 +507,11 @@ impl SqlPlanner {
                             FunctionArg::Unnamed(arg_expr) => match arg_expr {
                                 sqlparser::ast::FunctionArgExpr::Expr(e) => self.map_expr(e)?,
                                 sqlparser::ast::FunctionArgExpr::Wildcard => NyxExpr::int(1),
-                                _ => return Err("Unsupported function argument expression".to_string()),
+                                _ => {
+                                    return Err(
+                                        "Unsupported function argument expression".to_string()
+                                    )
+                                }
                             },
                             _ => return Err("Only unnamed arguments supported".to_string()),
                         };

@@ -1,6 +1,6 @@
 use std::io::{self, Write};
-use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 pub async fn run_shell(host: &str, port: u16) -> io::Result<()> {
     let addr = format!("{}:{}", host, port);
@@ -21,11 +21,11 @@ pub async fn run_shell(host: &str, port: u16) -> io::Result<()> {
     loop {
         print!("nyx> ");
         io::stdout().flush()?;
-        
+
         input.clear();
         io::stdin().read_line(&mut input)?;
         let sql = input.trim();
-        
+
         if sql == "exit" || sql == "quit" {
             break;
         }

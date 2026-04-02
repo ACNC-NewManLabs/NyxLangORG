@@ -92,14 +92,24 @@ mod tests {
         assert_eq!(NyxData::parse("true").unwrap(), NyxData::Bool(true));
         assert_eq!(NyxData::parse("42").unwrap(), NyxData::Int(42));
         assert_eq!(NyxData::parse("3.14").unwrap(), NyxData::Float(3.14));
-        assert_eq!(NyxData::parse("\"hello\"").unwrap(), NyxData::String("hello".to_string()));
+        assert_eq!(
+            NyxData::parse("\"hello\"").unwrap(),
+            NyxData::String("hello".to_string())
+        );
     }
 
     #[test]
     fn test_nyxdata_arrays_and_maps() {
         let arr_str = "[1, 2, \"nyx\"]";
         let arr_data = NyxData::parse(arr_str).unwrap();
-        assert_eq!(arr_data, NyxData::Array(vec![NyxData::Int(1), NyxData::Int(2), NyxData::String("nyx".to_string())]));
+        assert_eq!(
+            arr_data,
+            NyxData::Array(vec![
+                NyxData::Int(1),
+                NyxData::Int(2),
+                NyxData::String("nyx".to_string())
+            ])
+        );
 
         let map_str = "{\"key\": 99}";
         let map_data = NyxData::parse(map_str).unwrap();
@@ -113,7 +123,7 @@ mod tests {
         let mut map = HashMap::new();
         map.insert("val".to_string(), NyxData::Int(10));
         let data = NyxData::Map(map);
-        
+
         let s = data.to_string();
         assert_eq!(s, "{\"val\":10}");
     }

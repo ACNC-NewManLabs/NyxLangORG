@@ -187,13 +187,12 @@ impl NeuroParser {
             // allow keyword identifiers in some positions (e.g. field names)
             Ok(self.advance().lexeme.clone())
         } else {
-            Err(
-                self.error_here(
+            Err(self
+                .error_here(
                     codes::PARSER_UNEXPECTED_TOKEN,
                     format!("expected identifier, found '{}'", self.cur().lexeme),
                 )
-                .with_suggestion("use a valid identifier name"),
-            )
+                .with_suggestion("use a valid identifier name"))
         }
     }
 
@@ -239,9 +238,7 @@ impl NeuroParser {
     }
 
     fn parse_field_name(&mut self) -> Result<String, Diagnostic> {
-        if self.at(&TokenKind::String)
-            || self.at(&TokenKind::Integer)
-            || self.at(&TokenKind::Float)
+        if self.at(&TokenKind::String) || self.at(&TokenKind::Integer) || self.at(&TokenKind::Float)
         {
             return Ok(self.advance().lexeme.clone());
         }
@@ -586,7 +583,9 @@ impl NeuroParser {
                     default_value = Some(self.parse_expr()?);
                 }
                 if is_optional && default_value.is_none() {
-                    default_value = Some(Expr::NullLiteral { span: self.span_at() });
+                    default_value = Some(Expr::NullLiteral {
+                        span: self.span_at(),
+                    });
                 }
                 params.push(Param {
                     name,
@@ -1270,8 +1269,10 @@ impl NeuroParser {
             let v = self.advance().lexeme.clone();
             return Ok(Type::Literal(TypeLiteral::Float(v)));
         }
-        if matches!(self.cur().kind, TokenKind::Boolean | TokenKind::KwTrue | TokenKind::KwFalse)
-        {
+        if matches!(
+            self.cur().kind,
+            TokenKind::Boolean | TokenKind::KwTrue | TokenKind::KwFalse
+        ) {
             let v = self.cur().lexeme == "true";
             self.advance();
             return Ok(Type::Literal(TypeLiteral::Bool(v)));
@@ -1338,13 +1339,12 @@ impl NeuroParser {
             self.advance();
         }
         if segs.is_empty() {
-            return Err(
-                self.error_here(
+            return Err(self
+                .error_here(
                     codes::PARSER_SYNTAX_ERROR,
                     format!("expected type, found '{}'", self.cur().lexeme),
                 )
-                .with_suggestion("provide a valid type name here"),
-            );
+                .with_suggestion("provide a valid type name here"));
         }
         Ok(TypePath { segments: segs })
     }
@@ -1384,10 +1384,9 @@ impl NeuroParser {
             self.advance();
             Ok(())
         } else {
-            Err(
-                self.missing_token("'}'")
-                    .with_suggestion("add a closing '}' to finish this block"),
-            )
+            Err(self
+                .missing_token("'}'")
+                .with_suggestion("add a closing '}' to finish this block"))
         }
     }
 
@@ -1449,7 +1448,9 @@ impl NeuroParser {
                 self.advance();
                 self.parse_expr()?
             } else {
-                Expr::NullLiteral { span: self.span_at() }
+                Expr::NullLiteral {
+                    span: self.span_at(),
+                }
             };
             self.eat_semi();
             return Ok(Stmt::Let {
@@ -1560,7 +1561,10 @@ impl NeuroParser {
             self.advance();
             let expr = self.parse_expr()?;
             self.eat_semi();
-            return Ok(Stmt::Yield { expr: Some(expr), span: Span::new(span.start, self.cur().span.start) });
+            return Ok(Stmt::Yield {
+                expr: Some(expr),
+                span: Span::new(span.start, self.cur().span.start),
+            });
         }
         // unsafe
         if self.at(&TokenKind::KwUnsafe) {
@@ -1904,7 +1908,10 @@ impl NeuroParser {
             } else {
                 self.advance();
                 let try_span = Span::new(expr.span().start, self.prev().span.end);
-                expr = Expr::TryOp { expr: Box::new(expr), span: try_span };
+                expr = Expr::TryOp {
+                    expr: Box::new(expr),
+                    span: try_span,
+                };
                 continue;
             }
         }
@@ -1941,7 +1948,12 @@ impl NeuroParser {
                 } else {
                     None
                 };
-                let range_span = Span::new(left.span().start, end.as_ref().map(|e| e.span().end).unwrap_or(self.prev().span.end));
+                let range_span = Span::new(
+                    left.span().start,
+                    end.as_ref()
+                        .map(|e| e.span().end)
+                        .unwrap_or(self.prev().span.end),
+                );
                 left = Expr::Range {
                     start: Some(Box::new(left)),
                     end,
@@ -2036,7 +2048,10 @@ impl NeuroParser {
             self.advance();
             let r = self.parse_unary()?;
             let combined_span = Span::new(op_span.start, r.span().end);
-            return Ok(Expr::Deref { expr: Box::new(r), span: combined_span });
+            return Ok(Expr::Deref {
+                expr: Box::new(r),
+                span: combined_span,
+            });
         }
         if self.at(&TokenKind::Ampersand) {
             let op_span = self.span_at();
@@ -2055,7 +2070,10 @@ impl NeuroParser {
             self.advance();
             let r = self.parse_unary()?;
             let combined_span = Span::new(op_span.start, r.span().end);
-            return Ok(Expr::Move { expr: Box::new(r), span: combined_span });
+            return Ok(Expr::Move {
+                expr: Box::new(r),
+                span: combined_span,
+            });
         }
         self.parse_postfix()
     }
@@ -2075,7 +2093,10 @@ impl NeuroParser {
                 self.advance();
                 self.advance();
                 let await_span = Span::new(start_pos, self.prev().span.end);
-                e = Expr::Await { expr: Box::new(e), span: await_span };
+                e = Expr::Await {
+                    expr: Box::new(e),
+                    span: await_span,
+                };
                 continue;
             }
             // field/method access
@@ -2257,14 +2278,13 @@ impl NeuroParser {
                 self.advance();
                 match v.parse::<f64>() {
                     Ok(n) => Ok(Expr::FloatLiteral { value: n, span }),
-                    Err(_) => Err(
-                        self.error_at(
+                    Err(_) => Err(self
+                        .error_at(
                             codes::INVALID_LITERAL,
                             span,
                             format!("invalid float literal '{v}'"),
                         )
-                        .with_suggestion("use a valid float literal for this expression"),
-                    ),
+                        .with_suggestion("use a valid float literal for this expression")),
                 }
             }
             TokenKind::String => {
@@ -2283,7 +2303,10 @@ impl NeuroParser {
                 let v = self.cur().lexeme.clone();
                 let span = self.cur().span;
                 self.advance();
-                Ok(Expr::CharLiteral { value: v.chars().next().unwrap_or('\0'), span })
+                Ok(Expr::CharLiteral {
+                    value: v.chars().next().unwrap_or('\0'),
+                    span,
+                })
             }
             TokenKind::Boolean | TokenKind::KwTrue => {
                 let span = self.cur().span;
@@ -2308,7 +2331,10 @@ impl NeuroParser {
                 self.advance();
                 if self.at(&TokenKind::RBracket) {
                     self.advance();
-                    return Ok(Expr::ArrayLiteral { elements: vec![], span: Span::new(start_span.start, self.prev().span.end) });
+                    return Ok(Expr::ArrayLiteral {
+                        elements: vec![],
+                        span: Span::new(start_span.start, self.prev().span.end),
+                    });
                 }
                 let first = self.parse_expr()?;
                 if self.at(&TokenKind::Semicolon) {
@@ -2340,7 +2366,10 @@ impl NeuroParser {
                     elems.push(self.parse_expr()?);
                 }
                 self.expect(TokenKind::RBracket)?;
-                Ok(Expr::ArrayLiteral { elements: elems, span: Span::new(start_span.start, self.prev().span.end) })
+                Ok(Expr::ArrayLiteral {
+                    elements: elems,
+                    span: Span::new(start_span.start, self.prev().span.end),
+                })
             }
 
             // grouped, tuple, or closure `(…)`
@@ -2349,7 +2378,10 @@ impl NeuroParser {
                 self.advance();
                 if self.at(&TokenKind::RParen) {
                     self.advance();
-                    return Ok(Expr::TupleLiteral { elements: vec![], span: Span::new(start_span.start, self.prev().span.end) });
+                    return Ok(Expr::TupleLiteral {
+                        elements: vec![],
+                        span: Span::new(start_span.start, self.prev().span.end),
+                    });
                 }
                 let first = self.parse_expr()?;
                 if self.at(&TokenKind::RParen) {
@@ -2365,7 +2397,10 @@ impl NeuroParser {
                     elems.push(self.parse_expr()?);
                 }
                 self.expect(TokenKind::RParen)?;
-                Ok(Expr::TupleLiteral { elements: elems, span: Span::new(start_span.start, self.prev().span.end) })
+                Ok(Expr::TupleLiteral {
+                    elements: elems,
+                    span: Span::new(start_span.start, self.prev().span.end),
+                })
             }
 
             // block expression / struct-literal-without-name `{ field: val }`
@@ -2412,7 +2447,10 @@ impl NeuroParser {
                         self.skip_newlines();
                     }
                     self.expect(TokenKind::RBrace)?;
-                    return Ok(Expr::BlockLiteral { items, span: Span::new(start_span.start, self.prev().span.end) });
+                    return Ok(Expr::BlockLiteral {
+                        items,
+                        span: Span::new(start_span.start, self.prev().span.end),
+                    });
                 }
                 // otherwise a block expression
                 let stmts = self.parse_block()?;
@@ -2544,7 +2582,11 @@ impl NeuroParser {
                         Some(Box::new(self.parse_primary()?))
                     } else {
                         let block = self.parse_block()?;
-                        Some(Box::new(Expr::Block { stmts: block, tail_expr: None, span: self.span_at() }))
+                        Some(Box::new(Expr::Block {
+                            stmts: block,
+                            tail_expr: None,
+                            span: self.span_at(),
+                        }))
                     }
                 } else {
                     None
@@ -2570,7 +2612,10 @@ impl NeuroParser {
                 }
                 self.advance();
                 let e = self.parse_expr()?;
-                Ok(Expr::Loop { expr: Box::new(e), span: Span::new(start_span.start, self.prev().span.end) })
+                Ok(Expr::Loop {
+                    expr: Box::new(e),
+                    span: Span::new(start_span.start, self.prev().span.end),
+                })
             }
 
             // match expression
@@ -2594,7 +2639,10 @@ impl NeuroParser {
                 self.advance();
                 let _ = self.eat_kw("move");
                 let block = self.parse_block()?;
-                Ok(Expr::AsyncBlock { body: block, span: Span::new(start_span.start, self.prev().span.end) })
+                Ok(Expr::AsyncBlock {
+                    body: block,
+                    span: Span::new(start_span.start, self.prev().span.end),
+                })
             }
 
             // identifier / path / struct literal
@@ -2613,13 +2661,12 @@ impl NeuroParser {
                 self.parse_identifier_like_expr(first)
             }
 
-            _ => Err(
-                self.error_here(
+            _ => Err(self
+                .error_here(
                     codes::PARSER_INVALID_EXPRESSION,
                     format!("unexpected token '{}' in expression", self.cur().lexeme),
                 )
-                .with_suggestion("start an expression with a literal, identifier, or '('"),
-            ),
+                .with_suggestion("start an expression with a literal, identifier, or '('")),
         }
     }
 }
@@ -2699,7 +2746,10 @@ impl NeuroParser {
                         .tokens
                         .get(self.pos + 2)
                         .map(|t| {
-                            matches!(t.kind, TokenKind::Colon | TokenKind::Comma | TokenKind::RBrace)
+                            matches!(
+                                t.kind,
+                                TokenKind::Colon | TokenKind::Comma | TokenKind::RBrace
+                            )
                         })
                         .unwrap_or(false));
             if is_struct {
@@ -2716,7 +2766,10 @@ impl NeuroParser {
                         self.advance();
                         self.parse_expr()?
                     } else {
-                        Expr::Identifier { name: fn_.clone(), span: self.span_at() }
+                        Expr::Identifier {
+                            name: fn_.clone(),
+                            span: self.span_at(),
+                        }
                     };
                     fields.push(FieldInit {
                         name: fn_,
@@ -2728,13 +2781,23 @@ impl NeuroParser {
                     self.skip_newlines();
                 }
                 self.expect(TokenKind::RBrace)?;
-                return Ok(Expr::StructLiteral { name, fields, span: Span::new(start_pos, self.prev().span.end) });
+                return Ok(Expr::StructLiteral {
+                    name,
+                    fields,
+                    span: Span::new(start_pos, self.prev().span.end),
+                });
             }
         }
         if parts.len() == 1 {
-            Ok(Expr::Identifier { name: parts.remove(0), span: self.span_at() })
+            Ok(Expr::Identifier {
+                name: parts.remove(0),
+                span: self.span_at(),
+            })
         } else {
-            Ok(Expr::Path { segments: parts, span: self.span_at() })
+            Ok(Expr::Path {
+                segments: parts,
+                span: self.span_at(),
+            })
         }
     }
 
@@ -2855,43 +2918,59 @@ impl NeuroParser {
         self.expect(TokenKind::KwProtocol)?;
         let name = self.expect_ident()?;
         let version = if self.at(&TokenKind::Identifier) && self.cur().lexeme.starts_with('v') {
-             Some(self.advance().lexeme.clone())
+            Some(self.advance().lexeme.clone())
         } else {
-             None
+            None
         };
         self.expect(TokenKind::LBrace)?;
-        
+
         let mut roles = Vec::new();
         let mut primitives = Vec::new();
         let mut properties = Vec::new();
-        let mut transport = ProtocolTransport { framing: None, versioning: None };
+        let mut transport = ProtocolTransport {
+            framing: None,
+            versioning: None,
+        };
         let mut handshake = None;
         let mut session = None;
         let mut policies = Vec::new();
 
         while !self.at(&TokenKind::RBrace) && !self.is_eof() {
             self.skip_newlines();
-            if self.at(&TokenKind::RBrace) { break; }
-            
+            if self.at(&TokenKind::RBrace) {
+                break;
+            }
+
             let ident = self.expect_ident()?;
             match ident.as_str() {
                 "roles" => {
                     self.expect(TokenKind::Colon)?;
-                    while !self.at(&TokenKind::Newline) && !self.at(&TokenKind::Semicolon) && !self.at(&TokenKind::RBrace) {
+                    while !self.at(&TokenKind::Newline)
+                        && !self.at(&TokenKind::Semicolon)
+                        && !self.at(&TokenKind::RBrace)
+                    {
                         roles.push(self.expect_ident()?);
-                        if self.at(&TokenKind::Comma) { self.advance(); } else { break; }
+                        if self.at(&TokenKind::Comma) {
+                            self.advance();
+                        } else {
+                            break;
+                        }
                     }
                 }
                 "primitives" => {
                     self.expect(TokenKind::LBrace)?;
                     while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                         self.skip_newlines();
-                        if self.at(&TokenKind::RBrace) { break; }
+                        if self.at(&TokenKind::RBrace) {
+                            break;
+                        }
                         let pkind = self.expect_ident()?;
                         self.expect(TokenKind::Colon)?;
                         let algo = self.expect_ident()?;
                         primitives.push(ProtocolPrimitive { kind: pkind, algo });
-                        if self.at(&TokenKind::Comma) { self.advance(); }
+                        if self.at(&TokenKind::Comma) {
+                            self.advance();
+                        }
                         self.skip_newlines();
                     }
                     self.expect(TokenKind::RBrace)?;
@@ -2900,12 +2979,19 @@ impl NeuroParser {
                     self.expect(TokenKind::LBrace)?;
                     while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                         self.skip_newlines();
-                        if self.at(&TokenKind::RBrace) { break; }
+                        if self.at(&TokenKind::RBrace) {
+                            break;
+                        }
                         let pname = self.expect_ident()?;
                         self.expect(TokenKind::Equal)?;
                         let pval = self.parse_expr()?;
-                        properties.push(ProtocolProperty { name: pname, value: pval });
-                        if self.at(&TokenKind::Comma) { self.advance(); }
+                        properties.push(ProtocolProperty {
+                            name: pname,
+                            value: pval,
+                        });
+                        if self.at(&TokenKind::Comma) {
+                            self.advance();
+                        }
                         self.skip_newlines();
                     }
                     self.expect(TokenKind::RBrace)?;
@@ -2914,7 +3000,9 @@ impl NeuroParser {
                     self.expect(TokenKind::LBrace)?;
                     while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                         self.skip_newlines();
-                        if self.at(&TokenKind::RBrace) { break; }
+                        if self.at(&TokenKind::RBrace) {
+                            break;
+                        }
                         let tkind = self.expect_ident()?;
                         self.expect(TokenKind::Equal)?;
                         let tval = self.expect_ident()?;
@@ -2923,7 +3011,9 @@ impl NeuroParser {
                             "versioning" => transport.versioning = Some(tval),
                             _ => {}
                         }
-                        if self.at(&TokenKind::Comma) { self.advance(); }
+                        if self.at(&TokenKind::Comma) {
+                            self.advance();
+                        }
                         self.skip_newlines();
                     }
                     self.expect(TokenKind::RBrace)?;
@@ -2938,18 +3028,28 @@ impl NeuroParser {
                     self.expect(TokenKind::LBrace)?;
                     while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                         self.skip_newlines();
-                        if self.at(&TokenKind::RBrace) { break; }
+                        if self.at(&TokenKind::RBrace) {
+                            break;
+                        }
                         let pname = self.expect_ident()?;
                         self.expect(TokenKind::Equal)?;
                         let pval = self.parse_expr()?;
-                        policies.push(ProtocolPolicy { name: pname, value: pval });
-                        if self.at(&TokenKind::Comma) { self.advance(); }
+                        policies.push(ProtocolPolicy {
+                            name: pname,
+                            value: pval,
+                        });
+                        if self.at(&TokenKind::Comma) {
+                            self.advance();
+                        }
                         self.skip_newlines();
                     }
                     self.expect(TokenKind::RBrace)?;
                 }
                 _ => {
-                    return Err(self.error_here(codes::PARSER_UNEXPECTED_TOKEN, format!("unexpected protocol item '{}'", ident)));
+                    return Err(self.error_here(
+                        codes::PARSER_UNEXPECTED_TOKEN,
+                        format!("unexpected protocol item '{}'", ident),
+                    ));
                 }
             }
             self.skip_newlines();
@@ -2975,14 +3075,18 @@ impl NeuroParser {
         let mut steps = Vec::new();
         while !self.at(&TokenKind::RBrace) && !self.is_eof() {
             self.skip_newlines();
-            if self.at(&TokenKind::RBrace) { break; }
+            if self.at(&TokenKind::RBrace) {
+                break;
+            }
 
             if self.eat_contextual_kw("derive") {
                 self.expect(TokenKind::LBrace)?;
                 let mut assignments = Vec::new();
                 while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                     self.skip_newlines();
-                    if self.at(&TokenKind::RBrace) { break; }
+                    if self.at(&TokenKind::RBrace) {
+                        break;
+                    }
                     let name = self.expect_ident()?;
                     self.expect(TokenKind::Equal)?;
                     let value = self.parse_expr()?;
@@ -2996,27 +3100,31 @@ impl NeuroParser {
                 let mut actions = Vec::new();
                 while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                     self.skip_newlines();
-                    if self.at(&TokenKind::RBrace) { break; }
+                    if self.at(&TokenKind::RBrace) {
+                        break;
+                    }
                     actions.push(self.expect_ident()?);
                     self.skip_newlines();
                 }
                 self.expect(TokenKind::RBrace)?;
                 steps.push(HandshakeStep::Finish { actions });
             } else if self.at_kw("derive") {
-                 self.advance();
-                 self.expect(TokenKind::LBrace)?;
-                 let mut assignments = Vec::new();
-                 while !self.at(&TokenKind::RBrace) && !self.is_eof() {
-                     self.skip_newlines();
-                     if self.at(&TokenKind::RBrace) { break; }
-                     let name = self.expect_ident()?;
-                     self.expect(TokenKind::Equal)?;
-                     let value = self.parse_expr()?;
-                     assignments.push(HandshakeAssignment { name, value });
-                     self.skip_newlines();
-                 }
-                 self.expect(TokenKind::RBrace)?;
-                 steps.push(HandshakeStep::Derive { assignments });
+                self.advance();
+                self.expect(TokenKind::LBrace)?;
+                let mut assignments = Vec::new();
+                while !self.at(&TokenKind::RBrace) && !self.is_eof() {
+                    self.skip_newlines();
+                    if self.at(&TokenKind::RBrace) {
+                        break;
+                    }
+                    let name = self.expect_ident()?;
+                    self.expect(TokenKind::Equal)?;
+                    let value = self.parse_expr()?;
+                    assignments.push(HandshakeAssignment { name, value });
+                    self.skip_newlines();
+                }
+                self.expect(TokenKind::RBrace)?;
+                steps.push(HandshakeStep::Derive { assignments });
             } else {
                 let from = self.expect_ident()?;
                 self.expect(TokenKind::Arrow)?;
@@ -3027,15 +3135,25 @@ impl NeuroParser {
                 let mut fields = Vec::new();
                 while !self.at(&TokenKind::RBrace) && !self.is_eof() {
                     self.skip_newlines();
-                    if self.at(&TokenKind::RBrace) { break; }
+                    if self.at(&TokenKind::RBrace) {
+                        break;
+                    }
                     let fname = self.expect_ident()?;
                     self.expect(TokenKind::Equal)?;
                     let fval = self.parse_expr()?;
-                    fields.push(HandshakeField { name: fname, value: fval });
+                    fields.push(HandshakeField {
+                        name: fname,
+                        value: fval,
+                    });
                     self.skip_newlines();
                 }
                 self.expect(TokenKind::RBrace)?;
-                steps.push(HandshakeStep::Message { from, to, name, fields });
+                steps.push(HandshakeStep::Message {
+                    from,
+                    to,
+                    name,
+                    fields,
+                });
             }
             self.skip_newlines();
         }
@@ -3047,27 +3165,28 @@ impl NeuroParser {
         self.expect(TokenKind::LBrace)?;
         let mut body = Vec::new();
         while !self.at(&TokenKind::RBrace) && !self.is_eof() {
-             self.skip_newlines();
-             if self.at(&TokenKind::RBrace) { break; }
-             if self.at(&TokenKind::KwFn) {
-                 // treat fn inside session as a special statement or just parse it
-                 let f = self.parse_fn_decl()?;
+            self.skip_newlines();
+            if self.at(&TokenKind::RBrace) {
+                break;
+            }
+            if self.at(&TokenKind::KwFn) {
+                // treat fn inside session as a special statement or just parse it
+                let f = self.parse_fn_decl()?;
                 body.push(Stmt::Expr(Expr::Identifier {
                     name: format!("__session_method_{}", f.name),
                     span: self.span_at(),
                 }));
-                 // For now, I'll just push a dummy expression or extend SessionDef
-                 // Actually, let's keep it simple: SessionDef has Vec<Stmt>.
-                 // I'll wrap the function in a Block or similar if needed.
-             } else {
-                 body.push(self.parse_stmt()?);
-             }
-             self.skip_newlines();
+                // For now, I'll just push a dummy expression or extend SessionDef
+                // Actually, let's keep it simple: SessionDef has Vec<Stmt>.
+                // I'll wrap the function in a Block or similar if needed.
+            } else {
+                body.push(self.parse_stmt()?);
+            }
+            self.skip_newlines();
         }
         self.expect(TokenKind::RBrace)?;
         Ok(SessionDef { body })
     }
-
 }
 
 #[cfg(test)]
@@ -3119,4 +3238,3 @@ mod tests {
         assert_eq!(span.start.column, 13);
     }
 }
-

@@ -7,18 +7,18 @@ use crate::core::ast::ast_nodes::{
 };
 use crate::core::diagnostics::{codes, Diagnostic, DiagnosticEngine};
 use crate::core::lexer::lexer::Lexer;
+use crate::core::lowering::protocol_lower::ProtocolLowerer;
 use crate::core::parser::grammar_engine::GrammarEngine;
 use crate::core::parser::neuro_parser::{IncrementalState, NeuroParser, ParserErrors};
 use crate::core::registry::engine_registry::EngineRegistry;
 use crate::core::registry::language_registry::LanguageRegistry;
 use crate::core::semantic::semantic_analyzer::SemanticAnalyzer;
-use crate::core::lowering::protocol_lower::ProtocolLowerer;
 use crate::runtime::compiler_bridge::incremental::incremental_patch_set;
 use crate::runtime::compiler_bridge::package::package_entry;
 use crate::runtime::execution::reload::ModulePatch;
+use crate::systems::backend::bytecode_backend::BytecodeBackend;
 use crate::systems::backend::codegen::{compile_llvm_ir_to_binary, write_llvm_ir, CodegenOutput};
 use crate::systems::backend::llvm_backend::{LlvmBackend, Target};
-use crate::systems::backend::bytecode_backend::BytecodeBackend;
 use crate::systems::ir::ir_builder::IrBuilder;
 
 #[derive(Debug)]
@@ -843,7 +843,12 @@ fn rewrite_expr(
     module_aliases: &ModuleAliasIndex,
 ) {
     match expr {
-        Expr::ArrayLiteral { elements: items, .. } | Expr::TupleLiteral { elements: items, .. } => {
+        Expr::ArrayLiteral {
+            elements: items, ..
+        }
+        | Expr::TupleLiteral {
+            elements: items, ..
+        } => {
             for item in items {
                 rewrite_expr(
                     item,
@@ -953,7 +958,9 @@ fn rewrite_expr(
                 module_aliases,
             );
         }
-        Expr::Slice { object, start, end, .. } => {
+        Expr::Slice {
+            object, start, end, ..
+        } => {
             rewrite_expr(
                 object,
                 false,
@@ -1089,7 +1096,9 @@ fn rewrite_expr(
                 module_aliases,
             );
         }
-        Expr::Block { stmts, tail_expr, .. } => {
+        Expr::Block {
+            stmts, tail_expr, ..
+        } => {
             for stmt in stmts {
                 rewrite_stmt(
                     stmt,
@@ -1258,7 +1267,9 @@ fn rewrite_expr(
                 *expr = qualified_path_expr(qualified);
             }
         }
-        Expr::Path { segments: parts, .. } => {
+        Expr::Path {
+            segments: parts, ..
+        } => {
             if let Some(qualified) =
                 resolve_path_callee(parts, local_functions, imported_modules, module_aliases)
             {
@@ -1312,7 +1323,10 @@ fn resolve_path_callee(
 }
 
 fn qualified_path_expr(qualified: &str) -> Expr {
-    Expr::Path { segments: qualified.split("::").map(|part| part.to_string()).collect(), span: crate::core::diagnostics::Span::default() }
+    Expr::Path {
+        segments: qualified.split("::").map(|part| part.to_string()).collect(),
+        span: crate::core::diagnostics::Span::default(),
+    }
 }
 
 fn get_nyx_home() -> PathBuf {

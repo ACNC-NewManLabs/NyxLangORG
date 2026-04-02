@@ -25,13 +25,18 @@ impl PerformanceScaling {
 
     /// Logical partitioning of data based on shard key hashing for distributed consistency.
     pub fn partition_data(&self, timeline_key: u64, num_shards: usize) -> u64 {
-        if num_shards == 0 { return 0; }
+        if num_shards == 0 {
+            return 0;
+        }
         timeline_key % (num_shards as u64)
     }
 
     /// Tracks column access and returns true if an index should be built.
     pub fn track_and_trigger_indexing(&mut self, column_name: &str) -> bool {
-        let count = self.query_heatmap.entry(column_name.to_string()).or_insert(0);
+        let count = self
+            .query_heatmap
+            .entry(column_name.to_string())
+            .or_insert(0);
         *count += 1;
         *count > self.auto_index_threshold
     }

@@ -10,7 +10,9 @@ pub struct Rc<T> {
 impl<T> Rc<T> {
     /// Create new Rc
     pub fn new(value: T) -> Rc<T> {
-        Rc { inner: StdRc::new(value) }
+        Rc {
+            inner: StdRc::new(value),
+        }
     }
 
     /// Get reference count
@@ -26,6 +28,8 @@ impl<T> Rc<T> {
 
 impl<T> Clone for Rc<T> {
     fn clone(&self) -> Rc<T> {
-        Rc { inner: self.inner.clone() }
+        Rc {
+            inner: self.inner.clone(),
+        }
     }
 }

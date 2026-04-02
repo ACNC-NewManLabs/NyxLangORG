@@ -8,9 +8,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use base64::{engine::general_purpose, Engine as _};
 #[cfg(feature = "ui")]
-use std::cell::RefCell;
-#[cfg(feature = "ui")]
-use font8x8::{BASIC_FONTS, UnicodeFonts};
+use font8x8::{UnicodeFonts, BASIC_FONTS};
 use httpdate::fmt_http_date;
 #[cfg(feature = "ui")]
 use minifb::{KeyRepeat, MouseButton, Scale, ScaleMode, Window, WindowOptions};
@@ -20,6 +18,8 @@ use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use sha1::{Digest, Sha1};
 use socket2::{Domain, Protocol, Socket, Type};
+#[cfg(feature = "ui")]
+use std::cell::RefCell;
 
 use super::nyx_vm::{EvalError, NyxVm, Value};
 
@@ -57,10 +57,7 @@ struct RendererState {
 
 #[derive(Debug)]
 enum SocketEntry {
-    Pending {
-        reuse_addr: bool,
-        reuse_port: bool,
-    },
+    Pending { reuse_addr: bool, reuse_port: bool },
     Listener(TcpListener),
     Stream(TcpStream),
 }
@@ -104,7 +101,10 @@ pub fn register_host_natives(vm: &mut NyxVm, config: &NativeBridgeConfig) {
     vm.register_native("__native_renderer_init", renderer_init_native);
     vm.register_native("__native_renderer_init_wgpu", renderer_init_wgpu_native);
     vm.register_native("__native_renderer_render", renderer_render_native);
-    vm.register_native("__native_renderer_render_frame", renderer_render_frame_native);
+    vm.register_native(
+        "__native_renderer_render_frame",
+        renderer_render_frame_native,
+    );
     vm.register_native("__native_renderer_present", renderer_present_native);
     vm.register_native("__native_renderer_resize", renderer_resize_native);
     vm.register_native("__native_frame_pacing", frame_pacing_native);
@@ -172,7 +172,10 @@ fn assets_read_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
         .join(asset_id);
     let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
     Ok(Value::array(
-        bytes.into_iter().map(|b| Value::Int(i64::from(b))).collect(),
+        bytes
+            .into_iter()
+            .map(|b| Value::Int(i64::from(b)))
+            .collect(),
     ))
 }
 
@@ -295,7 +298,9 @@ fn input_poll_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalErro
 #[cfg(feature = "ui")]
 fn renderer_init_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let [_backend, vsync, _antialias] = args else {
-        return Err(err("__native_renderer_init(backend, vsync, antialiasing) expected"));
+        return Err(err(
+            "__native_renderer_init(backend, vsync, antialiasing) expected",
+        ));
     };
     let vsync = match vsync {
         Value::Bool(b) => *b,
@@ -313,7 +318,9 @@ fn renderer_init_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalE
 #[cfg(feature = "ui")]
 fn renderer_init_wgpu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let [Value::Int(width), Value::Int(height), Value::Str(title)] = args else {
-        return Err(err("__native_renderer_init_wgpu(width, height, title) expected"));
+        return Err(err(
+            "__native_renderer_init_wgpu(width, height, title) expected",
+        ));
     };
     init_renderer_state(*width as usize, *height as usize, title, true)
 }
@@ -376,7 +383,9 @@ fn init_renderer_state(
 #[cfg(feature = "ui")]
 fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let [display_list, dirty_regions] = args else {
-        return Err(err("__native_renderer_render(display_list, dirty_regions) expected"));
+        return Err(err(
+            "__native_renderer_render(display_list, dirty_regions) expected",
+        ));
     };
     RENDERER_STATE.with(|cell| {
         let mut state_ref = cell.borrow_mut();
@@ -385,7 +394,12 @@ fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         };
 
         let dirty_rects: Vec<Rect> = match dirty_regions {
-            Value::Array(arr) => arr.read().unwrap_or_else(|e| e.into_inner()).iter().filter_map(parse_rect).collect(),
+            Value::Array(arr) => arr
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter_map(parse_rect)
+                .collect(),
             _ => Vec::new(),
         };
 
@@ -395,7 +409,13 @@ fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         } else {
             // Partial clear for performance
             for rect in &dirty_rects {
-                clear_region(&mut state.buffer, state.width, state.height, *rect, state.clear_color);
+                clear_region(
+                    &mut state.buffer,
+                    state.width,
+                    state.height,
+                    *rect,
+                    state.clear_color,
+                );
             }
         }
 
@@ -417,7 +437,14 @@ fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
             match op_type.as_str() {
                 "rect" => {
                     if let Some(shadow) = style.shadow {
-                        draw_shadow(&mut state.buffer, state.width as usize, state.height as usize, bounds, shadow, &dirty_rects);
+                        draw_shadow(
+                            &mut state.buffer,
+                            state.width as usize,
+                            state.height as usize,
+                            bounds,
+                            shadow,
+                            &dirty_rects,
+                        );
                     }
                     let color = style.fill_color.unwrap_or(Color::rgba(0.2, 0.2, 0.24, 1.0));
                     draw_rrect(
@@ -431,9 +458,7 @@ fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
                     );
                 }
                 "text" => {
-                    let color = style
-                        .fill_color
-                        .unwrap_or(Color::rgba(0.9, 0.9, 0.92, 1.0));
+                    let color = style.fill_color.unwrap_or(Color::rgba(0.9, 0.9, 0.92, 1.0));
                     if let Some(Value::Str(text)) = content {
                         draw_text(
                             &mut state.buffer,
@@ -597,12 +622,17 @@ fn measure_text_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
     let font_size = numeric_to_f64(size)?;
     let width = font_size * 0.6 * text.chars().count() as f64;
     let height = font_size * 1.2;
-    Ok(Value::array(vec![Value::Float(width), Value::Float(height)]))
+    Ok(Value::array(vec![
+        Value::Float(width),
+        Value::Float(height),
+    ]))
 }
 
 fn measure_element_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let [_element, min_w, max_w, min_h, max_h] = args else {
-        return Err(err("measure_element(element, min_w, max_w, min_h, max_h) expected"));
+        return Err(err(
+            "measure_element(element, min_w, max_w, min_h, max_h) expected",
+        ));
     };
     let min_w = numeric_to_f64(min_w)?;
     let max_w = numeric_to_f64(max_w)?;
@@ -610,7 +640,10 @@ fn measure_element_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
     let max_h = numeric_to_f64(max_h)?;
     let width = if max_w > 0.0 { max_w } else { min_w };
     let height = if max_h > 0.0 { max_h } else { min_h };
-    Ok(Value::array(vec![Value::Float(width), Value::Float(height)]))
+    Ok(Value::array(vec![
+        Value::Float(width),
+        Value::Float(height),
+    ]))
 }
 
 fn numeric_to_f64(value: &Value) -> Result<f64, EvalError> {
@@ -754,7 +787,7 @@ fn numeric_to_f32(value: &Value) -> Option<f32> {
     match value {
         Value::Float(f) => Some(*f as f32),
         Value::Int(i) => Some(*i as f32),
-            _ => None,
+        _ => None,
     }
 }
 
@@ -922,7 +955,15 @@ fn draw_shadow(
             width: rect.width + spread * 2.0,
             height: rect.height + spread * 2.0,
         };
-        draw_rrect(buffer, width, height, pass_rect, spread, current_color, regions);
+        draw_rrect(
+            buffer,
+            width,
+            height,
+            pass_rect,
+            spread,
+            current_color,
+            regions,
+        );
     }
 }
 
@@ -1166,7 +1207,9 @@ fn write_socket_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 fn set_socket_option_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let [Value::Int(socket_id), Value::Str(option), Value::Int(value)] = args else {
-        return Err(err("__native_set_socket_option(socket, option, value) expected"));
+        return Err(err(
+            "__native_set_socket_option(socket, option, value) expected",
+        ));
     };
     let mut sockets = SOCKETS
         .get_or_init(|| Mutex::new(HashMap::new()))
@@ -1198,11 +1241,10 @@ fn fs_watch_create_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         return Err(err("__native_fs_watch_create(paths) expected"));
     };
     let (tx, rx) = mpsc::channel();
-    let mut watcher: RecommendedWatcher =
-        notify::recommended_watcher(move |res| {
-            let _ = tx.send(res);
-        })
-        .map_err(|e| err(e.to_string()))?;
+    let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res| {
+        let _ = tx.send(res);
+    })
+    .map_err(|e| err(e.to_string()))?;
     for path in paths_rc.read().unwrap_or_else(|e| e.into_inner()).iter() {
         let Value::Str(path) = path else {
             continue;
@@ -1216,7 +1258,13 @@ fn fs_watch_create_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
         .map_err(|_| err("watcher registry lock poisoned"))?
-        .insert(id, WatchEntry { _watcher: watcher, rx });
+        .insert(
+            id,
+            WatchEntry {
+                _watcher: watcher,
+                rx,
+            },
+        );
     Ok(Value::Int(id))
 }
 
@@ -1228,7 +1276,9 @@ fn fs_watch_poll_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     let Some(watchers) = WATCHERS.get() else {
         return Ok(Value::array(events));
     };
-    let mut watchers = watchers.lock().map_err(|_| err("watcher registry lock poisoned"))?;
+    let mut watchers = watchers
+        .lock()
+        .map_err(|_| err("watcher registry lock poisoned"))?;
     let Some(entry) = watchers.get_mut(watcher_id) else {
         return Ok(Value::array(events));
     };
@@ -1241,7 +1291,8 @@ fn fs_watch_poll_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
             _ => "other",
         };
         let path = event
-            .paths.first()
+            .paths
+            .first()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
         let mut evt = HashMap::new();
@@ -1316,7 +1367,9 @@ fn regex_match_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
         let mut out = Vec::new();
         for i in 0..caps.len() {
             out.push(Value::Str(
-                caps.get(i).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                caps.get(i)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default(),
             ));
         }
         Ok(Value::array(out))
@@ -1503,7 +1556,7 @@ fn tls_is_verified_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 fn build_server_config(cert_pem: &str, key_pem: &str) -> Result<Arc<ServerConfig>, EvalError> {
     let certs = read_certs(cert_pem)?;
     let key = read_private_key(key_pem)?;
-    
+
     // NOTE: This configuration does not verify client certificates.
     // For production use with TLS client authentication, use:
     //   .with_client_cert_verifier(Arc::new(WebPkiClientVerifier::builder(...)))
@@ -1534,7 +1587,11 @@ fn read_private_key(pem: &str) -> Result<PrivateKeyDer<'static>, EvalError> {
 fn extract_socket_id(conn: &Value) -> Result<i64, EvalError> {
     match conn {
         Value::Int(id) => Ok(*id),
-        Value::Object(map_rc) => match map_rc.read().unwrap_or_else(|e| e.into_inner()).get("socket") {
+        Value::Object(map_rc) => match map_rc
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get("socket")
+        {
             Some(Value::Int(id)) => Ok(*id),
             _ => Err(err("connection missing socket id")),
         },

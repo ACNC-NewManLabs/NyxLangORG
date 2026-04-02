@@ -3,5 +3,7 @@
 
 pub mod mutations {
     pub struct CodeBlock;
-    pub fn verify_integrity(_code: &CodeBlock) -> bool { true }
+    pub fn verify_integrity(_code: &CodeBlock) -> bool {
+        true
+    }
 }

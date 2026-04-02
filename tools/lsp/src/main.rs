@@ -1,5 +1,5 @@
 //! Nyx Language Server Protocol (LSP) Implementation
-//! 
+//!
 //! Provides IDE integration for Nyx including:
 //! - Syntax highlighting (via semantic tokens)
 //! - Intelligent autocomplete
@@ -28,11 +28,11 @@ fn main() {
 
     // Create connection (stdio)
     let (connection, io_threads) = Connection::stdio();
-    
+
     // Document store
-    let documents: Arc<parking_lot::RwLock<HashMap<Url, DocumentAnalyzer>>> = 
+    let documents: Arc<parking_lot::RwLock<HashMap<Url, DocumentAnalyzer>>> =
         Arc::new(parking_lot::RwLock::new(HashMap::new()));
-    
+
     // Global symbol index
     let index = Arc::new(parking_lot::RwLock::new(GlobalIndex::new()));
 
@@ -62,12 +62,12 @@ fn main() {
 }
 
 fn handle_request(
-    request: Request, 
+    request: Request,
     documents: Arc<parking_lot::RwLock<HashMap<Url, DocumentAnalyzer>>>,
-    index: Arc<parking_lot::RwLock<GlobalIndex>>
+    index: Arc<parking_lot::RwLock<GlobalIndex>>,
 ) -> Option<Response> {
     let id = request.id.clone();
-    
+
     match request.method.as_str() {
         "textDocument/completion" => {
             let params: lsp_types::CompletionParams = match serde_json::from_value(request.params) {
@@ -77,16 +77,22 @@ fn handle_request(
             let docs = documents.read();
             if let Some(doc) = docs.get(&params.text_document_position.text_document.uri) {
                 let index_read = index.read();
-                let items = completion::get_completions(doc.source(), params.text_document_position.position, &index_read, doc);
+                let items = completion::get_completions(
+                    doc.source(),
+                    params.text_document_position.position,
+                    &index_read,
+                    doc,
+                );
                 return Some(Response::new_ok(id, items));
             }
             None
         }
         "textDocument/definition" => {
-            let params: lsp_types::TextDocumentPositionParams = match serde_json::from_value(request.params) {
-                Ok(p) => p,
-                Err(_) => return None,
-            };
+            let params: lsp_types::TextDocumentPositionParams =
+                match serde_json::from_value(request.params) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
             let docs = documents.read();
             if let Some(doc) = docs.get(&params.text_document.uri) {
                 let index_read = index.read();
@@ -98,25 +104,30 @@ fn handle_request(
             Some(Response::new_ok(id, null))
         }
         "textDocument/references" => {
-            let params: lsp_types::TextDocumentPositionParams = match serde_json::from_value(request.params) {
-                Ok(p) => p,
-                Err(_) => return None,
-            };
+            let params: lsp_types::TextDocumentPositionParams =
+                match serde_json::from_value(request.params) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
             let docs = documents.read();
             if let Some(doc) = docs.get(&params.text_document.uri) {
                 let index_read = index.read();
                 let locations = doc.find_references(params.position, &index_read);
-                let arr: Vec<serde_json::Value> = locations.into_iter().map(|l| serde_json::to_value(l).unwrap_or(serde_json::Value::Null)).collect();
+                let arr: Vec<serde_json::Value> = locations
+                    .into_iter()
+                    .map(|l| serde_json::to_value(l).unwrap_or(serde_json::Value::Null))
+                    .collect();
                 return Some(Response::new_ok(id, arr));
             }
             let arr: Vec<serde_json::Value> = vec![];
             Some(Response::new_ok(id, arr))
         }
         "textDocument/hover" => {
-            let params: lsp_types::TextDocumentPositionParams = match serde_json::from_value(request.params) {
-                Ok(p) => p,
-                Err(_) => return None,
-            };
+            let params: lsp_types::TextDocumentPositionParams =
+                match serde_json::from_value(request.params) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
             let docs = documents.read();
             if let Some(doc) = docs.get(&params.text_document.uri) {
                 let index_read = index.read();
@@ -135,17 +146,21 @@ fn handle_request(
             let docs = documents.read();
             if let Some(doc) = docs.get(&params.text_document.uri) {
                 let actions = doc.get_code_actions(params.range);
-                let arr: Vec<serde_json::Value> = actions.into_iter().map(|a| serde_json::to_value(a).unwrap_or(serde_json::Value::Null)).collect();
+                let arr: Vec<serde_json::Value> = actions
+                    .into_iter()
+                    .map(|a| serde_json::to_value(a).unwrap_or(serde_json::Value::Null))
+                    .collect();
                 return Some(Response::new_ok(id, arr));
             }
             let arr: Vec<serde_json::Value> = vec![];
             Some(Response::new_ok(id, arr))
         }
         "textDocument/semanticTokens/full" => {
-            let params: lsp_types::SemanticTokensParams = match serde_json::from_value(request.params) {
-                Ok(p) => p,
-                Err(_) => return None,
-            };
+            let params: lsp_types::SemanticTokensParams =
+                match serde_json::from_value(request.params) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
             let docs = documents.read();
             if let Some(doc) = docs.get(&params.text_document.uri) {
                 let tokens = doc.get_semantic_tokens();
@@ -154,13 +169,14 @@ fn handle_request(
             None
         }
         "workspace/symbol" => {
-            let params: lsp_types::WorkspaceSymbolParams = match serde_json::from_value(request.params) {
-                Ok(p) => p,
-                Err(_) => return None,
-            };
+            let params: lsp_types::WorkspaceSymbolParams =
+                match serde_json::from_value(request.params) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
             let index_read = index.read();
             let symbols = index_read.all_symbols();
-            
+
             // Filter by query
             let query = params.query.to_lowercase();
             let mut matches = Vec::new();
@@ -179,14 +195,14 @@ fn handle_request(
             }
             return Some(Response::new_ok(id, matches));
         }
-        _ => None
+        _ => None,
     }
 }
 
 fn handle_notification(
     notification: lsp_server::Notification,
     documents: Arc<parking_lot::RwLock<HashMap<Url, DocumentAnalyzer>>>,
-    index: Arc<parking_lot::RwLock<GlobalIndex>>
+    index: Arc<parking_lot::RwLock<GlobalIndex>>,
 ) {
     match notification.method.as_str() {
         "initialized" => {
@@ -194,38 +210,38 @@ fn handle_notification(
             spawn_indexer(index);
         }
         "textDocument/didOpen" => {
-            let params: lsp_types::DidOpenTextDocumentParams = 
+            let params: lsp_types::DidOpenTextDocumentParams =
                 match serde_json::from_value(notification.params) {
                     Ok(p) => p,
                     Err(_) => return,
                 };
-            
+
             let uri = params.text_document.uri;
             let source = params.text_document.text;
-            
+
             log::info!("Opening document: {}", uri);
-            
+
             let mut docs = documents.write();
             let analyzer = DocumentAnalyzer::new(uri.clone(), &source);
-            
+
             // Update index
             let symbols = analyzer.extract_symbols();
             index.write().update_file(uri.clone(), symbols);
-            
+
             docs.insert(uri.clone(), analyzer);
         }
         "textDocument/didChange" => {
-            let params: lsp_types::DidChangeTextDocumentParams = 
+            let params: lsp_types::DidChangeTextDocumentParams =
                 match serde_json::from_value(notification.params) {
                     Ok(p) => p,
                     Err(_) => return,
                 };
-            
+
             let uri = params.text_document.uri;
-            
+
             if let Some(change) = params.content_changes.into_iter().last() {
                 log::info!("Changing document: {}", uri);
-                
+
                 let mut docs = documents.write();
                 if let Some(doc) = docs.get_mut(&uri) {
                     doc.update(&change.text);
@@ -236,21 +252,21 @@ fn handle_notification(
             }
         }
         "textDocument/didSave" => {
-            let params: lsp_types::DidSaveTextDocumentParams = 
+            let params: lsp_types::DidSaveTextDocumentParams =
                 match serde_json::from_value(notification.params) {
                     Ok(p) => p,
                     Err(_) => return,
                 };
-            
+
             let uri = params.text_document.uri;
             log::info!("Saving document: {}", uri);
-            
+
             let mut docs = documents.write();
             if let Some(doc) = docs.get_mut(&uri) {
                 if let Some(text) = params.text {
                     doc.update(&text);
                 }
-                
+
                 // Update index on save
                 let symbols = doc.extract_symbols();
                 index.write().update_file(uri.clone(), symbols);
@@ -267,33 +283,41 @@ fn spawn_indexer(index: Arc<parking_lot::RwLock<GlobalIndex>>) {
     std::thread::spawn(move || {
         let start = std::time::Instant::now();
         let mut files = Vec::new();
-        
+
         let walker = ignore::WalkBuilder::new("./").build();
         for result in walker {
             if let Ok(entry) = result {
                 if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                    if entry.path().extension().map(|ex| ex == "nyx").unwrap_or(false) {
+                    if entry
+                        .path()
+                        .extension()
+                        .map(|ex| ex == "nyx")
+                        .unwrap_or(false)
+                    {
                         files.push(entry.path().to_path_buf());
                     }
                 }
             }
         }
-        
+
         log::info!("Found {} Nyx files for indexing", files.len());
-        
+
         use rayon::prelude::*;
-        let results: Vec<(Url, Vec<index::Symbol>)> = files.into_par_iter().filter_map(|path| {
-            let source = std::fs::read_to_string(&path).ok()?;
-            let uri = Url::from_file_path(std::fs::canonicalize(&path).ok()?).ok()?;
-            let analyzer = DocumentAnalyzer::new(uri.clone(), &source);
-            Some((uri, analyzer.extract_symbols()))
-        }).collect();
-        
+        let results: Vec<(Url, Vec<index::Symbol>)> = files
+            .into_par_iter()
+            .filter_map(|path| {
+                let source = std::fs::read_to_string(&path).ok()?;
+                let uri = Url::from_file_path(std::fs::canonicalize(&path).ok()?).ok()?;
+                let analyzer = DocumentAnalyzer::new(uri.clone(), &source);
+                Some((uri, analyzer.extract_symbols()))
+            })
+            .collect();
+
         let mut idx = index.write();
         for (uri, symbols) in results {
             idx.update_file(uri, symbols);
         }
-        
+
         log::info!("Workspace indexing complete in {:?}", start.elapsed());
     });
 }

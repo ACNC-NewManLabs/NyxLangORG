@@ -1,17 +1,18 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use winit::event_loop::{EventLoop, ControlFlow};
+use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
-use winit::event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode};
 
-
+use crate::accessibility::semantics::DesktopAccessibilityBridge;
 use crate::devtools::protocol::DevtoolsEnvelope;
 use crate::graphics::backends::wgpu::renderer::WgpuRenderer;
-use crate::accessibility::semantics::DesktopAccessibilityBridge;
 
 use super::asset_host::AssetHost;
-use super::runtime_host::{HostError, PlatformEvent, RuntimeHost, SemanticsDelta, SurfaceConfig, SurfaceHandle};
+use super::runtime_host::{
+    HostError, PlatformEvent, RuntimeHost, SemanticsDelta, SurfaceConfig, SurfaceHandle,
+};
 
 // Removed Debug, Clone since EventLoop is neither
 pub struct DesktopHost {
@@ -43,7 +44,7 @@ impl DesktopHost {
 
     pub fn initialize(&mut self) -> Result<(), HostError> {
         let event_loop = EventLoop::new();
-        
+
         self.event_loop = Some(event_loop);
         Ok(())
     }
@@ -52,7 +53,9 @@ impl DesktopHost {
     where
         F: FnMut(Vec<PlatformEvent>) -> Result<(), HostError> + 'static,
     {
-        let event_loop = self.event_loop.take()
+        let event_loop = self
+            .event_loop
+            .take()
             .ok_or_else(|| HostError::new("NotInitialized"))?;
 
         let _windows = self.windows.clone();
@@ -88,11 +91,13 @@ impl DesktopHost {
         });
     }
 
-    fn handle_window_event(&self, window_id: winit::window::WindowId, event: WindowEvent) -> Option<PlatformEvent> {
+    fn handle_window_event(
+        &self,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) -> Option<PlatformEvent> {
         match event {
-            WindowEvent::CloseRequested => {
-                Some(PlatformEvent::Quit)
-            }
+            WindowEvent::CloseRequested => Some(PlatformEvent::Quit),
             WindowEvent::Resized(size) => {
                 self.update_window_size(window_id, size);
                 None
@@ -103,12 +108,10 @@ impl DesktopHost {
             WindowEvent::MouseInput { state, button, .. } => {
                 self.handle_mouse_input(window_id, state, button)
             }
-            WindowEvent::CursorMoved { position, .. } => {
-                Some(PlatformEvent::MouseMove {
-                    x: position.x as f32,
-                    y: position.y as f32,
-                })
-            }
+            WindowEvent::CursorMoved { position, .. } => Some(PlatformEvent::MouseMove {
+                x: position.x as f32,
+                y: position.y as f32,
+            }),
             WindowEvent::Focused(focused) => {
                 if focused {
                     Some(PlatformEvent::FocusGained)
@@ -120,7 +123,11 @@ impl DesktopHost {
         }
     }
 
-    fn handle_keyboard_input(&self, _window_id: winit::window::WindowId, input: KeyboardInput) -> Option<PlatformEvent> {
+    fn handle_keyboard_input(
+        &self,
+        _window_id: winit::window::WindowId,
+        input: KeyboardInput,
+    ) -> Option<PlatformEvent> {
         match input.state {
             ElementState::Pressed => {
                 if let Some(virtual_keycode) = input.virtual_keycode {
@@ -147,7 +154,12 @@ impl DesktopHost {
         }
     }
 
-    fn handle_mouse_input(&self, _window_id: winit::window::WindowId, state: ElementState, button: winit::event::MouseButton) -> Option<PlatformEvent> {
+    fn handle_mouse_input(
+        &self,
+        _window_id: winit::window::WindowId,
+        state: ElementState,
+        button: winit::event::MouseButton,
+    ) -> Option<PlatformEvent> {
         let button_u32 = match button {
             winit::event::MouseButton::Left => 0,
             winit::event::MouseButton::Right => 1,
@@ -156,20 +168,16 @@ impl DesktopHost {
         };
 
         match state {
-            ElementState::Pressed => {
-                Some(PlatformEvent::MouseDown {
-                    x: 0.0,
-                    y: 0.0,
-                    button: button_u32,
-                })
-            }
-            ElementState::Released => {
-                Some(PlatformEvent::MouseUp {
-                    x: 0.0,
-                    y: 0.0,
-                    button: button_u32,
-                })
-            }
+            ElementState::Pressed => Some(PlatformEvent::MouseDown {
+                x: 0.0,
+                y: 0.0,
+                button: button_u32,
+            }),
+            ElementState::Released => Some(PlatformEvent::MouseUp {
+                x: 0.0,
+                y: 0.0,
+                button: button_u32,
+            }),
         }
     }
 
@@ -242,7 +250,11 @@ impl DesktopHost {
         }
     }
 
-    fn update_window_size(&self, window_id: winit::window::WindowId, size: winit::dpi::PhysicalSize<u32>) {
+    fn update_window_size(
+        &self,
+        window_id: winit::window::WindowId,
+        size: winit::dpi::PhysicalSize<u32>,
+    ) {
         let mut windows = self.windows.lock().unwrap();
         if let Some(window) = windows.values_mut().find(|w| w.window.id() == window_id) {
             window.size = size;
@@ -261,7 +273,9 @@ impl DesktopHost {
 
 impl RuntimeHost for DesktopHost {
     fn create_surface(&mut self, config: SurfaceConfig) -> Result<SurfaceHandle, HostError> {
-        let event_loop = self.event_loop.as_ref()
+        let event_loop = self
+            .event_loop
+            .as_ref()
             .ok_or_else(|| HostError::new("NotInitialized"))?;
 
         let window = WindowBuilder::new()
@@ -279,7 +293,10 @@ impl RuntimeHost for DesktopHost {
             size: winit::dpi::PhysicalSize::new(config.width, config.height),
         };
 
-        self.windows.lock().unwrap().insert(surface_id, desktop_window);
+        self.windows
+            .lock()
+            .unwrap()
+            .insert(surface_id, desktop_window);
         Ok(SurfaceHandle(surface_id))
     }
 
@@ -317,24 +334,31 @@ impl RuntimeHost for DesktopHost {
 impl DesktopHost {
     pub fn initialize_renderer(&mut self, surface_id: u64) -> Result<(), HostError> {
         let windows = self.windows.lock().unwrap();
-        let _window = windows.get(&surface_id)
+        let _window = windows
+            .get(&surface_id)
             .ok_or_else(|| HostError::new(format!("InvalidSurface: {:?}", surface_id)))?;
 
         // Initialize wgpu renderer
         // Note: This is a simplified version - actual implementation would be async
         println!("Initializing renderer for surface {}", surface_id);
-        
+
         Ok(())
     }
 
-    pub fn render_frame(&mut self, surface_id: u64, display_list: &crate::graphics::renderer::display_list::DisplayList) -> Result<(), HostError> {
+    pub fn render_frame(
+        &mut self,
+        surface_id: u64,
+        display_list: &crate::graphics::renderer::display_list::DisplayList,
+    ) -> Result<(), HostError> {
         let mut windows = self.windows.lock().unwrap();
-        let window = windows.get_mut(&surface_id)
+        let window = windows
+            .get_mut(&surface_id)
             .ok_or_else(|| HostError::new(format!("InvalidSurface: {:?}", surface_id)))?;
 
         if let Some(renderer) = &mut window.renderer {
             // Render the frame
-            renderer.render(display_list)
+            renderer
+                .render(display_list)
                 .map_err(|e| HostError::new(e.to_string()))?;
         }
 
@@ -343,7 +367,8 @@ impl DesktopHost {
 
     pub fn get_window_size(&self, surface_id: u64) -> Result<(u32, u32), HostError> {
         let windows = self.windows.lock().unwrap();
-        let window = windows.get(&surface_id)
+        let window = windows
+            .get(&surface_id)
             .ok_or_else(|| HostError::new(format!("InvalidSurface: {:?}", surface_id)))?;
 
         Ok((window.size.width, window.size.height))
@@ -351,7 +376,8 @@ impl DesktopHost {
 
     pub fn set_window_title(&self, surface_id: u64, title: &str) -> Result<(), HostError> {
         let windows = self.windows.lock().unwrap();
-        let window = windows.get(&surface_id)
+        let window = windows
+            .get(&surface_id)
             .ok_or_else(|| HostError::new(format!("InvalidSurface: {:?}", surface_id)))?;
 
         window.window.set_title(title);
@@ -360,7 +386,8 @@ impl DesktopHost {
 
     pub fn request_redraw(&self, surface_id: u64) -> Result<(), HostError> {
         let windows = self.windows.lock().unwrap();
-        let window = windows.get(&surface_id)
+        let window = windows
+            .get(&surface_id)
             .ok_or_else(|| HostError::new(format!("InvalidSurface: {:?}", surface_id)))?;
 
         window.window.request_redraw();

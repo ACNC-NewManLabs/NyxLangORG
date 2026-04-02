@@ -2,7 +2,7 @@
 //!
 //! Provides interrupt management and timers for virtual CPUs.
 
-use super::devices::{VirtualDevice, DeviceType, DeviceResult};
+use super::devices::{DeviceResult, DeviceType, VirtualDevice};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApicTimerMode {
@@ -24,7 +24,7 @@ impl LocalApic {
     pub fn new(id: u32) -> Self {
         Self {
             id,
-            version: 0x14, // Version 1.4
+            version: 0x14,         // Version 1.4
             lvt_timer: 0x00010000, // Masked initially
             timer_initial_count: 0,
             timer_current_count: 0,
@@ -47,7 +47,7 @@ impl LocalApic {
 
     pub fn write_apic(&mut self, offset: u32, value: u32) {
         match offset {
-            0x0B0 => { /* EOI - End of Interrupt */ },
+            0x0B0 => { /* EOI - End of Interrupt */ }
             0x320 => self.lvt_timer = value,
             0x380 => {
                 self.timer_initial_count = value;
@@ -60,8 +60,12 @@ impl LocalApic {
 }
 
 impl VirtualDevice for LocalApic {
-    fn device_type(&self) -> DeviceType { DeviceType::Pic }
-    fn name(&self) -> &str { "local-apic" }
+    fn device_type(&self) -> DeviceType {
+        DeviceType::Pic
+    }
+    fn name(&self) -> &str {
+        "local-apic"
+    }
     fn read(&mut self, port: u16, _size: usize) -> DeviceResult<u64> {
         Ok(self.read_apic(port as u32) as u64)
     }
@@ -69,8 +73,10 @@ impl VirtualDevice for LocalApic {
         self.write_apic(port as u32, value as u32);
         Ok(())
     }
-    fn interrupt(&mut self, _irq: u8) -> DeviceResult<()> { Ok(()) }
-    
+    fn interrupt(&mut self, _irq: u8) -> DeviceResult<()> {
+        Ok(())
+    }
+
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }

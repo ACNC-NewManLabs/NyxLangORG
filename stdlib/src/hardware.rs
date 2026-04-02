@@ -8,6 +8,8 @@ pub mod hal {
 
 pub mod drivers {
     pub mod keyboard {
-        pub fn read_key() -> char { ' ' }
+        pub fn read_key() -> char {
+            ' '
+        }
     }
 }

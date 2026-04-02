@@ -1,4 +1,4 @@
-use crate::runtime::execution::nyx_vm::{NyxVm, Value, EvalError};
+use crate::runtime::execution::nyx_vm::{EvalError, NyxVm, Value};
 
 pub fn register_config_stdlib(vm: &mut NyxVm) {
     vm.register_native("std::config::get_version", get_version_native);
@@ -13,7 +13,9 @@ pub fn get_version_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, Eva
 /// Returns specific system limits (e.g., net_body_max).
 pub fn get_limit_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.is_empty() {
-        return Err(EvalError::new("get_limit(name) expects 1 argument".to_string()));
+        return Err(EvalError::new(
+            "get_limit(name) expects 1 argument".to_string(),
+        ));
     }
 
     let limit_name = match &args[0] {

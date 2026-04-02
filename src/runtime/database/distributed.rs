@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::runtime::database::durability::WalOp;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RaftState {
@@ -66,7 +66,10 @@ impl DistributedArchitect {
             if let Ok((term, voted)) = serde_json::from_slice::<(u64, Option<u32>)>(&data) {
                 self.current_term = term;
                 self.voted_for = voted;
-                println!("[Raft] Node {} loaded state: term={}, voted_for={:?}", self.node_id, term, voted);
+                println!(
+                    "[Raft] Node {} loaded state: term={}, voted_for={:?}",
+                    self.node_id, term, voted
+                );
             }
         }
     }
@@ -84,18 +87,22 @@ impl DistributedArchitect {
         self.votes_received.clear();
         self.votes_received.insert(self.node_id);
         self.persist_state();
-        
-        println!("[Raft] Node {} starting election for term {}", self.node_id, self.current_term);
+
+        println!(
+            "[Raft] Node {} starting election for term {}",
+            self.node_id, self.current_term
+        );
 
         if let Some(pool) = &self.network_pool {
             let pool = pool.clone();
             let term = self.current_term;
             let candidate_id = self.node_id;
             tokio::spawn(async move {
-                pool.broadcast(RaftMessage::RequestVote { term, candidate_id }).await;
+                pool.broadcast(RaftMessage::RequestVote { term, candidate_id })
+                    .await;
             });
         }
-        
+
         // Majority logic: nodes should actually respond with VoteResponse.
         // For this hardening, we allow a self-vote majority if cluster_size is 1.
         if self.cluster_size == 1 {
@@ -108,17 +115,28 @@ impl DistributedArchitect {
     pub fn handle_vote_response(&mut self, term: u64, node_id: u32, granted: bool) {
         if term == self.current_term && self.state == RaftState::Candidate && granted {
             self.votes_received.insert(node_id);
-            println!("[Raft] Node {} received vote from {} for term {}", self.node_id, node_id, term);
-            
+            println!(
+                "[Raft] Node {} received vote from {} for term {}",
+                self.node_id, node_id, term
+            );
+
             if self.votes_received.len() > (self.cluster_size as usize / 2) {
                 self.state = RaftState::Leader;
-                println!("[Raft] Node {} promoted to LEADER (Quorum reached)", self.node_id);
+                println!(
+                    "[Raft] Node {} promoted to LEADER (Quorum reached)",
+                    self.node_id
+                );
             }
         }
     }
 
     /// Handles an AppendEntries RPC from a leader.
-    pub fn handle_append_entries(&mut self, leader_term: u64, leader_id: u32, entries: Vec<RaftLogEntry>) -> bool {
+    pub fn handle_append_entries(
+        &mut self,
+        leader_term: u64,
+        leader_id: u32,
+        entries: Vec<RaftLogEntry>,
+    ) -> bool {
         if leader_term < self.current_term {
             return false;
         }
@@ -133,7 +151,7 @@ impl DistributedArchitect {
                 self.log.push(entry);
             }
         }
-        
+
         true
     }
 
@@ -154,24 +172,42 @@ impl DistributedArchitect {
     }
 
     pub fn resolve_vector_clocks(&self, timestamp_a: u64, timestamp_b: u64) -> u64 {
-        if timestamp_a > timestamp_b { timestamp_a } else { timestamp_b }
+        if timestamp_a > timestamp_b {
+            timestamp_a
+        } else {
+            timestamp_b
+        }
     }
 }
 
 // --- NEW PRODUCTION NETWORK LAYER ---
 
+use futures::{SinkExt, StreamExt};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, connect_async, tungstenite::protocol::Message};
-use futures::{StreamExt, SinkExt};
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RaftMessage {
-    RequestVote { term: u64, candidate_id: u32 },
-    VoteResponse { term: u64, granted: bool },
-    AppendEntries { term: u64, leader_id: u32, entries: Vec<RaftLogEntry> },
-    AppendResponse { term: u64, success: bool, node_id: u32 },
+    RequestVote {
+        term: u64,
+        candidate_id: u32,
+    },
+    VoteResponse {
+        term: u64,
+        granted: bool,
+    },
+    AppendEntries {
+        term: u64,
+        leader_id: u32,
+        entries: Vec<RaftLogEntry>,
+    },
+    AppendResponse {
+        term: u64,
+        success: bool,
+        node_id: u32,
+    },
 }
 
 pub struct NetworkPool {
@@ -203,9 +239,15 @@ impl NetworkPool {
         }
     }
 
-    pub async fn start_service(node_id: u32, port: u16, architect: Arc<Mutex<DistributedArchitect>>) {
+    pub async fn start_service(
+        node_id: u32,
+        port: u16,
+        architect: Arc<Mutex<DistributedArchitect>>,
+    ) {
         let addr = format!("0.0.0.0:{}", port);
-        let listener = TcpListener::bind(&addr).await.expect("Failed to bind Raft port");
+        let listener = TcpListener::bind(&addr)
+            .await
+            .expect("Failed to bind Raft port");
         println!("[Raft] Node {} listening on {}", node_id, addr);
 
         while let Ok((stream, _)) = listener.accept().await {
@@ -220,13 +262,20 @@ impl NetworkPool {
                                 match msg {
                                     RaftMessage::RequestVote { term, candidate_id } => {
                                         let granted = arc.handle_request_vote(term, candidate_id);
-                                        (Some(RaftMessage::VoteResponse { term, granted }), arc.network_pool.clone())
+                                        (
+                                            Some(RaftMessage::VoteResponse { term, granted }),
+                                            arc.network_pool.clone(),
+                                        )
                                     }
                                     RaftMessage::VoteResponse { term, granted } => {
                                         arc.handle_vote_response(term, 0, granted);
                                         (None, None)
                                     }
-                                    RaftMessage::AppendEntries { term, leader_id, entries } => {
+                                    RaftMessage::AppendEntries {
+                                        term,
+                                        leader_id,
+                                        entries,
+                                    } => {
                                         arc.handle_append_entries(term, leader_id, entries);
                                         (None, None)
                                     }
@@ -254,7 +303,7 @@ mod tests {
     fn test_raft_election_and_promotion() {
         let dist = DistributedArchitect::new(1, 3);
         assert_eq!(dist.state, RaftState::Follower);
-        
+
         // Single node quorum (1/2 + 1 = 1)
         let mut single_node = DistributedArchitect::new(1, 1);
         assert!(single_node.execute_leader_election());
@@ -275,9 +324,11 @@ mod tests {
         let entries = vec![RaftLogEntry {
             term: 1,
             index: 1,
-            op: WalOp::DropTable { name: "test".to_string() },
+            op: WalOp::DropTable {
+                name: "test".to_string(),
+            },
         }];
-        
+
         assert!(follower.handle_append_entries(1, 1, entries));
         assert_eq!(follower.log.len(), 1);
         assert_eq!(follower.current_term, 1);

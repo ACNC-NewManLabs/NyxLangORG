@@ -1,5 +1,5 @@
 //! NYX Core Library
-//! 
+//!
 //! The foundational layer that works without an OS.
 //! Provides essential types, traits, and utilities.
 
@@ -14,21 +14,21 @@ pub fn shutdown() {
 }
 
 // Internal modules
+pub mod iter;
+pub mod mem;
 pub mod option;
+pub mod primitive_extensions;
+pub mod ptr;
 pub mod result;
 pub mod traits;
-pub mod mem;
-pub mod ptr;
-pub mod iter;
-pub mod primitive_extensions;
 
 // Re-export core types from custom implementations
+pub use self::iter::*;
+pub use self::mem::*;
 pub use self::option::Option;
+pub use self::ptr::*;
 pub use self::result::Result;
 pub use self::traits::*;
-pub use self::mem::*;
-pub use self::ptr::*;
-pub use self::iter::*;
 
 #[cfg(test)]
 mod tests {

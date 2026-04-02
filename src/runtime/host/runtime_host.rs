@@ -3,9 +3,9 @@
 //! This module defines the core runtime host interface that abstracts
 //! over different platform backends (web, desktop, mobile, dev).
 
-use std::path::PathBuf;
 use crate::devtools::protocol::DevtoolsEnvelope;
 use crate::graphics::renderer::display_list::DisplayList;
+use std::path::PathBuf;
 
 /// Surface handle for rendering
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,7 +46,12 @@ pub enum PlatformEvent {
     /// Touch end
     TouchEnd { x: f32, y: f32, id: u64 },
     /// Scroll
-    Scroll { x: f32, y: f32, delta_x: f32, delta_y: f32 },
+    Scroll {
+        x: f32,
+        y: f32,
+        delta_x: f32,
+        delta_y: f32,
+    },
     /// Focus gained
     FocusGained,
     /// Focus lost
@@ -81,31 +86,37 @@ pub struct HostError {
 
 impl HostError {
     pub fn new(msg: impl Into<String>) -> Self {
-        Self { message: msg.into() }
+        Self {
+            message: msg.into(),
+        }
     }
 }
 
 pub trait RuntimeHost {
     /// Create a new rendering surface
     fn create_surface(&mut self, config: SurfaceConfig) -> Result<SurfaceHandle, HostError>;
-    
+
     /// Poll for platform events
     fn poll_events(&mut self) -> Result<Vec<PlatformEvent>, HostError>;
-    
+
     /// Read an asset by ID
     fn read_asset(&self, asset_id: &str) -> Result<Vec<u8>, HostError>;
-    
+
     /// Emit a devtools event
     fn emit_devtools(&self, event: DevtoolsEnvelope) -> Result<(), HostError>;
-    
+
     /// Publish semantics updates for accessibility
     fn publish_semantics(&self, delta: SemanticsDelta) -> Result<(), HostError>;
-    
+
     /// Watch paths for hot reload
     fn watch_paths(&mut self, paths: &[PathBuf]) -> Result<(), HostError>;
-    
+
     /// Render a frame to a surface
-    fn render(&mut self, surface: SurfaceHandle, display_list: &DisplayList) -> Result<(), HostError> {
+    fn render(
+        &mut self,
+        surface: SurfaceHandle,
+        display_list: &DisplayList,
+    ) -> Result<(), HostError> {
         let _ = surface;
         let _ = display_list;
         Ok(())
@@ -117,28 +128,32 @@ impl<T: RuntimeHost> RuntimeHost for Box<T> {
     fn create_surface(&mut self, config: SurfaceConfig) -> Result<SurfaceHandle, HostError> {
         (**self).create_surface(config)
     }
-    
+
     fn poll_events(&mut self) -> Result<Vec<PlatformEvent>, HostError> {
         (**self).poll_events()
     }
-    
+
     fn read_asset(&self, asset_id: &str) -> Result<Vec<u8>, HostError> {
         (**self).read_asset(asset_id)
     }
-    
+
     fn emit_devtools(&self, event: DevtoolsEnvelope) -> Result<(), HostError> {
         (**self).emit_devtools(event)
     }
-    
+
     fn publish_semantics(&self, delta: SemanticsDelta) -> Result<(), HostError> {
         (**self).publish_semantics(delta)
     }
-    
+
     fn watch_paths(&mut self, paths: &[PathBuf]) -> Result<(), HostError> {
         (**self).watch_paths(paths)
     }
-    
-    fn render(&mut self, surface: SurfaceHandle, display_list: &DisplayList) -> Result<(), HostError> {
+
+    fn render(
+        &mut self,
+        surface: SurfaceHandle,
+        display_list: &DisplayList,
+    ) -> Result<(), HostError> {
         (**self).render(surface, display_list)
     }
 }

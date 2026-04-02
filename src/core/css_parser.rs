@@ -26,7 +26,11 @@ pub struct CssParseError {
 
 impl std::fmt::Display for CssParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "error[{}]: {} (in '{}')", self.code, self.message, self.declaration)
+        write!(
+            f,
+            "error[{}]: {} (in '{}')",
+            self.code, self.message, self.declaration
+        )
     }
 }
 
@@ -50,7 +54,9 @@ pub fn parse_css(raw: &str) -> Result<Vec<CssDeclaration>, CssParseError> {
         // Find the first colon (not inside parentheses)
         let colon_pos = find_first_colon(decl).ok_or_else(|| CssParseError {
             code: "CSS001",
-            message: format!("Missing colon in CSS declaration — expected \"property: value\", got \"{decl}\""),
+            message: format!(
+                "Missing colon in CSS declaration — expected \"property: value\", got \"{decl}\""
+            ),
             declaration: decl.to_string(),
         })?;
 
@@ -131,7 +137,7 @@ pub fn split_value_segments(value: &str) -> Vec<ValueSegment> {
             segments.push(ValueSegment::Text(rest[..start].to_string()));
         }
         let inner_start = start + 2; // skip "${"
-        // Find matching closing brace (accounting for nesting)
+                                     // Find matching closing brace (accounting for nesting)
         let inner = &rest[inner_start..];
         let mut depth = 1usize;
         let mut end = 0usize;
@@ -237,7 +243,11 @@ mod tests {
     fn test_split_segments() {
         let segs = split_value_segments("1px solid ${color}");
         assert_eq!(segs.len(), 2);
-        if let ValueSegment::Text(t) = &segs[0] { assert_eq!(t, "1px solid "); }
-        if let ValueSegment::Interp(e) = &segs[1] { assert_eq!(e, "color"); }
+        if let ValueSegment::Text(t) = &segs[0] {
+            assert_eq!(t, "1px solid ");
+        }
+        if let ValueSegment::Interp(e) = &segs[1] {
+            assert_eq!(e, "color");
+        }
     }
 }

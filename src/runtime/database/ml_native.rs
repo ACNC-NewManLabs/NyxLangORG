@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use rayon::prelude::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureVersion {
@@ -49,7 +49,8 @@ impl MLNativeConvergence {
             return 0.0;
         }
 
-        let dot_product: f64 = vec_a.par_iter()
+        let dot_product: f64 = vec_a
+            .par_iter()
             .zip(vec_b.par_iter())
             .map(|(a, b)| a * b)
             .sum();
@@ -66,13 +67,15 @@ impl MLNativeConvergence {
 
     /// Detects statistical drift (Kolmogorov-Smirnov lite) between baseline and current data.
     pub fn check_skew_drift(&self, baseline_mean: f64, current_mean: f64) -> bool {
-        if baseline_mean == 0.0 { return false; }
+        if baseline_mean == 0.0 {
+            return false;
+        }
         let diff = (baseline_mean - current_mean).abs() / baseline_mean;
         diff > self.drift_threshold
     }
 }
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests {
@@ -83,7 +86,7 @@ mod tests {
         let mut ml = MLNativeConvergence::new();
         ml.register_feature("user_embedding".to_string(), vec![0.1, 0.2]);
         ml.register_feature("user_embedding".to_string(), vec![0.1, 0.3]);
-        
+
         let versions = ml.feature_store.get("user_embedding").unwrap();
         assert_eq!(versions.len(), 2);
         assert_eq!(versions[1].version, 2);

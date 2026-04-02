@@ -22,8 +22,12 @@ pub struct PackageBuild {
 }
 
 pub fn package_entry(entry_file: &Path, target: &str) -> Result<PackageBuild, RuntimeError> {
-    let entry_file = std::fs::canonicalize(entry_file)
-        .map_err(|e| RuntimeError::new(format!("failed to canonicalize {}: {e}", entry_file.display())))?;
+    let entry_file = std::fs::canonicalize(entry_file).map_err(|e| {
+        RuntimeError::new(format!(
+            "failed to canonicalize {}: {e}",
+            entry_file.display()
+        ))
+    })?;
     let root = package_root(&entry_file)?;
     let index = index_modules(&root)?;
     let mut ordered_modules = Vec::new();
@@ -104,7 +108,7 @@ fn package_root(entry_file: &Path) -> Result<PathBuf, RuntimeError> {
     let entry_dir = entry_file
         .parent()
         .ok_or_else(|| RuntimeError::new("entry file has no parent directory"))?;
-    
+
     // If entry_dir is empty, it means the file is in the current directory.
     // Use "." to ensure path methods like ancestors() and join() work as expected for fs operations.
     let search_root = if entry_dir.as_os_str().is_empty() {
@@ -139,13 +143,13 @@ fn collect_nyx_files(root: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<(
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             if name.starts_with('.') || name == "target" || name == "node_modules" {
                 continue;
             }
         }
-        
+
         if path.is_dir() {
             collect_nyx_files(&path, files)?;
         } else if path.extension().and_then(|ext| ext.to_str()) == Some("nyx") {

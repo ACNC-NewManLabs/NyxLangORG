@@ -1,6 +1,11 @@
 //! Unsafe Operations Module
 
-pub fn unsafe_block<F, R>(f: F) -> R where F: FnOnce() -> R { f() }
+pub fn unsafe_block<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    f()
+}
 
 #[allow(dead_code)]
 pub struct UnsafeCell<T> {
@@ -8,5 +13,9 @@ pub struct UnsafeCell<T> {
 }
 
 impl<T> UnsafeCell<T> {
-    pub const fn new(value: T) -> Self { Self { value: std::cell::UnsafeCell::new(value) } }
+    pub const fn new(value: T) -> Self {
+        Self {
+            value: std::cell::UnsafeCell::new(value),
+        }
+    }
 }

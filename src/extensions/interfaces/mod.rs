@@ -49,17 +49,33 @@ impl std::str::FromStr for Version {
             ));
         }
 
-        let major = parts[0]
-            .parse()
-            .map_err(|_| NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, "Invalid major version", ErrorCategory::Internal))?;
-        let minor = parts[1]
-            .parse()
-            .map_err(|_| NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, "Invalid minor version", ErrorCategory::Internal))?;
-        let patch = parts[2]
-            .parse()
-            .map_err(|_| NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, "Invalid patch version", ErrorCategory::Internal))?;
+        let major = parts[0].parse().map_err(|_| {
+            NyxError::new(
+                codes::INTERNAL_UNKNOWN_ERROR,
+                "Invalid major version",
+                ErrorCategory::Internal,
+            )
+        })?;
+        let minor = parts[1].parse().map_err(|_| {
+            NyxError::new(
+                codes::INTERNAL_UNKNOWN_ERROR,
+                "Invalid minor version",
+                ErrorCategory::Internal,
+            )
+        })?;
+        let patch = parts[2].parse().map_err(|_| {
+            NyxError::new(
+                codes::INTERNAL_UNKNOWN_ERROR,
+                "Invalid patch version",
+                ErrorCategory::Internal,
+            )
+        })?;
 
-        Ok(Self { major, minor, patch })
+        Ok(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -268,8 +284,8 @@ pub struct SandboxConfig {
 impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
-            max_memory: Some(256 * 1024 * 1024), // 256 MB
-            max_cpu_time: Some(5000), // 5 seconds
+            max_memory: Some(256 * 1024 * 1024),   // 256 MB
+            max_cpu_time: Some(5000),              // 5 seconds
             max_stack_size: Some(8 * 1024 * 1024), // 8 MB
             allow_network: false,
             allow_file_system: false,
@@ -448,7 +464,8 @@ pub trait RuntimeAPI {
     fn create_sandbox(&self, config: SandboxConfig) -> Result<Sandbox, NyxError>;
 
     /// Execute bytecode in a sandbox
-    fn execute_in_sandbox(&self, bytecode: &Bytecode, sandbox: &Sandbox) -> Result<Value, NyxError>;
+    fn execute_in_sandbox(&self, bytecode: &Bytecode, sandbox: &Sandbox)
+        -> Result<Value, NyxError>;
 
     /// Get runtime capabilities
     fn get_capabilities(&self) -> RuntimeCapabilities;
@@ -558,8 +575,7 @@ pub trait ModuleAPI {
 // ============================================================================
 
 /// Extension configuration loaded from nyx.toml
-#[derive(Debug, Clone, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct ExtensionConfig {
     /// Engine configurations
     pub engines: Vec<EngineConfig>,
@@ -568,7 +584,6 @@ pub struct ExtensionConfig {
     /// Standard library paths
     pub stdlib: Vec<String>,
 }
-
 
 /// Plugin configuration
 #[derive(Debug, Clone, Deserialize)]

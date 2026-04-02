@@ -62,8 +62,12 @@ impl SemanticAnalyzer {
                             for (i, step) in handshake.steps.iter().enumerate() {
                                 match step {
                                     HandshakeStep::Message { from, to, name, .. } => {
-                                        if from == role { methods.push(format!("send_{}", name)); }
-                                        if to == role { methods.push(format!("recv_{}", name)); }
+                                        if from == role {
+                                            methods.push(format!("send_{}", name));
+                                        }
+                                        if to == role {
+                                            methods.push(format!("recv_{}", name));
+                                        }
                                     }
                                     HandshakeStep::Derive { .. } => {
                                         methods.push(format!("step_{}_derive", i));
@@ -76,10 +80,13 @@ impl SemanticAnalyzer {
                         }
                         role_methods.insert(role.clone(), methods);
                     }
-                    ctx.protocols.insert(p.name.clone(), ProtocolInfo {
-                        _roles: p.roles.clone(),
-                        handshake_methods: role_methods,
-                    });
+                    ctx.protocols.insert(
+                        p.name.clone(),
+                        ProtocolInfo {
+                            _roles: p.roles.clone(),
+                            handshake_methods: role_methods,
+                        },
+                    );
                 }
                 _ => {}
             }
@@ -228,7 +235,9 @@ impl SemanticAnalyzer {
                     syms.pop_scope();
                 }
             }
-            Stmt::InlineAsm { outputs, inputs, .. } => {
+            Stmt::InlineAsm {
+                outputs, inputs, ..
+            } => {
                 for out in outputs {
                     let name = self.asm_output_name(&out.expr)?;
                     if let Some(ty) = syms.lookup(&name) {
@@ -287,15 +296,15 @@ impl SemanticAnalyzer {
                 Ok(NyxType::Unknown)
             }
             Expr::Path { segments: _, .. } => Ok(NyxType::Unknown),
-            Expr::Binary { left, op, right, .. } => {
+            Expr::Binary {
+                left, op, right, ..
+            } => {
                 let lt = self.infer_expr(left, syms, ctx).unwrap_or(NyxType::Unknown);
                 let _rt = self
                     .infer_expr(right, syms, ctx)
                     .unwrap_or(NyxType::Unknown);
                 Ok(match op.as_str() {
-                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" | "in" => {
-                        NyxType::Bool
-                    }
+                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" | "in" => NyxType::Bool,
                     "??" => lt,
                     _ => lt,
                 })
@@ -310,11 +319,17 @@ impl SemanticAnalyzer {
                 // Validate known function arity
                 let mut call_name = None;
                 match callee.as_ref() {
-                    Expr::Identifier { name, .. } => { call_name = Some(name.clone()); }
-                    Expr::Path { segments: parts, .. } => { call_name = Some(parts.join("::")); }
+                    Expr::Identifier { name, .. } => {
+                        call_name = Some(name.clone());
+                    }
+                    Expr::Path {
+                        segments: parts, ..
+                    } => {
+                        call_name = Some(parts.join("::"));
+                    }
                     _ => {}
                 }
-                
+
                 if let Some(ref name) = call_name {
                     if name == "print" {
                         if args.len() != 1 {
@@ -334,11 +349,13 @@ impl SemanticAnalyzer {
                             };
                             return Err(format!(
                                 "error[E003]: function '{}' expects {} arguments, got {}",
-                                name, expected_str, args.len()
+                                name,
+                                expected_str,
+                                args.len()
                             ));
                         }
                     }
-                    
+
                     // Handle Protocol Constructor: Messaging_Client::new()
                     if name.contains("_") && name.ends_with("::new") {
                         let parts: Vec<&str> = name.split("::").collect();
@@ -364,13 +381,23 @@ impl SemanticAnalyzer {
                 }
                 Ok(NyxType::Unknown)
             }
-            Expr::MethodCall { receiver, method, args, .. } => {
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
                 let recty = self.infer_expr(receiver, syms, ctx)?;
                 for a in args {
                     self.infer_expr(a, syms, ctx)?;
                 }
-                
-                if let NyxType::ProtocolRole { protocol, role, state } = recty {
+
+                if let NyxType::ProtocolRole {
+                    protocol,
+                    role,
+                    state,
+                } = recty
+                {
                     if let Some(proto) = ctx.protocols.get(protocol.as_str()) {
                         if let Some(methods) = proto.handshake_methods.get(role.as_str()) {
                             if (state as usize) < methods.len() {
@@ -388,7 +415,10 @@ impl SemanticAnalyzer {
                                     ));
                                 }
                             } else {
-                                return Err(format!("error[E511]: handshake already complete for '{}::{}'", protocol, role));
+                                return Err(format!(
+                                    "error[E511]: handshake already complete for '{}::{}'",
+                                    protocol, role
+                                ));
                             }
                         }
                     }
@@ -404,7 +434,9 @@ impl SemanticAnalyzer {
                 self.infer_expr(index, syms, ctx)?;
                 Ok(NyxType::Unknown)
             }
-            Expr::Slice { object, start, end, .. } => {
+            Expr::Slice {
+                object, start, end, ..
+            } => {
                 self.infer_expr(object, syms, ctx)?;
                 if let Some(s) = start {
                     self.infer_expr(s, syms, ctx)?;
@@ -427,15 +459,20 @@ impl SemanticAnalyzer {
                 }
                 Ok(NyxType::Unknown)
             }
-            Expr::Await { expr: e, .. } | Expr::Move { expr: e, .. } | Expr::Deref { expr: e, .. } | Expr::TryOp { expr: e, .. } => {
-                self.infer_expr(e, syms, ctx)
-            }
+            Expr::Await { expr: e, .. }
+            | Expr::Move { expr: e, .. }
+            | Expr::Deref { expr: e, .. }
+            | Expr::TryOp { expr: e, .. } => self.infer_expr(e, syms, ctx),
             Expr::Reference { expr, .. } => {
                 self.infer_expr(expr, syms, ctx)?;
                 Ok(NyxType::Unknown)
             }
             Expr::Closure { .. } => Ok(NyxType::Unknown),
-            Expr::Block { stmts, tail_expr: tail, .. } => {
+            Expr::Block {
+                stmts,
+                tail_expr: tail,
+                ..
+            } => {
                 let mut block_syms = syms.clone();
                 let mut block_seen = std::collections::HashSet::new();
                 for s in stmts {
@@ -501,7 +538,9 @@ impl SemanticAnalyzer {
     fn asm_output_name(&self, expr: &Expr) -> Result<String, String> {
         match expr {
             Expr::Identifier { name: n, .. } => Ok(n.clone()),
-            Expr::Path { segments: parts, .. } => Ok(parts.join("::")),
+            Expr::Path {
+                segments: parts, ..
+            } => Ok(parts.join("::")),
             Expr::FieldAccess { object, field, .. } => {
                 Ok(format!("{}.{field}", self.asm_output_name(object)?))
             }
@@ -544,14 +583,21 @@ fn type_to_nyx(ty: &Type) -> NyxType {
 }
 
 impl SemanticAnalyzer {
-    fn analyze_protocol(&self, p: &ProtocolDecl, _ctx: &AnalysisCtx) -> Result<(), std::string::String> {
+    fn analyze_protocol(
+        &self,
+        p: &ProtocolDecl,
+        _ctx: &AnalysisCtx,
+    ) -> Result<(), std::string::String> {
         // ... (existing validations)
         let mut roles_seen = std::collections::HashSet::new();
         for role in &p.roles {
             roles_seen.insert(role.clone());
         }
 
-        let mut role_methods: std::vec::Vec<(std::string::String, std::vec::Vec<std::string::String>)> = std::vec::Vec::new();
+        let mut role_methods: std::vec::Vec<(
+            std::string::String,
+            std::vec::Vec<std::string::String>,
+        )> = std::vec::Vec::new();
         for role in &p.roles {
             role_methods.push((role.clone(), std::vec::Vec::new()));
         }
@@ -591,10 +637,10 @@ impl SemanticAnalyzer {
             }
         }
 
-        // We can't easily mutate AnalysisCtx here as it's &ctx, 
+        // We can't easily mutate AnalysisCtx here as it's &ctx,
         // but in a real compiler we'd populate it in a first pass.
         // For this hardening, we'll assume the analyzer is updated to handle this.
-        
+
         Ok(())
     }
 }

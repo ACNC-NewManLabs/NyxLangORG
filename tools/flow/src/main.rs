@@ -1,8 +1,8 @@
 use clap::Parser;
 use colored::*;
+use nyx::core::ast::ast_nodes::{Expr, ItemKind, Program, Stmt};
 use nyx::core::lexer::lexer::Lexer;
 use nyx::core::parser::neuro_parser::NeuroParser;
-use nyx::core::ast::ast_nodes::{Program, ItemKind, Stmt, Expr};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -32,7 +32,9 @@ fn main() {
         std::process::exit(1);
     });
 
-    let registry = match nyx::core::registry::language_registry::LanguageRegistry::load("registry/language.json") {
+    let registry = match nyx::core::registry::language_registry::LanguageRegistry::load(
+        "registry/language.json",
+    ) {
         Ok(r) => r,
         Err(_) => nyx::core::registry::language_registry::LanguageRegistry::default(),
     };
@@ -45,7 +47,7 @@ fn main() {
             return;
         }
     };
-    
+
     let grammar = nyx::core::parser::grammar_engine::GrammarEngine::from_registry(&registry);
     let mut parser = NeuroParser::new(grammar);
     let program = match parser.parse(&tokens) {
@@ -67,7 +69,7 @@ fn main() {
 
 fn build_call_graph(program: &Program) -> HashMap<String, HashSet<String>> {
     let mut graph = HashMap::new();
-    
+
     for item in &program.items {
         if let ItemKind::Function(f) = &item.kind {
             let mut calls = HashSet::new();
@@ -75,7 +77,7 @@ fn build_call_graph(program: &Program) -> HashMap<String, HashSet<String>> {
             graph.insert(f.name.clone(), calls);
         }
     }
-    
+
     graph
 }
 
@@ -85,7 +87,11 @@ fn find_calls_in_stmts(stmts: &[Stmt], calls: &mut HashSet<String>) {
             Stmt::Expr(e) | Stmt::Return { expr: Some(e), .. } | Stmt::Let { expr: e, .. } => {
                 find_calls_in_expr(e, calls);
             }
-            Stmt::If { branches, else_body, .. } => {
+            Stmt::If {
+                branches,
+                else_body,
+                ..
+            } => {
                 for branch in branches {
                     find_calls_in_stmts(&branch.body, calls);
                 }

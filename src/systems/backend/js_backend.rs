@@ -36,7 +36,7 @@ impl JsBackend {
 
             let mut state_id = 0;
             let mut label_to_state = std::collections::HashMap::new();
-            
+
             for instr in &func.instructions {
                 if let Instruction::Label(lbl) = instr {
                     state_id += 1;
@@ -67,7 +67,7 @@ impl JsBackend {
                         let l = self.val_to_js(lhs);
                         let r = self.val_to_js(rhs);
                         let safe_dst = dst.replace("::", "_");
-                        
+
                         if matches!(op, BinaryOp::Not) {
                             js.push_str(&format!("        var {} = !({});\n", safe_dst, r));
                         } else {
@@ -92,16 +92,25 @@ impl JsBackend {
                                 BinaryOp::Shr => ">>",
                                 BinaryOp::Not => "!",
                             };
-                            js.push_str(&format!("        var {} = {} {} {};\n", safe_dst, l, op_str, r));
+                            js.push_str(&format!(
+                                "        var {} = {} {} {};\n",
+                                safe_dst, l, op_str, r
+                            ));
                         }
                     }
                     Instruction::Call { dst, callee, args } => {
-                        let arg_strs: Vec<String> = args.iter().map(|a| self.val_to_js(a)).collect();
+                        let arg_strs: Vec<String> =
+                            args.iter().map(|a| self.val_to_js(a)).collect();
                         let safe_dst = dst.replace("::", "_");
-                        
+
                         let safe_callee = callee.replace("::", "_");
-                        
-                        js.push_str(&format!("        var {} = {}({});\n", safe_dst, safe_callee, arg_strs.join(", ")));
+
+                        js.push_str(&format!(
+                            "        var {} = {}({});\n",
+                            safe_dst,
+                            safe_callee,
+                            arg_strs.join(", ")
+                        ));
                     }
                     Instruction::StructInit {
                         dst,
@@ -125,10 +134,7 @@ impl JsBackend {
                         ));
                     }
                     Instruction::StructGet {
-                        dst,
-                        base,
-                        field,
-                        ..
+                        dst, base, field, ..
                     } => {
                         let safe_dst = dst.replace("::", "_");
                         let safe_base = base.replace("::", "_");
@@ -149,12 +155,11 @@ impl JsBackend {
                         let safe_base = base.replace("::", "_");
                         let idx = self.val_to_js(index);
                         let val = self.val_to_js(value);
-                        js.push_str(&format!(
-                            "        {}[{}] = {};\n",
-                            safe_base, idx, val
-                        ));
+                        js.push_str(&format!("        {}[{}] = {};\n", safe_base, idx, val));
                     }
-                    Instruction::ArrayGet { dst, base, index, .. } => {
+                    Instruction::ArrayGet {
+                        dst, base, index, ..
+                    } => {
                         let safe_dst = dst.replace("::", "_");
                         let safe_base = base.replace("::", "_");
                         let idx = self.val_to_js(index);
@@ -163,7 +168,11 @@ impl JsBackend {
                             safe_dst, safe_base, idx
                         ));
                     }
-                    Instruction::InlineAsm { code, outputs, inputs } => {
+                    Instruction::InlineAsm {
+                        code,
+                        outputs,
+                        inputs,
+                    } => {
                         let input_vals: Vec<String> =
                             inputs.iter().map(|i| self.val_to_js(&i.value)).collect();
                         let inputs_js = format!("[{}]", input_vals.join(", "));
@@ -171,22 +180,18 @@ impl JsBackend {
                         if outputs.is_empty() {
                             js.push_str(&format!(
                                 "        nyx_inline_asm({}, {});\n",
-                                code_js,
-                                inputs_js
+                                code_js, inputs_js
                             ));
                         } else if outputs.len() == 1 {
                             let name = outputs[0].name.replace("::", "_");
                             js.push_str(&format!(
                                 "        var {} = nyx_inline_asm({}, {});\n",
-                                name,
-                                code_js,
-                                inputs_js
+                                name, code_js, inputs_js
                             ));
                         } else {
                             js.push_str(&format!(
                                 "        var __asm_out = nyx_inline_asm({}, {});\n",
-                                code_js,
-                                inputs_js
+                                code_js, inputs_js
                             ));
                             for (idx, outp) in outputs.iter().enumerate() {
                                 let name = outp.name.replace("::", "_");
@@ -206,7 +211,11 @@ impl JsBackend {
                         let id = label_to_state.get(lbl).unwrap();
                         js.push_str(&format!("        __state = {}; break;\n", id));
                     }
-                    Instruction::Branch { cond, then_label, else_label } => {
+                    Instruction::Branch {
+                        cond,
+                        then_label,
+                        else_label,
+                    } => {
                         let cond_str = self.val_to_js(cond);
                         let then_id = label_to_state.get(then_label).unwrap();
                         let else_id = label_to_state.get(else_label).unwrap();
@@ -216,7 +225,10 @@ impl JsBackend {
             }
             js.push_str("    }\n  }\n}\n\n");
             // Export the function out to the global window
-            js.push_str(&format!("if (typeof window !== 'undefined') window.{} = {};\n", func.name, func.name));
+            js.push_str(&format!(
+                "if (typeof window !== 'undefined') window.{} = {};\n",
+                func.name, func.name
+            ));
         }
 
         // Auto-execution for 'main'

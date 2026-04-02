@@ -10,7 +10,9 @@ pub struct Arc<T> {
 impl<T> Arc<T> {
     /// Create new Arc
     pub fn new(value: T) -> Arc<T> {
-        Arc { inner: StdArc::new(value) }
+        Arc {
+            inner: StdArc::new(value),
+        }
     }
 
     /// Get reference count
@@ -26,6 +28,8 @@ impl<T> Arc<T> {
 
 impl<T> Clone for Arc<T> {
     fn clone(&self) -> Arc<T> {
-        Arc { inner: self.inner.clone() }
+        Arc {
+            inner: self.inner.clone(),
+        }
     }
 }

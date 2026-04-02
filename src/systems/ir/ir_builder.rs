@@ -2,8 +2,7 @@ use crate::core::ast::ast_nodes::*;
 use crate::systems::ir::nyx_ir::*;
 use std::collections::HashMap;
 
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct IrBuilder {
     label_counter: usize,
     loop_stack: Vec<LoopLabels>,
@@ -20,7 +19,6 @@ pub struct IrBuilder {
     type_subst: Option<HashMap<String, IrType>>,
     defer_stack: Vec<Vec<Vec<Instruction>>>,
 }
-
 
 #[derive(Debug, Clone)]
 struct LoopLabels {
@@ -95,8 +93,11 @@ impl IrBuilder {
                     let trait_name = ib.trait_name.as_ref().map(|t| t.last_name().to_string());
                     for it in &ib.items {
                         if let ImplItem::Method(m) = it {
-                            let mangled =
-                                builder.method_mangled_name(&self_name, trait_name.as_deref(), &m.name);
+                            let mangled = builder.method_mangled_name(
+                                &self_name,
+                                trait_name.as_deref(),
+                                &m.name,
+                            );
                             let mut cloned = m.clone();
                             cloned.name = mangled.clone();
                             if cloned.generics.is_empty() {
@@ -118,11 +119,7 @@ impl IrBuilder {
 
         functions.append(&mut builder.synthetic_functions);
 
-        let mut structs: Vec<StructDef> = builder
-            .struct_defs
-            .values()
-            .cloned()
-            .collect();
+        let mut structs: Vec<StructDef> = builder.struct_defs.values().cloned().collect();
         structs.extend(builder.synthetic_structs.values().cloned());
         Ok(Module { structs, functions })
     }
@@ -140,7 +137,7 @@ impl IrBuilder {
         let prev_subst = self.type_subst.take();
         self.type_subst = subst.cloned();
         self.push_defer_scope();
-        
+
         let mut params = Vec::new();
         for p in &f.params {
             let ty = self.ast_type_to_ir(&p.param_type);
@@ -153,7 +150,7 @@ impl IrBuilder {
         for stmt in &f.body {
             self.lower_stmt(stmt, &mut instrs, &mut tmp)?;
         }
-        
+
         if !instrs
             .iter()
             .any(|i| matches!(i, Instruction::Return { .. }))
@@ -161,7 +158,7 @@ impl IrBuilder {
             self.emit_defers(&mut instrs);
             instrs.push(Instruction::Return { value: None });
         }
-        
+
         self.pop_defer_scope();
         let name = name_override.unwrap_or(&f.name).to_string();
         let func = IrFunction {
@@ -195,8 +192,7 @@ impl IrBuilder {
                 } = stmt
                 {
                     let ty = self.ast_type_to_ir(var_type);
-                    self.local_types
-                        .insert(name.clone(), ty);
+                    self.local_types.insert(name.clone(), ty);
                 }
                 self.propagate_closure_local(expr, name);
             }
@@ -213,7 +209,9 @@ impl IrBuilder {
                 }
                 self.propagate_closure_local(value, &name);
             }
-            Stmt::CompoundAssign { target, op, value, .. } => {
+            Stmt::CompoundAssign {
+                target, op, value, ..
+            } => {
                 let name = expr_to_local(target)?;
                 let lhs = Value::Local(name.clone());
                 let rhs = self.lower_expr(value, out, tmp)?;
@@ -364,7 +362,10 @@ impl IrBuilder {
                 self.loop_stack.pop();
             }
             Stmt::ForIn {
-                var, iter, body, span: _,
+                var,
+                iter,
+                body,
+                span: _,
             } => {
                 self.lower_for_in(var, iter, body, out, tmp)?;
             }
@@ -421,7 +422,10 @@ impl IrBuilder {
                 }
             }
             Stmt::Yield { .. } => {
-                return Err("error[E110]: yield is not yet supported in AOT compilation (IR lowering)".to_string());
+                return Err(
+                    "error[E110]: yield is not yet supported in AOT compilation (IR lowering)"
+                        .to_string(),
+                );
             }
         }
         Ok(())
@@ -436,9 +440,9 @@ impl IrBuilder {
     ) -> Result<Value, String> {
         match expr {
             Expr::IntLiteral { value: n, .. } => Ok(Value::Int(*n)),
-            Expr::BigIntLiteral { value: _, .. } => {
-                Err("error[E110]: big integer literals are not supported in IR lowering".to_string())
-            }
+            Expr::BigIntLiteral { value: _, .. } => Err(
+                "error[E110]: big integer literals are not supported in IR lowering".to_string(),
+            ),
             Expr::FloatLiteral { value: f, .. } => Ok(Value::Float(*f)),
             Expr::StringLiteral { value: s, .. } => Ok(Value::Str(s.clone())),
             Expr::BoolLiteral { value: b, .. } => Ok(Value::Bool(*b)),
@@ -447,8 +451,12 @@ impl IrBuilder {
             // css`` literals are evaluated by the VM, not the IR path.
             Expr::CssLiteral { value: _, .. } => Ok(Value::Null),
             Expr::Identifier { name: n, .. } => Ok(Value::Local(n.clone())),
-            Expr::Path { segments: parts, .. } => Ok(Value::Local(parts.join("::"))),
-            Expr::Binary { left, op, right, .. } => {
+            Expr::Path {
+                segments: parts, ..
+            } => Ok(Value::Local(parts.join("::"))),
+            Expr::Binary {
+                left, op, right, ..
+            } => {
                 let lv = self.lower_expr(left, out, tmp)?;
                 let rv = self.lower_expr(right, out, tmp)?;
                 if op == "??" {
@@ -637,13 +645,9 @@ impl IrBuilder {
             }
             Expr::FieldAccess { object, field, .. } => {
                 let base = expr_to_local(object)?;
-                let struct_ty = self
-                    .local_types
-                    .get(&base)
-                    .cloned()
-                    .ok_or_else(|| {
-                        format!("error[E110]: unknown struct type for '{base}' in field access")
-                    })?;
+                let struct_ty = self.local_types.get(&base).cloned().ok_or_else(|| {
+                    format!("error[E110]: unknown struct type for '{base}' in field access")
+                })?;
                 let struct_name = match struct_ty {
                     IrType::Struct(n) => n,
                     _ => {
@@ -668,10 +672,15 @@ impl IrBuilder {
                 Ok(Value::Temp(dst))
             }
             Expr::Cast { expr, .. } => self.lower_expr(expr, out, tmp),
-            Expr::Await { expr: e, .. } | Expr::Move { expr: e, .. } | Expr::Deref { expr: e, .. } | Expr::TryOp { expr: e, .. } => {
-                self.lower_expr(e, out, tmp)
-            }
-            Expr::Block { stmts, tail_expr: tail, .. } => {
+            Expr::Await { expr: e, .. }
+            | Expr::Move { expr: e, .. }
+            | Expr::Deref { expr: e, .. }
+            | Expr::TryOp { expr: e, .. } => self.lower_expr(e, out, tmp),
+            Expr::Block {
+                stmts,
+                tail_expr: tail,
+                ..
+            } => {
                 self.push_defer_scope();
                 for s in stmts {
                     self.lower_stmt(s, out, tmp)?;
@@ -739,7 +748,9 @@ impl IrBuilder {
                     .insert(dst.clone(), IrType::Struct(struct_name));
                 Ok(Value::Temp(dst))
             }
-            Expr::ArrayLiteral { elements: items, .. } => {
+            Expr::ArrayLiteral {
+                elements: items, ..
+            } => {
                 let elem_ty = self.infer_array_elem_type(items)?;
                 let len_val = Value::Int(items.len() as i64);
                 let dst = format!("_t{}", {
@@ -868,15 +879,22 @@ impl IrBuilder {
                 self.local_types.insert(dst.clone(), elem_ty);
                 Ok(Value::Temp(dst))
             }
-            Expr::Slice { .. } => Err("error[E110]: slice expressions are not supported in IR lowering".to_string()),
-            Expr::MethodCall { receiver, method, args, .. } => {
+            Expr::Slice { .. } => {
+                Err("error[E110]: slice expressions are not supported in IR lowering".to_string())
+            }
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
                 let recv_val = self.lower_expr(receiver, out, tmp)?;
                 let recv_ty = self.infer_expr_type(receiver)?;
-                let callee =
-                    self.resolve_method_callee(&recv_ty, method)
-                        .ok_or_else(|| {
-                            format!("error[E110]: unknown method '{}' for receiver", method)
-                        })?;
+                let callee = self
+                    .resolve_method_callee(&recv_ty, method)
+                    .ok_or_else(|| {
+                        format!("error[E110]: unknown method '{}' for receiver", method)
+                    })?;
                 let mut arg_exprs = Vec::with_capacity(args.len() + 1);
                 arg_exprs.push((**receiver).clone());
                 arg_exprs.extend(args.iter().cloned());
@@ -898,7 +916,9 @@ impl IrBuilder {
                 });
                 Ok(Value::Temp(dst))
             }
-            Expr::TupleLiteral { elements: items, .. } => {
+            Expr::TupleLiteral {
+                elements: items, ..
+            } => {
                 let mut elem_vals = Vec::new();
                 let mut elem_tys = Vec::new();
                 for item in items {
@@ -935,11 +955,7 @@ impl IrBuilder {
                 let captures = self.collect_closure_captures(body, params)?;
                 let mut capture_tys = Vec::new();
                 for cap in &captures {
-                    let ty = self
-                        .local_types
-                        .get(cap)
-                        .cloned()
-                        .unwrap_or(IrType::I64);
+                    let ty = self.local_types.get(cap).cloned().unwrap_or(IrType::I64);
                     capture_tys.push(ty);
                 }
 
@@ -958,16 +974,10 @@ impl IrBuilder {
                     name: env_name.clone(),
                     fields,
                 };
-                self.synthetic_structs
-                    .insert(env_name.clone(), env_def);
+                self.synthetic_structs.insert(env_name.clone(), env_def);
 
-                let closure_fn = self.lower_closure_fn(
-                    &fn_name,
-                    &captures,
-                    &capture_tys,
-                    params,
-                    body,
-                )?;
+                let closure_fn =
+                    self.lower_closure_fn(&fn_name, &captures, &capture_tys, params, body)?;
                 self.synthetic_functions.push(closure_fn);
 
                 let dst = format!("_t{}", {
@@ -1007,7 +1017,7 @@ impl IrBuilder {
                     *tmp += 1;
                     t
                 });
-                
+
                 for branch in branches {
                     let then_lbl = self.new_label("ifexpr_then");
                     let next_lbl = self.new_label("ifexpr_next");
@@ -1027,20 +1037,26 @@ impl IrBuilder {
                             val = self.lower_expr(e, out, tmp)?;
                         }
                     }
-                    out.push(Instruction::Let { name: dst.clone(), value: val });
+                    out.push(Instruction::Let {
+                        name: dst.clone(),
+                        value: val,
+                    });
                     out.push(Instruction::Jump(end_lbl.clone()));
                     out.push(Instruction::Label(next_lbl));
                 }
-                
+
                 // Else body
                 let mut else_val = Value::Null;
                 if let Some(body_expr) = else_body {
                     else_val = self.lower_expr(body_expr, out, tmp)?;
                 }
-                out.push(Instruction::Let { name: dst.clone(), value: else_val });
+                out.push(Instruction::Let {
+                    name: dst.clone(),
+                    value: else_val,
+                });
                 out.push(Instruction::Jump(end_lbl.clone()));
                 out.push(Instruction::Label(end_lbl));
-                
+
                 Ok(Value::Temp(dst))
             }
             Expr::BlockLiteral { .. }
@@ -1194,7 +1210,11 @@ impl IrBuilder {
         for (idx, arm) in arms.iter().enumerate() {
             let arm_lbl = self.new_label("match_arm");
             let last = idx + 1 == arms.len();
-            let fallback_lbl = if last { end_lbl.clone() } else { next_lbl.clone() };
+            let fallback_lbl = if last {
+                end_lbl.clone()
+            } else {
+                next_lbl.clone()
+            };
 
             let cond = self.lower_match_condition(&arm.pattern, &match_name, out, tmp)?;
             let cond = if let Some(guard) = &arm.guard {
@@ -1422,8 +1442,12 @@ impl IrBuilder {
     fn lower_literal_expr(&self, expr: &Expr) -> Result<Value, String> {
         match expr {
             Expr::IntLiteral { value: n, .. } => Ok(Value::Int(*n)),
-            Expr::BigIntLiteral { value: _, .. } => Err("error[E110]: big integer match literals not supported".into()),
-            Expr::FloatLiteral { value: _, .. } => Err("error[E110]: float match literals not yet supported".into()),
+            Expr::BigIntLiteral { value: _, .. } => {
+                Err("error[E110]: big integer match literals not supported".into())
+            }
+            Expr::FloatLiteral { value: _, .. } => {
+                Err("error[E110]: float match literals not yet supported".into())
+            }
             Expr::StringLiteral { value: _, .. } => {
                 Err("error[E110]: string match literals not yet supported".into())
             }
@@ -1521,7 +1545,10 @@ impl IrBuilder {
     fn match_is_exhaustive(&self, arms: &[MatchArm]) -> bool {
         arms.iter().any(|arm| {
             arm.guard.is_none()
-                && matches!(arm.pattern, MatchPattern::Wildcard | MatchPattern::Identifier(_))
+                && matches!(
+                    arm.pattern,
+                    MatchPattern::Wildcard | MatchPattern::Identifier(_)
+                )
         })
     }
 
@@ -1587,23 +1614,17 @@ impl IrBuilder {
                         }
                         Expr::BigIntLiteral { value: _, .. } => {
                             return Err(
-                                "error[E110]: range step must be a small integer literal".into(),
+                                "error[E110]: range step must be a small integer literal".into()
                             )
                         }
                         _ => {
-                            return Err(
-                                "error[E110]: range step must be an integer literal".into(),
-                            )
+                            return Err("error[E110]: range step must be an integer literal".into())
                         }
                     }
                 } else {
                     1
                 };
-                let compare_op = if step > 0 {
-                    BinaryOp::Lt
-                } else {
-                    BinaryOp::Gt
-                };
+                let compare_op = if step > 0 { BinaryOp::Lt } else { BinaryOp::Gt };
                 Ok(RangeIter {
                     start: start_v,
                     end: end_v,
@@ -1858,7 +1879,9 @@ impl IrBuilder {
     fn propagate_closure_local(&mut self, expr: &Expr, name: &str) {
         let src = match expr {
             Expr::Identifier { name: n, .. } => Some(n.clone()),
-            Expr::Path { segments: parts, .. } => Some(parts.join("::")),
+            Expr::Path {
+                segments: parts, ..
+            } => Some(parts.join("::")),
             _ => None,
         };
         if let Some(src) = src {
@@ -1904,13 +1927,15 @@ impl IrBuilder {
     ) {
         match expr {
             Expr::Identifier { name, .. } => {
-                if !locals.iter().any(|s| s.contains(name))
-                    && self.local_types.contains_key(name)
-                {
+                if !locals.iter().any(|s| s.contains(name)) && self.local_types.contains_key(name) {
                     captures.insert(name.clone());
                 }
             }
-            Expr::Block { stmts, tail_expr: tail, .. } => {
+            Expr::Block {
+                stmts,
+                tail_expr: tail,
+                ..
+            } => {
                 locals.push(std::collections::HashSet::new());
                 for s in stmts {
                     self.walk_stmt_for_captures(s, locals, captures);
@@ -1950,7 +1975,9 @@ impl IrBuilder {
                 self.walk_expr_for_captures(object, locals, captures);
                 self.walk_expr_for_captures(index, locals, captures);
             }
-            Expr::Slice { object, start, end, .. } => {
+            Expr::Slice {
+                object, start, end, ..
+            } => {
                 self.walk_expr_for_captures(object, locals, captures);
                 if let Some(s) = start {
                     self.walk_expr_for_captures(s, locals, captures);
@@ -1964,7 +1991,12 @@ impl IrBuilder {
                     self.walk_expr_for_captures(&f.value, locals, captures);
                 }
             }
-            Expr::ArrayLiteral { elements: items, .. } | Expr::TupleLiteral { elements: items, .. } => {
+            Expr::ArrayLiteral {
+                elements: items, ..
+            }
+            | Expr::TupleLiteral {
+                elements: items, ..
+            } => {
                 for it in items {
                     self.walk_expr_for_captures(it, locals, captures);
                 }
@@ -1973,7 +2005,11 @@ impl IrBuilder {
                 self.walk_expr_for_captures(value, locals, captures);
                 self.walk_expr_for_captures(len, locals, captures);
             }
-            Expr::IfExpr { branches, else_body, .. } => {
+            Expr::IfExpr {
+                branches,
+                else_body,
+                ..
+            } => {
                 for b in branches {
                     self.walk_expr_for_captures(&b.condition, locals, captures);
                     locals.push(std::collections::HashSet::new());
@@ -2046,7 +2082,11 @@ impl IrBuilder {
                     self.walk_expr_for_captures(e, locals, captures);
                 }
             }
-            Stmt::If { branches, else_body, .. } => {
+            Stmt::If {
+                branches,
+                else_body,
+                ..
+            } => {
                 for b in branches {
                     self.walk_expr_for_captures(&b.condition, locals, captures);
                     locals.push(std::collections::HashSet::new());
@@ -2063,7 +2103,9 @@ impl IrBuilder {
                     locals.pop();
                 }
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 self.walk_expr_for_captures(condition, locals, captures);
                 locals.push(std::collections::HashSet::new());
                 for s in body {
@@ -2078,7 +2120,9 @@ impl IrBuilder {
                 }
                 locals.pop();
             }
-            Stmt::ForIn { var, iter, body, .. } => {
+            Stmt::ForIn {
+                var, iter, body, ..
+            } => {
                 self.walk_expr_for_captures(iter, locals, captures);
                 locals.push(std::collections::HashSet::new());
                 if let Some(scope) = locals.last_mut() {
@@ -2105,7 +2149,9 @@ impl IrBuilder {
                     locals.pop();
                 }
             }
-            Stmt::InlineAsm { outputs, inputs, .. } => {
+            Stmt::InlineAsm {
+                outputs, inputs, ..
+            } => {
                 for o in outputs {
                     self.walk_expr_for_captures(&o.expr, locals, captures);
                 }
@@ -2147,11 +2193,10 @@ impl IrBuilder {
             });
         }
         for p in params {
-            let ty = p
-                .ty
-                .as_ref()
-                .map(|t| self.ast_type_to_ir(t))
-                .unwrap_or(IrType::I64);
+            let ty =
+                p.ty.as_ref()
+                    .map(|t| self.ast_type_to_ir(t))
+                    .unwrap_or(IrType::I64);
             self.local_types.insert(p.name.clone(), ty.clone());
             params_out.push(IrParam {
                 name: p.name.clone(),
@@ -2227,18 +2272,26 @@ impl IrBuilder {
 
     fn infer_expr_type(&mut self, expr: &Expr) -> Result<IrType, String> {
         Ok(match expr {
-            Expr::IntLiteral { value: _, .. } | Expr::BoolLiteral { value: _, .. } | Expr::CharLiteral { value: _, .. } => IrType::I64,
+            Expr::IntLiteral { value: _, .. }
+            | Expr::BoolLiteral { value: _, .. }
+            | Expr::CharLiteral { value: _, .. } => IrType::I64,
             Expr::BigIntLiteral { value: _, .. } => {
-                return Err("error[E110]: big integer literals are not supported in IR types".into())
+                return Err(
+                    "error[E110]: big integer literals are not supported in IR types".into(),
+                )
             }
             Expr::FloatLiteral { value: _, .. } => IrType::F64,
             Expr::StringLiteral { value: _, .. } => IrType::Ptr,
             Expr::StructLiteral { name, .. } => IrType::Struct(name.clone()),
-            Expr::ArrayLiteral { elements: items, .. } => {
+            Expr::ArrayLiteral {
+                elements: items, ..
+            } => {
                 let elem = self.infer_array_elem_type(items)?;
                 IrType::Array(Box::new(elem))
             }
-            Expr::TupleLiteral { elements: items, .. } => {
+            Expr::TupleLiteral {
+                elements: items, ..
+            } => {
                 let mut elem_tys = Vec::new();
                 for it in items {
                     elem_tys.push(self.infer_expr_type(it)?);
@@ -2246,11 +2299,9 @@ impl IrBuilder {
                 let name = self.ensure_tuple_struct(&elem_tys);
                 IrType::Struct(name)
             }
-            Expr::Identifier { name, .. } => self
-                .local_types
-                .get(name)
-                .cloned()
-                .unwrap_or(IrType::I64),
+            Expr::Identifier { name, .. } => {
+                self.local_types.get(name).cloned().unwrap_or(IrType::I64)
+            }
             Expr::Ternary {
                 then_expr,
                 else_expr,
@@ -2311,7 +2362,9 @@ struct RangeIter {
 fn expr_to_local(e: &Expr) -> Result<String, String> {
     match e {
         Expr::Identifier { name: n, .. } => Ok(n.clone()),
-        Expr::Path { segments: parts, .. } => Ok(parts.join("::")),
+        Expr::Path {
+            segments: parts, ..
+        } => Ok(parts.join("::")),
         Expr::FieldAccess { object, field, .. } => {
             Ok(format!("{}.{field}", expr_to_local(object)?))
         }

@@ -1,28 +1,28 @@
 //! Nyx Hypervisor - Virtual Machine Monitor
-//! 
+//!
 //! This module provides a complete virtualization platform capable of
 //! running operating systems inside Nyx without external hypervisors.
 
+pub mod apic;
+pub mod cmos;
 pub mod cpu;
-pub mod memory;
 pub mod devices;
-pub mod vm;
 pub mod hypercall;
+pub mod jit;
 #[cfg(target_os = "linux")]
 pub mod kvm;
-pub mod jit;
-pub mod virtio;
-pub mod pci;
 pub mod magic_ring;
-pub mod apic;
+pub mod memory;
+pub mod pci;
+pub mod virtio;
 pub mod virtio_block;
-pub mod cmos;
+pub mod vm;
 
-pub use cpu::{CpuEmulator, CpuState, Register, CpuMode, Architecture};
-pub use memory::{VirtualMemory, PageTable, GuestPhysicalAddr, HostVirtualAddr};
-pub use devices::{DeviceManager, VirtualDevice, ConsoleDevice, BlockDevice, NetworkDevice};
-pub use vm::{VirtualMachine, VmConfig, VmState};
+pub use cpu::{Architecture, CpuEmulator, CpuMode, CpuState, Register};
+pub use devices::{BlockDevice, ConsoleDevice, DeviceManager, NetworkDevice, VirtualDevice};
 pub use hypercall::{Hypercall, HypercallResult};
+pub use memory::{GuestPhysicalAddr, HostVirtualAddr, PageTable, VirtualMemory};
+pub use vm::{VirtualMachine, VmConfig, VmState};
 
 /// Maximum number of CPUs per VM
 pub const MAX_VM_CPUS: usize = 8;
@@ -59,7 +59,9 @@ impl std::fmt::Display for HypervisorError {
         match self {
             HypervisorError::VmCreationFailed(msg) => write!(f, "VM creation failed: {}", msg),
             HypervisorError::CpuInitFailed(msg) => write!(f, "CPU init failed: {}", msg),
-            HypervisorError::MemoryAllocationFailed(msg) => write!(f, "Memory allocation failed: {}", msg),
+            HypervisorError::MemoryAllocationFailed(msg) => {
+                write!(f, "Memory allocation failed: {}", msg)
+            }
             HypervisorError::DeviceError(msg) => write!(f, "Device error: {}", msg),
             HypervisorError::InvalidConfig(msg) => write!(f, "Invalid config: {}", msg),
             HypervisorError::EmulationError(msg) => write!(f, "Emulation error: {}", msg),
@@ -81,4 +83,3 @@ mod tests {
         assert!(init().is_ok());
     }
 }
-

@@ -71,7 +71,9 @@ fn main() {
         max_line: args.max_line,
     };
 
-    let files: Vec<PathBuf> = args.paths.iter()
+    let files: Vec<PathBuf> = args
+        .paths
+        .iter()
         .flat_map(|p| collect_nyx_files(p))
         .collect();
 
@@ -84,7 +86,7 @@ fn main() {
 
     let total = files.len();
     let mut changed = 0usize;
-    let mut errors  = 0usize;
+    let mut errors = 0usize;
 
     for path in &files {
         if args.verbose {
@@ -93,7 +95,9 @@ fn main() {
 
         match process_file(path, &config, args.check, args.diff, args.quiet) {
             Ok(was_changed) => {
-                if was_changed { changed += 1; }
+                if was_changed {
+                    changed += 1;
+                }
             }
             Err(e) => {
                 errors += 1;
@@ -107,26 +111,47 @@ fn main() {
         println!();
         if args.check {
             if changed == 0 {
-                println!("{} {} file{} already formatted.",
-                    "✓".green().bold(), total, plural(total));
+                println!(
+                    "{} {} file{} already formatted.",
+                    "✓".green().bold(),
+                    total,
+                    plural(total)
+                );
             } else {
-                println!("{} {}/{} file{} need formatting.",
-                    "✗".red().bold(), changed, total, plural(total));
+                println!(
+                    "{} {}/{} file{} need formatting.",
+                    "✗".red().bold(),
+                    changed,
+                    total,
+                    plural(total)
+                );
             }
         } else {
             let unchanged = total - changed - errors;
             if changed > 0 {
-                println!("{} Formatted {} file{}.",
-                    "✓".green().bold(), changed, plural(changed));
+                println!(
+                    "{} Formatted {} file{}.",
+                    "✓".green().bold(),
+                    changed,
+                    plural(changed)
+                );
             }
             if unchanged > 0 {
-                println!("{} {} file{} already up to date.",
-                    "·".dimmed(), unchanged, plural(unchanged));
+                println!(
+                    "{} {} file{} already up to date.",
+                    "·".dimmed(),
+                    unchanged,
+                    plural(unchanged)
+                );
             }
         }
         if errors > 0 {
-            println!("{} {} file{} could not be processed.",
-                "✗".red().bold(), errors, plural(errors));
+            println!(
+                "{} {} file{} could not be processed.",
+                "✗".red().bold(),
+                errors,
+                plural(errors)
+            );
         }
     }
 
@@ -145,7 +170,11 @@ fn collect_nyx_files(root: &Path) -> Vec<PathBuf> {
         if root.extension().map(|e| e == "nyx").unwrap_or(false) {
             return vec![root.to_path_buf()];
         } else {
-            eprintln!("{} Skipping non-.nyx file: {}", "⚠".yellow(), root.display());
+            eprintln!(
+                "{} Skipping non-.nyx file: {}",
+                "⚠".yellow(),
+                root.display()
+            );
             return vec![];
         }
     }
@@ -273,7 +302,11 @@ fn format_source(source: &str, config: &FormatConfig) -> Result<String, String> 
             last_was_blank = false;
         } else {
             // Space before this token?
-            let prev = if i > 0 { Some(&tokens[i - 1].kind) } else { None };
+            let prev = if i > 0 {
+                Some(&tokens[i - 1].kind)
+            } else {
+                None
+            };
             if space_before(kind, prev) {
                 out.push(' ');
             }
@@ -352,7 +385,10 @@ fn space_before(kind: &TokenKind, prev: Option<&TokenKind>) -> bool {
         TokenKind::LParen | TokenKind::LBracket => {
             // No space before `(` when following identifiers / keywords (function call)
             if let Some(p) = prev {
-                matches!(p, TokenKind::Identifier | TokenKind::RParen | TokenKind::RBracket)
+                matches!(
+                    p,
+                    TokenKind::Identifier | TokenKind::RParen | TokenKind::RBracket
+                )
             } else {
                 false
             }
@@ -396,7 +432,10 @@ fn space_before(kind: &TokenKind, prev: Option<&TokenKind>) -> bool {
         // Keywords always get space before them (except at line start)
         t if t.is_keyword() => {
             if let Some(p) = prev {
-                !matches!(p, TokenKind::LBrace | TokenKind::LParen | TokenKind::LBracket)
+                !matches!(
+                    p,
+                    TokenKind::LBrace | TokenKind::LParen | TokenKind::LBracket
+                )
             } else {
                 false
             }
@@ -413,10 +452,7 @@ fn space_before(kind: &TokenKind, prev: Option<&TokenKind>) -> bool {
             if let Some(p) = prev {
                 matches!(
                     p,
-                    TokenKind::Comma
-                    | TokenKind::Colon
-                    | TokenKind::Equal
-                    | TokenKind::LBrace
+                    TokenKind::Comma | TokenKind::Colon | TokenKind::Equal | TokenKind::LBrace
                 ) || p.is_keyword()
             } else {
                 false
@@ -435,7 +471,7 @@ fn print_diff(path: &Path, original: &str, formatted: &str) {
     println!();
 
     let orig_lines: Vec<&str> = original.lines().collect();
-    let fmt_lines: Vec<&str>  = formatted.lines().collect();
+    let fmt_lines: Vec<&str> = formatted.lines().collect();
     let max = orig_lines.len().max(fmt_lines.len());
 
     for i in 0..max {
@@ -463,11 +499,16 @@ fn print_diff(path: &Path, original: &str, formatted: &str) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn peek_non_ws(tokens: &[nyx::core::lexer::token::Token], from: usize) -> Option<&TokenKind> {
-    tokens[from..].iter().find(|t| {
-        !matches!(t.kind, TokenKind::Whitespace | TokenKind::Newline)
-    }).map(|t| &t.kind)
+    tokens[from..]
+        .iter()
+        .find(|t| !matches!(t.kind, TokenKind::Whitespace | TokenKind::Newline))
+        .map(|t| &t.kind)
 }
 
 fn plural(n: usize) -> &'static str {
-    if n == 1 { "" } else { "s" }
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
 }

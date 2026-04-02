@@ -18,7 +18,7 @@ pub mod reg {
     pub trait InputReg: Copy + 'static {}
     /// Marker trait for output registers
     pub trait OutputReg: Copy + 'static {}
-    
+
     // Common register types
     #[derive(Debug, Clone, Copy)]
     pub struct Rax;
@@ -52,7 +52,7 @@ pub mod reg {
     pub struct R14;
     #[derive(Debug, Clone, Copy)]
     pub struct R15;
-    
+
     impl InputReg for Rax {}
     impl InputReg for Rbx {}
     impl InputReg for Rcx {}
@@ -69,7 +69,7 @@ pub mod reg {
     impl InputReg for R13 {}
     impl InputReg for R14 {}
     impl InputReg for R15 {}
-    
+
     impl OutputReg for Rax {}
     impl OutputReg for Rbx {}
     impl OutputReg for Rcx {}
@@ -98,20 +98,32 @@ pub struct AsmOptions {
 }
 
 impl AsmOptions {
-    pub fn volatile(mut self) -> Self { self.volatile = true; self }
-    pub fn pure(mut self) -> Self { self.pure = true; self }
-    pub fn noreturn(mut self) -> Self { self.noreturn = true; self }
-    pub fn align_stack(mut self) -> Self { self.align_stack = true; self }
+    pub fn volatile(mut self) -> Self {
+        self.volatile = true;
+        self
+    }
+    pub fn pure(mut self) -> Self {
+        self.pure = true;
+        self
+    }
+    pub fn noreturn(mut self) -> Self {
+        self.noreturn = true;
+        self
+    }
+    pub fn align_stack(mut self) -> Self {
+        self.align_stack = true;
+        self
+    }
 }
 
 pub mod routines {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     use core::arch;
-    
+
     /// Disable CPU interrupts (privileged operation)
     /// # Safety
     /// This is a privileged CPU operation that requires ring 0 access
-    pub unsafe fn disable_interrupts() { 
+    pub unsafe fn disable_interrupts() {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             arch::asm!("cli", options(nomem, nostack, preserves_flags));
@@ -121,11 +133,11 @@ pub mod routines {
             // On non-x86 targets there is no standard user-mode interrupt flag control.
         }
     }
-    
+
     /// Enable CPU interrupts (privileged operation)
     /// # Safety
     /// This is a privileged CPU operation that requires ring 0 access
-    pub unsafe fn enable_interrupts() { 
+    pub unsafe fn enable_interrupts() {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             arch::asm!("sti", options(nomem, nostack, preserves_flags));
@@ -135,11 +147,11 @@ pub mod routines {
             // No-op on non-x86 targets.
         }
     }
-    
+
     /// Halt the CPU (privileged operation)
     /// # Safety
     /// This is a privileged CPU operation that requires ring 0 access
-    pub unsafe fn halt() { 
+    pub unsafe fn halt() {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             arch::asm!("hlt", options(nomem, nostack, preserves_flags));
@@ -149,11 +161,11 @@ pub mod routines {
             std::thread::park();
         }
     }
-    
+
     /// Get instruction pointer
     /// # Safety
     /// Reading IP in userspace is not directly possible
-    pub unsafe fn get_ip() -> usize { 
+    pub unsafe fn get_ip() -> usize {
         #[cfg(target_arch = "x86_64")]
         {
             let rip: usize;
@@ -176,19 +188,23 @@ pub mod routines {
             get_ip as usize
         }
     }
-    
+
     /// Get stack pointer
     pub fn get_sp() -> usize {
         #[cfg(target_arch = "x86_64")]
         {
             let sp: usize;
-            unsafe { arch::asm!("mov {0}, rsp", out(reg) sp, options(nomem, preserves_flags)); }
+            unsafe {
+                arch::asm!("mov {0}, rsp", out(reg) sp, options(nomem, preserves_flags));
+            }
             sp
         }
         #[cfg(target_arch = "x86")]
         {
             let sp: usize;
-            unsafe { arch::asm!("mov {0}, esp", out(reg) sp, options(nomem, preserves_flags)); }
+            unsafe {
+                arch::asm!("mov {0}, esp", out(reg) sp, options(nomem, preserves_flags));
+            }
             return sp;
         }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -197,19 +213,23 @@ pub mod routines {
             &local as *const u8 as usize
         }
     }
-    
+
     /// Get frame pointer
     pub fn get_fp() -> usize {
         #[cfg(target_arch = "x86_64")]
         {
             let fp: usize;
-            unsafe { arch::asm!("mov {0}, rbp", out(reg) fp, options(nomem, preserves_flags)); }
+            unsafe {
+                arch::asm!("mov {0}, rbp", out(reg) fp, options(nomem, preserves_flags));
+            }
             fp
         }
         #[cfg(target_arch = "x86")]
         {
             let fp: usize;
-            unsafe { arch::asm!("mov {0}, ebp", out(reg) fp, options(nomem, preserves_flags)); }
+            unsafe {
+                arch::asm!("mov {0}, ebp", out(reg) fp, options(nomem, preserves_flags));
+            }
             return fp;
         }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -218,31 +238,31 @@ pub mod routines {
             &local as *const u8 as usize
         }
     }
-    
+
     /// CPU pause instruction (for spin-wait loops)
     pub fn pause() {
         std::hint::spin_loop();
     }
-    
+
     /// Memory fence - load
     pub fn mfence() {
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     }
-    
+
     /// Memory fence - read
     pub fn rfence() {
         // On x86, read fence is a no-op since x86 has strong memory ordering
         // But we provide the instruction for code clarity
         core::sync::atomic::fence(core::sync::atomic::Ordering::Acquire);
     }
-    
+
     /// Memory fence - write
     pub fn wfence() {
         core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
     }
-    
+
     /// Get CPU identifier string
-    pub fn cpu_id() -> String { 
+    pub fn cpu_id() -> String {
         #[cfg(target_arch = "x86")]
         {
             use std::arch::x86::__cpuid;
@@ -253,8 +273,14 @@ pub mod routines {
                 r.ecx.to_le_bytes(),
             ]
             .concat();
-            let vendor = String::from_utf8_lossy(&bytes).trim_matches('\0').to_string();
-            return if vendor.is_empty() { "unknown".to_string() } else { vendor };
+            let vendor = String::from_utf8_lossy(&bytes)
+                .trim_matches('\0')
+                .to_string();
+            return if vendor.is_empty() {
+                "unknown".to_string()
+            } else {
+                vendor
+            };
         }
 
         #[cfg(target_arch = "x86_64")]
@@ -267,8 +293,14 @@ pub mod routines {
                 r.ecx.to_le_bytes(),
             ]
             .concat();
-            let vendor = String::from_utf8_lossy(&bytes).trim_matches('\0').to_string();
-            if vendor.is_empty() { "unknown".to_string() } else { vendor }
+            let vendor = String::from_utf8_lossy(&bytes)
+                .trim_matches('\0')
+                .to_string();
+            if vendor.is_empty() {
+                "unknown".to_string()
+            } else {
+                vendor
+            }
         }
 
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -276,9 +308,9 @@ pub mod routines {
             "unknown".to_string()
         }
     }
-    
+
     /// Check if running in 64-bit mode
-    pub fn is_64bit() -> bool { 
+    pub fn is_64bit() -> bool {
         cfg!(target_pointer_width = "64")
     }
 }
@@ -287,29 +319,29 @@ pub mod bit_ops {
     /// Count leading zeros
     /// # Safety
     /// Requires valid 32-bit input
-    pub unsafe fn clz(x: u32) -> u32 { 
-        x.leading_zeros() 
+    pub unsafe fn clz(x: u32) -> u32 {
+        x.leading_zeros()
     }
-    
+
     /// Count trailing zeros
     /// # Safety
     /// Requires valid 32-bit input
-    pub unsafe fn ctz(x: u32) -> u32 { 
-        x.trailing_zeros() 
+    pub unsafe fn ctz(x: u32) -> u32 {
+        x.trailing_zeros()
     }
-    
+
     /// Population count (count set bits)
     /// # Safety
     /// Requires valid 32-bit input
-    pub unsafe fn popcnt(x: u32) -> u32 { 
-        x.count_ones() 
+    pub unsafe fn popcnt(x: u32) -> u32 {
+        x.count_ones()
     }
-    
+
     /// Byte swap (reverse endianness)
     /// # Safety
     /// Requires valid 32-bit input
-    pub unsafe fn bswap(x: u32) -> u32 { 
-        x.swap_bytes() 
+    pub unsafe fn bswap(x: u32) -> u32 {
+        x.swap_bytes()
     }
 }
 
@@ -320,7 +352,7 @@ pub mod io {
     /// Read from input port
     /// # Safety
     /// This is a privileged I/O operation requiring port I/O permissions
-    pub unsafe fn inb(port: u16) -> u8 { 
+    pub unsafe fn inb(port: u16) -> u8 {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             let value: u8;
@@ -338,11 +370,11 @@ pub mod io {
             0
         }
     }
-    
+
     /// Write to output port
     /// # Safety
     /// This is a privileged I/O operation requiring port I/O permissions
-    pub unsafe fn outb(port: u16, value: u8) { 
+    pub unsafe fn outb(port: u16, value: u8) {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             arch::asm!(
@@ -357,11 +389,11 @@ pub mod io {
             let _ = (port, value);
         }
     }
-    
+
     /// Read 16-bit from input port
     /// # Safety
     /// This is a privileged I/O operation requiring port I/O permissions
-    pub unsafe fn inw(port: u16) -> u16 { 
+    pub unsafe fn inw(port: u16) -> u16 {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             let value: u16;
@@ -379,11 +411,11 @@ pub mod io {
             0
         }
     }
-    
+
     /// Write 16-bit to output port
     /// # Safety
     /// This is a privileged I/O operation requiring port I/O permissions
-    pub unsafe fn outw(port: u16, value: u16) { 
+    pub unsafe fn outw(port: u16, value: u16) {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             arch::asm!(
@@ -398,11 +430,11 @@ pub mod io {
             let _ = (port, value);
         }
     }
-    
+
     /// Read 32-bit from input port
     /// # Safety
     /// This is a privileged I/O operation requiring port I/O permissions
-    pub unsafe fn inl(port: u16) -> u32 { 
+    pub unsafe fn inl(port: u16) -> u32 {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             let value: u32;
@@ -420,11 +452,11 @@ pub mod io {
             0
         }
     }
-    
+
     /// Write 32-bit to output port
     /// # Safety
     /// This is a privileged I/O operation requiring port I/O permissions
-    pub unsafe fn outl(port: u16, value: u32) { 
+    pub unsafe fn outl(port: u16, value: u32) {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             arch::asm!(

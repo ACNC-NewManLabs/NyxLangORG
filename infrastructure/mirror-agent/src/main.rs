@@ -21,7 +21,10 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let args = Args::parse();
-    let url = format!("{}/api/v1/mirrors/snapshot", args.registry.trim_end_matches('/'));
+    let url = format!(
+        "{}/api/v1/mirrors/snapshot",
+        args.registry.trim_end_matches('/')
+    );
     let res = reqwest::blocking::get(url).map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("snapshot request failed: {}", res.status()));

@@ -31,7 +31,9 @@ impl<T> Unique<T> {
 impl<T> Drop for Unique<T> {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
-            unsafe { let _ = Box::from_raw(self.ptr); };
+            unsafe {
+                let _ = Box::from_raw(self.ptr);
+            };
         }
     }
 }

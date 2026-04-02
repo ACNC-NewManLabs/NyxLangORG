@@ -1,5 +1,5 @@
-use sha2::{Sha256, Digest};
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
+use sha2::{Digest, Sha256};
 
 pub struct AdvancedSecurity {
     pub zero_trust_jwt_active: bool,
@@ -62,7 +62,7 @@ mod tests {
         hasher.update(payload);
         hasher.update("NYX_SECRET_SALT");
         let sig = general_purpose::STANDARD.encode(hasher.finalize());
-        
+
         assert!(sec.verify_internal_token(payload, &sig));
         assert!(!sec.verify_internal_token(payload, "invalid_sig"));
     }

@@ -19,17 +19,24 @@ fn main() {
         return;
     }
 
-    println!("{}", "============================================================".yellow());
+    println!(
+        "{}",
+        "============================================================".yellow()
+    );
     println!("{} {}", "Disassembling:".bold(), args.file.display());
-    println!("{}", "============================================================".yellow());
+    println!(
+        "{}",
+        "============================================================".yellow()
+    );
 
-    let mut compiler = match Compiler::from_registry_files("registry/language.json", "registry/engines.json") {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("Warning: could not load registries, using default behavior.");
-            return;
-        }
-    };
+    let mut compiler =
+        match Compiler::from_registry_files("registry/language.json", "registry/engines.json") {
+            Ok(c) => c,
+            Err(_) => {
+                eprintln!("Warning: could not load registries, using default behavior.");
+                return;
+            }
+        };
 
     match compiler.compile_to_bytecode(&args.file) {
         Ok(module) => {
@@ -37,8 +44,11 @@ fn main() {
                 println!();
                 println!("{} {}", "Function:".blue().bold(), func.name.green());
                 println!("Arguments: {}", func.arity);
-                println!("{}", "------------------------------------------------------------".dimmed());
-                
+                println!(
+                    "{}",
+                    "------------------------------------------------------------".dimmed()
+                );
+
                 for (i, instr) in func.instructions.iter().enumerate() {
                     let opcode_str = format!("{:?}", instr.opcode);
                     println!(
@@ -47,15 +57,15 @@ fn main() {
                         opcode_str.bold(),
                         format!("(line {})", instr.line).dimmed()
                     );
-                    
+
                     // Display operands if any
                     // Note: This matches the simplified BytecodeInstr structure
                     if !instr.operands.is_empty() {
-                         print!("       Operands: ");
-                         for op in &instr.operands {
-                             print!("{:?} ", op);
-                         }
-                         println!();
+                        print!("       Operands: ");
+                        for op in &instr.operands {
+                            print!("{:?} ", op);
+                        }
+                        println!();
                     }
                 }
             }

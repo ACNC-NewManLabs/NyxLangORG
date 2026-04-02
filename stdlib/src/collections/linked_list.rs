@@ -8,7 +8,9 @@ pub struct LinkedList<T> {
 
 impl<T> LinkedList<T> {
     pub fn new() -> LinkedList<T> {
-        LinkedList { inner: StdLinkedList::new() }
+        LinkedList {
+            inner: StdLinkedList::new(),
+        }
     }
     pub fn push_back(&mut self, value: T) {
         self.inner.push_back(value);
@@ -22,12 +24,18 @@ impl<T> LinkedList<T> {
     pub fn pop_front(&mut self) -> Option<T> {
         self.inner.pop_front()
     }
-    pub fn len(&self) -> usize { self.inner.len() }
-    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 impl<T> Default for LinkedList<T> {
-    fn default() -> LinkedList<T> { LinkedList::new() }
+    fn default() -> LinkedList<T> {
+        LinkedList::new()
+    }
 }
 
 #[cfg(test)]

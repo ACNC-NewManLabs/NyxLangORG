@@ -26,10 +26,16 @@ impl AppLauncher {
 
     pub fn run_main(&mut self) -> Result<RuntimeValue, RuntimeError> {
         let frame_id = self.clock.begin_frame();
-        self.bootstrap
-            .trace
-            .emit(DevtoolsStream::Timeline, DevtoolsPayload::FrameStarted { frame_id });
-        let value = self.bootstrap.session.vm_mut().execute_main().map_err(RuntimeError::from)?;
+        self.bootstrap.trace.emit(
+            DevtoolsStream::Timeline,
+            DevtoolsPayload::FrameStarted { frame_id },
+        );
+        let value = self
+            .bootstrap
+            .session
+            .vm_mut()
+            .execute_main()
+            .map_err(RuntimeError::from)?;
         self.bootstrap.trace.emit(
             DevtoolsStream::Timeline,
             DevtoolsPayload::FrameEnded {

@@ -1,7 +1,7 @@
-use wgpu::*;
-use wgpu::util::{DeviceExt, BufferInitDescriptor};
-use crate::graphics::renderer::display_list::{DisplayList, DrawOp};
 use crate::graphics::renderer::atlas::TextureAtlas;
+use crate::graphics::renderer::display_list::{DisplayList, DrawOp};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::*;
 
 pub struct WgpuRenderer {
     device: Device,
@@ -12,7 +12,7 @@ pub struct WgpuRenderer {
     bind_group: BindGroup,
     uniform_buffer: Buffer,
     _texture_atlas: TextureAtlas,
-    
+
     // Performance tracking
     frame_count: u64,
     draw_calls: usize,
@@ -20,14 +20,16 @@ pub struct WgpuRenderer {
 }
 
 impl WgpuRenderer {
-    pub async fn new(window: &'static winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(
+        window: &'static winit::window::Window,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             dx12_shader_compiler: Default::default(),
         });
 
         let surface = unsafe { instance.create_surface(window) }.unwrap();
-        
+
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
@@ -50,7 +52,9 @@ impl WgpuRenderer {
             .map_err(|e| format!("Failed to create device: {}", e))?;
 
         let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = surface_caps.formats.iter()
+        let surface_format = surface_caps
+            .formats
+            .iter()
             .copied()
             .find(|f| f.is_srgb())
             .unwrap_or(surface_caps.formats[0]);
@@ -204,19 +208,34 @@ impl WgpuRenderer {
 
     pub fn render(&mut self, display_list: &DisplayList) -> Result<(), Box<dyn std::error::Error>> {
         let frame_start = std::time::Instant::now();
-        
+
         let output = self.surface.get_current_texture()?;
-        let view = output.texture.create_view(&TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&TextureViewDescriptor::default());
 
         // Update uniforms
         let transform = [
-            2.0 / self.config.width as f32, 0.0, 0.0, 0.0,
-            0.0, -2.0 / self.config.height as f32, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            -1.0, 1.0, 0.0, 1.0,
+            2.0 / self.config.width as f32,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -2.0 / self.config.height as f32,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            -1.0,
+            1.0,
+            0.0,
+            1.0,
         ];
 
-        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&transform));
+        self.queue
+            .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&transform));
 
         // Create vertex buffer from display list
         let vertices = self.display_list_to_vertices(display_list);
@@ -226,9 +245,11 @@ impl WgpuRenderer {
             usage: BufferUsages::VERTEX,
         });
 
-        let mut encoder = self.device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
         {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -268,50 +289,144 @@ impl WgpuRenderer {
 
     fn display_list_to_vertices(&self, display_list: &DisplayList) -> Vec<Vertex> {
         let mut vertices = Vec::new();
-        
+
         for op in &display_list.ops {
             match op {
-                DrawOp::SolidQuad { x, y, width, height, color } => {
+                DrawOp::SolidQuad {
+                    x,
+                    y,
+                    width,
+                    height,
+                    color,
+                } => {
                     let x0 = *x;
                     let y0 = *y;
                     let x1 = x0 + width;
                     let y1 = y0 + height;
-                    
-                    vertices.push(Vertex { position: [x0, y0], color: *color, uv: [0.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y0], color: *color, uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x0, y1], color: *color, uv: [0.0, 1.0] });
-                    vertices.push(Vertex { position: [x1, y0], color: *color, uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y1], color: *color, uv: [1.0, 1.0] });
-                    vertices.push(Vertex { position: [x0, y1], color: *color, uv: [0.0, 1.0] });
+
+                    vertices.push(Vertex {
+                        position: [x0, y0],
+                        color: *color,
+                        uv: [0.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color: *color,
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color: *color,
+                        uv: [0.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color: *color,
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y1],
+                        color: *color,
+                        uv: [1.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color: *color,
+                        uv: [0.0, 1.0],
+                    });
                 }
-                DrawOp::GlyphRun { x, y, glyphs: _, color } => {
+                DrawOp::GlyphRun {
+                    x,
+                    y,
+                    glyphs: _,
+                    color,
+                } => {
                     // Simplified glyph rendering
                     let x0 = *x;
                     let y0 = *y;
                     let x1 = x0 + 10.0; // Placeholder size
                     let y1 = y0 + 12.0;
-                    
-                    vertices.push(Vertex { position: [x0, y0], color: *color, uv: [0.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y0], color: *color, uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x0, y1], color: *color, uv: [0.0, 1.0] });
-                    vertices.push(Vertex { position: [x1, y0], color: *color, uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y1], color: *color, uv: [1.0, 1.0] });
-                    vertices.push(Vertex { position: [x0, y1], color: *color, uv: [0.0, 1.0] });
+
+                    vertices.push(Vertex {
+                        position: [x0, y0],
+                        color: *color,
+                        uv: [0.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color: *color,
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color: *color,
+                        uv: [0.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color: *color,
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y1],
+                        color: *color,
+                        uv: [1.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color: *color,
+                        uv: [0.0, 1.0],
+                    });
                 }
-                DrawOp::Image { x, y, width, height, image_id: _ } => {
+                DrawOp::Image {
+                    x,
+                    y,
+                    width,
+                    height,
+                    image_id: _,
+                } => {
                     let x0 = *x;
                     let y0 = *y;
                     let x1 = x0 + width;
                     let y1 = y0 + height;
-                    
-                    vertices.push(Vertex { position: [x0, y0], color: [1.0, 1.0, 1.0, 1.0], uv: [0.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y0], color: [1.0, 1.0, 1.0, 1.0], uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x0, y1], color: [1.0, 1.0, 1.0, 1.0], uv: [0.0, 1.0] });
-                    vertices.push(Vertex { position: [x1, y0], color: [1.0, 1.0, 1.0, 1.0], uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y1], color: [1.0, 1.0, 1.0, 1.0], uv: [1.0, 1.0] });
-                    vertices.push(Vertex { position: [x0, y1], color: [1.0, 1.0, 1.0, 1.0], uv: [0.0, 1.0] });
+
+                    vertices.push(Vertex {
+                        position: [x0, y0],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [0.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [0.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y1],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [1.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [0.0, 1.0],
+                    });
                 }
-                DrawOp::ClipRect { x, y, width, height } => {
+                DrawOp::ClipRect {
+                    x,
+                    y,
+                    width,
+                    height,
+                } => {
                     // Implement clipping via stencil buffer
                     // For now, just draw a border
                     let x0 = *x;
@@ -319,13 +434,37 @@ impl WgpuRenderer {
                     let x1 = x0 + width;
                     let y1 = y0 + height;
                     let color = [1.0, 0.0, 0.0, 1.0];
-                    
-                    vertices.push(Vertex { position: [x0, y0], color, uv: [0.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y0], color, uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x0, y1], color, uv: [0.0, 1.0] });
-                    vertices.push(Vertex { position: [x1, y0], color, uv: [1.0, 0.0] });
-                    vertices.push(Vertex { position: [x1, y1], color, uv: [1.0, 1.0] });
-                    vertices.push(Vertex { position: [x0, y1], color, uv: [0.0, 1.0] });
+
+                    vertices.push(Vertex {
+                        position: [x0, y0],
+                        color,
+                        uv: [0.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color,
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color,
+                        uv: [0.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y0],
+                        color,
+                        uv: [1.0, 0.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x1, y1],
+                        color,
+                        uv: [1.0, 1.0],
+                    });
+                    vertices.push(Vertex {
+                        position: [x0, y1],
+                        color,
+                        uv: [0.0, 1.0],
+                    });
                 }
                 DrawOp::Transform(_) => {
                     // Transform handling would be more complex
@@ -333,7 +472,7 @@ impl WgpuRenderer {
                 }
             }
         }
-        
+
         vertices
     }
 

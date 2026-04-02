@@ -41,18 +41,18 @@ impl VulnerabilityDatabase {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("nyx")
             .join("security-db");
-        
+
         let mut db = Self {
             db_path,
             vulnerabilities: HashMap::new(),
         };
-        
+
         // Initialize with built-in vulnerabilities
         db.init_builtin();
-        
+
         db
     }
-    
+
     /// Initialize with built-in vulnerability data
     fn init_builtin(&mut self) {
         let entries = vec![
@@ -129,23 +129,23 @@ impl VulnerabilityDatabase {
                 recommendation: "Address the TODO or create a tracking issue.".to_string(),
             },
         ];
-        
+
         for entry in entries {
             self.vulnerabilities.insert(entry.id.clone(), entry);
         }
     }
-    
+
     /// Update the database from remote source
     pub fn update(&self) -> Result<(), String> {
         // In a production system, this would fetch from a remote vulnerability database
         // For now, we just ensure the local database directory exists
-        
+
         let db_dir = &self.db_path;
-        
+
         if let Err(e) = fs::create_dir_all(db_dir) {
             return Err(format!("Failed to create database directory: {}", e));
         }
-        
+
         // Write version info
         let version_file = db_dir.join("version.json");
         let version_info = serde_json::json!({
@@ -155,14 +155,14 @@ impl VulnerabilityDatabase {
                 .map(|d| d.as_secs())
                 .unwrap_or(0)
         });
-        
+
         if let Err(e) = fs::write(&version_file, version_info.to_string()) {
             return Err(format!("Failed to write version file: {}", e));
         }
-        
+
         Ok(())
     }
-    
+
     /// Get database information
     pub fn get_info(&self) -> DbInfo {
         DbInfo {
@@ -172,12 +172,12 @@ impl VulnerabilityDatabase {
             cwe_count: self.vulnerabilities.len(),
         }
     }
-    
+
     /// Look up a vulnerability by CWE ID
     pub fn lookup(&self, cwe_id: &str) -> Option<&VulnerabilityEntry> {
         self.vulnerabilities.get(cwe_id)
     }
-    
+
     /// Get all vulnerabilities
     pub fn all(&self) -> Vec<&VulnerabilityEntry> {
         self.vulnerabilities.values().collect()
@@ -193,7 +193,7 @@ impl Default for VulnerabilityDatabase {
 // Helper module for directory paths
 mod dirs {
     use std::path::PathBuf;
-    
+
     pub fn data_local_dir() -> Option<PathBuf> {
         std::env::var("LOCALAPPDATA")
             .or_else(|_| std::env::var("XDG_DATA_HOME"))
@@ -203,4 +203,3 @@ mod dirs {
             .or_else(|| Some(PathBuf::from(".")))
     }
 }
-

@@ -45,10 +45,10 @@ impl DevWatcher {
     /// Set paths to watch
     pub fn set_paths(&mut self, paths: &[PathBuf]) {
         self.paths = paths.to_vec();
-        
+
         // Create new watcher
         let (tx, rx) = mpsc::channel();
-        
+
         self.watcher = Some(
             RecommendedWatcher::new(
                 move |res| {
@@ -58,9 +58,9 @@ impl DevWatcher {
             )
             .expect("Failed to create watcher"),
         );
-        
+
         self.rx = Some(rx);
-        
+
         // Start watching
         if let Some(ref mut watcher) = self.watcher {
             for path in &self.paths {
@@ -77,7 +77,7 @@ impl DevWatcher {
     /// Check for file changes
     pub fn poll_changes(&mut self) -> Vec<FileChange> {
         let mut changes = Vec::new();
-        
+
         if let Some(ref rx) = self.rx {
             while let Ok(result) = rx.try_recv() {
                 if let Ok(event) = result {
@@ -93,7 +93,7 @@ impl DevWatcher {
                 }
             }
         }
-        
+
         changes
     }
 
@@ -133,10 +133,7 @@ impl Default for HotReloadConfig {
             enabled: true,
             debounce_ms: 300,
             max_retries: 3,
-            watch_paths: vec![
-                "src/".to_string(),
-                "tests/".to_string(),
-            ],
+            watch_paths: vec!["src/".to_string(), "tests/".to_string()],
         }
     }
 }
@@ -247,4 +244,3 @@ pub fn is_build_critical(path: &Path) -> bool {
         false
     }
 }
-

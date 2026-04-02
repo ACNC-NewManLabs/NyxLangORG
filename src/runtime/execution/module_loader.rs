@@ -56,9 +56,9 @@ impl ModuleLoader {
 }
 
 pub fn module_id_from_path(root: &Path, path: &Path) -> Result<String, RuntimeError> {
-    let relative = path
-        .strip_prefix(root)
-        .map_err(|_| RuntimeError::new(format!("module {} is outside package root", path.display())))?;
+    let relative = path.strip_prefix(root).map_err(|_| {
+        RuntimeError::new(format!("module {} is outside package root", path.display()))
+    })?;
     let mut id = relative.to_string_lossy().replace('\\', "/");
     if let Some(stripped) = id.strip_suffix(".nyx") {
         id = stripped.to_string();

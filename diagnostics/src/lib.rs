@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::backtrace::Backtrace;
+use std::fmt;
 use std::io;
 use std::path::PathBuf;
 
@@ -15,7 +15,11 @@ pub struct Position {
 
 impl Position {
     pub fn new(line: usize, column: usize, offset: usize) -> Self {
-        Self { line, column, offset }
+        Self {
+            line,
+            column,
+            offset,
+        }
     }
 }
 
@@ -300,7 +304,11 @@ pub struct NyxError {
 }
 
 impl NyxError {
-    pub fn new(code: impl Into<String>, message: impl Into<String>, category: ErrorCategory) -> Self {
+    pub fn new(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        category: ErrorCategory,
+    ) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
@@ -404,7 +412,9 @@ impl NyxError {
     }
 
     pub fn code_category(&self) -> &str {
-        if self.code.len() < 3 { return "Unknown"; }
+        if self.code.len() < 3 {
+            return "Unknown";
+        }
         match &self.code[0..1] {
             "E" => {
                 let num_part = &self.code[1..];
@@ -432,7 +442,7 @@ impl NyxError {
 impl fmt::Display for NyxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}[{}]: {}", self.severity, self.code, self.message)?;
-        
+
         if !self.module.is_empty() {
             write!(f, " (module: {})", self.module)?;
         }
@@ -440,7 +450,9 @@ impl fmt::Display for NyxError {
         if let Some(file) = &self.details.file {
             if let (Some(line), Some(column)) = (self.details.line, self.details.column) {
                 write!(f, "\n  --> {}:{}:{}", file, line, column)?;
-                if let (Some(end_line), Some(end_column)) = (self.details.end_line, self.details.end_column) {
+                if let (Some(end_line), Some(end_column)) =
+                    (self.details.end_line, self.details.end_column)
+                {
                     if end_line != line || end_column != column {
                         write!(f, " to {}:{}", end_line, end_column)?;
                     }
@@ -473,8 +485,7 @@ impl From<io::Error> for NyxError {
             io::ErrorKind::ResourceBusy => codes::IO_RESOURCE_EXHAUSTED,
             _ => codes::IO_READ_ERROR,
         };
-        NyxError::new(code, err.to_string(), ErrorCategory::Io)
-            .with_module("io".to_string())
+        NyxError::new(code, err.to_string(), ErrorCategory::Io).with_module("io".to_string())
     }
 }
 
@@ -496,6 +507,10 @@ impl From<String> for NyxError {
 
 impl From<&str> for NyxError {
     fn from(s: &str) -> Self {
-        NyxError::new(codes::INTERNAL_UNKNOWN_ERROR, s.to_string(), ErrorCategory::Internal)
+        NyxError::new(
+            codes::INTERNAL_UNKNOWN_ERROR,
+            s.to_string(),
+            ErrorCategory::Internal,
+        )
     }
 }

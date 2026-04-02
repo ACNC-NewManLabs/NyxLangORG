@@ -1,42 +1,42 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-pub mod gpu_bridge;
-pub mod net_bridge;
+pub mod aero_jit;
 pub mod agent_bridge;
+pub mod bytecode_compiler;
+pub mod bytecode_vm;
 pub mod concurrent_bridge;
 pub mod config_bridge;
-pub mod dist_bridge;
 pub mod df_engine;
 pub mod df_kernels;
-pub mod simd_kernels;
-pub mod nyx_table_writer;
-pub mod wal_engine;
-pub mod transaction_context;
+pub mod dist_bridge;
+pub mod driver_mock;
+pub mod gpu_bridge;
+pub mod jit_compiler;
 pub mod kernel_compiler;
-pub mod bytecode_vm;
-pub mod bytecode_compiler;
+pub mod loop_optimizer;
 pub mod module_loader;
 pub mod native_bridge;
-pub mod nyx_vm;
-pub mod reload;
-pub mod session;
-pub mod stdlib_bridge;
-pub mod jit_compiler;
-pub mod ui_runtime;
-pub mod sql_planner;
-pub mod optimizer;
-pub mod driver_mock;
-pub mod loop_optimizer;
-pub mod aero_jit;
+pub mod net_bridge;
 pub mod nyx_server;
 pub mod nyx_shell_client;
+pub mod nyx_table_writer;
+pub mod nyx_vm;
+pub mod optimizer;
+pub mod reload;
+pub mod session;
+pub mod simd_kernels;
+pub mod sql_planner;
+pub mod stdlib_bridge;
+pub mod transaction_context;
+pub mod ui_runtime;
+pub mod wal_engine;
 
 pub use bytecode_vm::BytecodeRuntimeSession;
 pub use module_loader::{ModuleHandle, ModuleLoader, NyxModule, NyxPackage};
 pub use reload::{ModulePatch, PatchReport, ReloadSnapshot, RuntimeStateSnapshot};
 
-pub use nyx_vm::{NyxVm, Value, eval_repl_line, VmConfig};
+pub use nyx_vm::{eval_repl_line, NyxVm, Value, VmConfig};
 pub type RuntimeValue = Value;
 
 #[derive(Debug, Clone)]
@@ -77,8 +77,15 @@ pub struct ModuleInstance {
 pub trait RuntimeSession {
     fn load_package(&mut self, package: NyxPackage) -> Result<(), RuntimeError>;
     fn instantiate_module(&mut self, module_id: &str) -> Result<ModuleInstance, RuntimeError>;
-    fn invoke(&mut self, entry_symbol: &str, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError>;
-    fn patch_modules(&mut self, changed_modules: Vec<ModulePatch>) -> Result<PatchReport, RuntimeError>;
+    fn invoke(
+        &mut self,
+        entry_symbol: &str,
+        args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError>;
+    fn patch_modules(
+        &mut self,
+        changed_modules: Vec<ModulePatch>,
+    ) -> Result<PatchReport, RuntimeError>;
     fn snapshot_reload_state(&mut self) -> Result<ReloadSnapshot, RuntimeError>;
     fn restore_reload_state(&mut self, snapshot: ReloadSnapshot) -> Result<(), RuntimeError>;
 }

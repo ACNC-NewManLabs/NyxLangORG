@@ -1,10 +1,10 @@
 //! CMOS / RTC (Real-Time Clock) Device
 //!
-//! Emulates the standard Motorola 146818 CMOS/RTC chip used for 
+//! Emulates the standard Motorola 146818 CMOS/RTC chip used for
 //! timekeeping and non-volatile configuration storage.
 
-use super::devices::{VirtualDevice, DeviceType, DeviceResult};
-use chrono::{Datelike, Timelike, Local};
+use super::devices::{DeviceResult, DeviceType, VirtualDevice};
+use chrono::{Datelike, Local, Timelike};
 
 pub struct CmosDevice {
     pub index: u8,
@@ -53,8 +53,12 @@ impl CmosDevice {
 }
 
 impl VirtualDevice for CmosDevice {
-    fn device_type(&self) -> DeviceType { DeviceType::Pic }
-    fn name(&self) -> &str { "cmos-rtc" }
+    fn device_type(&self) -> DeviceType {
+        DeviceType::Pic
+    }
+    fn name(&self) -> &str {
+        "cmos-rtc"
+    }
 
     fn read(&mut self, port: u16, _size: usize) -> DeviceResult<u64> {
         if port == 0x71 {
@@ -76,8 +80,10 @@ impl VirtualDevice for CmosDevice {
         Ok(())
     }
 
-    fn interrupt(&mut self, _irq: u8) -> DeviceResult<()> { Ok(()) }
-    
+    fn interrupt(&mut self, _irq: u8) -> DeviceResult<()> {
+        Ok(())
+    }
+
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }

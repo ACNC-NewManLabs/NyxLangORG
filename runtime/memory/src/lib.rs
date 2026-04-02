@@ -19,13 +19,15 @@ impl AllocationGuard {
         if current + size > self.limit {
             false
         } else {
-            self.current.fetch_add(size, std::sync::atomic::Ordering::SeqCst);
+            self.current
+                .fetch_add(size, std::sync::atomic::Ordering::SeqCst);
             true
         }
     }
 
     pub fn free(&self, size: usize) {
-        self.current.fetch_sub(size, std::sync::atomic::Ordering::SeqCst);
+        self.current
+            .fetch_sub(size, std::sync::atomic::Ordering::SeqCst);
     }
 }
 

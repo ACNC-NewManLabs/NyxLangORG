@@ -1,7 +1,7 @@
 use clap::Parser;
 use colored::*;
-use which::which;
 use std::path::Path;
+use which::which;
 
 #[derive(Parser, Debug)]
 #[command(name = "nyx-doctor")]
@@ -12,7 +12,10 @@ fn main() {
     let _args = Args::parse();
 
     println!("{} Checking Nyx ecosystem health...", "🌌".magenta().bold());
-    println!("{}", "============================================================".magenta());
+    println!(
+        "{}",
+        "============================================================".magenta()
+    );
 
     let mut issues = 0;
 
@@ -20,7 +23,10 @@ fn main() {
     if let Ok(path) = which("nyx") {
         println!("{} Nyx CLI: Found at {}", "✓".green(), path.display());
     } else if Path::new("./tools/nyx").exists() {
-        println!("{} Nyx CLI: Found in current directory (local development)", "✓".green());
+        println!(
+            "{} Nyx CLI: Found in current directory (local development)",
+            "✓".green()
+        );
     } else {
         println!("{} Nyx CLI: Not found in PATH", "✗".red());
         issues += 1;
@@ -30,14 +36,20 @@ fn main() {
     if Path::new("registry/language.json").exists() {
         println!("{} Language Registry: Found", "✓".green());
     } else {
-        println!("{} Language Registry: Missing (Expected registry/language.json)", "✗".red());
+        println!(
+            "{} Language Registry: Missing (Expected registry/language.json)",
+            "✗".red()
+        );
         issues += 1;
     }
 
     if Path::new("registry/engines.json").exists() {
         println!("{} Engines Registry: Found", "✓".green());
     } else {
-        println!("{} Engines Registry: Missing (Expected registry/engines.json)", "✗".red());
+        println!(
+            "{} Engines Registry: Missing (Expected registry/engines.json)",
+            "✗".red()
+        );
         issues += 1;
     }
 
@@ -45,7 +57,10 @@ fn main() {
     if which("rustc").is_ok() {
         println!("{} Rust Compiler: Found", "✓".green());
     } else {
-        println!("{} Rust Compiler: Missing (required for JIT/Tooling rebuilds)", "✗".red());
+        println!(
+            "{} Rust Compiler: Missing (required for JIT/Tooling rebuilds)",
+            "✗".red()
+        );
         issues += 1;
     }
 
@@ -53,13 +68,26 @@ fn main() {
     if Path::new("/dev/kvm").exists() {
         println!("{} KVM Hypervisor: Available", "✓".green());
     } else {
-        println!("{} KVM Hypervisor: Not found (Performance might be degraded)", "!".yellow());
+        println!(
+            "{} KVM Hypervisor: Not found (Performance might be degraded)",
+            "!".yellow()
+        );
     }
 
-    println!("{}", "============================================================".magenta());
+    println!(
+        "{}",
+        "============================================================".magenta()
+    );
     if issues == 0 {
-        println!("{} Your Nyx environment is healthy and ready for production.", "SUCCESS".green().bold());
+        println!(
+            "{} Your Nyx environment is healthy and ready for production.",
+            "SUCCESS".green().bold()
+        );
     } else {
-        println!("{} Found {} issues. Please fix them for an optimal experience.", "WARNING".yellow().bold(), issues);
+        println!(
+            "{} Found {} issues. Please fix them for an optimal experience.",
+            "WARNING".yellow().bold(),
+            issues
+        );
     }
 }

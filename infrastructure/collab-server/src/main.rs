@@ -125,12 +125,14 @@ async fn main() {
 }
 
 async fn run() -> Result<(), String> {
-    let db_path =
-        std::env::var("NYX_COLLAB_DB").unwrap_or_else(|_| "infrastructure/schemas/collab.db".to_string());
-    let bind_addr = std::env::var("NYX_COLLAB_BIND").unwrap_or_else(|_| "127.0.0.1:8092".to_string());
+    let db_path = std::env::var("NYX_COLLAB_DB")
+        .unwrap_or_else(|_| "infrastructure/schemas/collab.db".to_string());
+    let bind_addr =
+        std::env::var("NYX_COLLAB_BIND").unwrap_or_else(|_| "127.0.0.1:8092".to_string());
 
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
-    let schema = std::fs::read_to_string("infrastructure/collab-server/schema.sql").map_err(|e| e.to_string())?;
+    let schema = std::fs::read_to_string("infrastructure/collab-server/schema.sql")
+        .map_err(|e| e.to_string())?;
     conn.execute_batch(&schema).map_err(|e| e.to_string())?;
     seed_defaults(&conn)?;
 
@@ -162,7 +164,10 @@ async fn healthz() -> impl IntoResponse {
 async fn ecosystem_insights(
     State(state): State<AppState>,
 ) -> Result<Json<InsightsResponse>, (StatusCode, Json<ApiError>)> {
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let mut stmt = conn
         .prepare(
@@ -193,16 +198,28 @@ async fn submit_insight(
     State(state): State<AppState>,
     Json(req): Json<SubmitInsightRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
-    if req.insight_type.trim().is_empty() || req.pattern.trim().is_empty() || req.recommendation.trim().is_empty() {
-        return Err(api_err(StatusCode::BAD_REQUEST, "insight_type/pattern/recommendation required"));
+    if req.insight_type.trim().is_empty()
+        || req.pattern.trim().is_empty()
+        || req.recommendation.trim().is_empty()
+    {
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "insight_type/pattern/recommendation required",
+        ));
     }
     if !(0.0..=1.0).contains(&req.impact_score) {
-        return Err(api_err(StatusCode::BAD_REQUEST, "impact_score must be in [0,1]"));
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "impact_score must be in [0,1]",
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
     let pattern_hash = sha256_hex(req.pattern.as_bytes());
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
     conn.execute(
         "INSERT INTO insights (insight_type, pattern_hash, recommendation, impact_score, source_anonymous_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?)",
@@ -220,7 +237,10 @@ async fn help_solve(
     // Escape special LIKE characters to prevent SQL injection
     let escaped = q.q.replace('%', "\\%").replace('_', "\\_");
     let like = format!("%{}%", escaped);
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let mut stmt = conn
         .prepare(
@@ -260,7 +280,10 @@ async fn discover_projects(
     let like_skill = format!("%{}%", skill);
     let like_tag = format!("%{}%", tag);
 
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let mut p_stmt = conn
         .prepare(
@@ -318,12 +341,18 @@ async fn contribute(
     Json(req): Json<ContributeRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     if req.alias.trim().is_empty() || req.contact_hint.trim().is_empty() || req.skills.is_empty() {
-        return Err(api_err(StatusCode::BAD_REQUEST, "alias/skills/contact_hint required"));
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "alias/skills/contact_hint required",
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
     let skills = req.skills.join(",");
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
     conn.execute(
         "INSERT INTO contributors (alias, skills, contact_hint, created_at) VALUES (?, ?, ?, ?)",
         params![req.alias, skills, req.contact_hint, now],
@@ -337,13 +366,23 @@ async fn publish_knowledge(
     State(state): State<AppState>,
     Json(req): Json<PublishKnowledgeRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
-    if req.kind.trim().is_empty() || req.title.trim().is_empty() || req.body.trim().is_empty() || req.author_alias.trim().is_empty() {
-        return Err(api_err(StatusCode::BAD_REQUEST, "kind/title/body/author_alias required"));
+    if req.kind.trim().is_empty()
+        || req.title.trim().is_empty()
+        || req.body.trim().is_empty()
+        || req.author_alias.trim().is_empty()
+    {
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "kind/title/body/author_alias required",
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
     let tags = req.tags.join(",");
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
     conn.execute(
         "INSERT INTO knowledge_resources (kind, title, body, tags, author_alias, created_at)
          VALUES (?, ?, ?, ?, ?, ?)",
@@ -357,7 +396,10 @@ async fn publish_knowledge(
 async fn analytics_summary(
     State(state): State<AppState>,
 ) -> Result<Json<AnalyticsResponse>, (StatusCode, Json<ApiError>)> {
-    let conn = state.db.lock().map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "db lock poisoned"))?;
 
     let project_count = count(&conn, "projects")?;
     let contributor_count = count(&conn, "contributors")?;
@@ -365,7 +407,9 @@ async fn analytics_summary(
 
     let mut top_tags = Vec::new();
     let mut stmt = conn.prepare("SELECT tags FROM projects").map_err(sql_err)?;
-    let rows = stmt.query_map([], |r| r.get::<_, String>(0)).map_err(sql_err)?;
+    let rows = stmt
+        .query_map([], |r| r.get::<_, String>(0))
+        .map_err(sql_err)?;
 
     let mut freq = std::collections::HashMap::<String, i64>::new();
     for row in rows {
@@ -464,9 +508,17 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn api_err(code: StatusCode, msg: &str) -> (StatusCode, Json<ApiError>) {
-    (code, Json(ApiError { error: msg.to_string() }))
+    (
+        code,
+        Json(ApiError {
+            error: msg.to_string(),
+        }),
+    )
 }
 
 fn sql_err(err: rusqlite::Error) -> (StatusCode, Json<ApiError>) {
-    api_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("db error: {err}"))
+    api_err(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        &format!("db error: {err}"),
+    )
 }
