@@ -8,6 +8,7 @@ pub mod memory;
 pub mod devices;
 pub mod vm;
 pub mod hypercall;
+#[cfg(target_os = "linux")]
 pub mod kvm;
 pub mod jit;
 pub mod virtio;
