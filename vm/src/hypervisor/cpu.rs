@@ -1439,13 +1439,15 @@ mod tests {
         cpu.start();
         
         // Write a simple program: MOV RAX, 100; HLT
-        cpu.memory[0] = 0xB8;  // MOV RAX, imm32
-        cpu.memory[1] = 100;
-        cpu.memory[2] = 0;
-        cpu.memory[3] = 0;
-        cpu.memory[4] = 0;
-        
-        cpu.memory[5] = 0xF4; // HLT
+        {
+            let mut mem = cpu.memory.lock().unwrap();
+            mem[0] = 0xB8;  // MOV RAX, imm32
+            mem[1] = 100;
+            mem[2] = 0;
+            mem[3] = 0;
+            mem[4] = 0;
+            mem[5] = 0xF4; // HLT
+        }
         
         let count = cpu.run(100).unwrap();
         assert!(count > 0);

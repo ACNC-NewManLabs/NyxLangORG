@@ -899,7 +899,7 @@ mod tests {
     #[test]
     fn test_vm_creation() {
         let config = VmConfig::default();
-        let _devices = create_standard_devices();
+        let _devices = create_standard_devices(&config);
         let vm = VirtualMachine::new(config);
         assert!(vm.is_ok());
         
@@ -916,7 +916,7 @@ mod tests {
         vm.memory.write_phys(GuestPhysicalAddr(0x1000), 1, 0xF4).unwrap();
         
         // Set PC to program location
-        vm.cpus[0].state.set_pc(0x1000);
+        vm.cpus[0].lock().unwrap().state.set_pc(0x1000);
         
         // Run for a few instructions
         let count = vm.run(10).unwrap();

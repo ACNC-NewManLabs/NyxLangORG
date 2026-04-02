@@ -6,7 +6,7 @@
 
 use nyx_vm::hypervisor::{VirtualMachine, VmConfig as LowLevelVmConfig, Architecture};
 use nyx_diagnostics::{NyxError, ErrorCategory};
-use minifb::{Window, WindowOptions, MouseButton, MouseMode, Key};
+use minifb::{Window, WindowOptions, MouseButton, MouseMode};
 use font8x8::UnicodeFonts;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -192,7 +192,7 @@ impl Hypervisor {
                     vm_lock.update_mouse(vx, vy, buttons);
                     vm_lock.sync_framebuffer();
                 }
-            } else if let Ok(mut vm_lock) = self.vm.try_lock() {
+            } else if let Ok(vm_lock) = self.vm.try_lock() {
                 vm_lock.sync_framebuffer();
             }
 
