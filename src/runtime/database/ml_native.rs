@@ -14,6 +14,12 @@ pub struct MLNativeConvergence {
     pub drift_threshold: f64,
 }
 
+impl Default for MLNativeConvergence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MLNativeConvergence {
     pub fn new() -> Self {
         Self {
@@ -25,7 +31,7 @@ impl MLNativeConvergence {
 
     /// Registers a new feature version in the native feature store.
     pub fn register_feature(&mut self, name: String, data: Vec<f64>) {
-        let versions = self.feature_store.entry(name).or_insert(Vec::new());
+        let versions = self.feature_store.entry(name).or_default();
         let next_version = (versions.len() + 1) as u32;
         versions.push(FeatureVersion {
             version: next_version,

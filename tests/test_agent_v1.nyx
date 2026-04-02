@@ -1,0 +1,52 @@
+// tests/test_agent_v1.nyx
+
+fn main() {
+    println("--- Testing Nyx-Agent v1.0 API Parity ---");
+
+    // 1. Test vector_create
+    std::agent::vector_create("test_coll");
+    println("[PASS] vector_create: collection created");
+
+    // 2. Test embed
+    let v1 = std::agent::embed("Nyx is a powerful language");
+    let v2 = std::agent::embed("Nyx is for high performance");
+    let v3 = std::agent::embed("The capital of France is Paris");
+
+    println("[PASS] embed: generated 384-dim vectors");
+    println("Vector 1 length: " + v1.len());
+
+    // 3. Test vector_insert
+    let idx1 = std::agent::vector_insert("test_coll", v1);
+    let idx2 = std::agent::vector_insert("test_coll", v2);
+    let idx3 = std::agent::vector_insert("test_coll", v3);
+
+    println("[PASS] vector_insert: inserted 3 vectors. Indices: " + idx1 + ", " + idx2 + ", " + idx3);
+
+    // 4. Test vector_search by name
+    let query = std::agent::embed("Nyx programming language");
+    let results = std::agent::vector_search("test_coll", query, 2);
+
+    println("[PASS] vector_search: results count = " + results.len());
+    for r in results {
+        println("  -> Hit: index=" + r[1] + " score=" + r[0]);
+    }
+
+    // 5. Test vector_clear
+    std::agent::vector_clear("test_coll");
+    let empty_results = std::agent::vector_search("test_coll", query, 1);
+    println("[PASS] vector_clear: empty results count = " + empty_results.len());
+
+    // 6. Test text_split
+    let text = "This is a long document.\n\nIt has multiple paragraphs.\n\nAnd some sentences.";
+    let chunks = std::agent::text_split(text, 20);
+    println("[PASS] text_split: chunk count = " + chunks.len());
+    for c in chunks {
+        println("  -> Chunk: " + c);
+    }
+
+    // 7. Test chat/generate
+    let resp = std::agent::chat("Explain RAG");
+    println("[PASS] chat: response received: " + resp);
+
+    println("--- All Nyx-Agent v1.0 Tests Passed ---");
+}

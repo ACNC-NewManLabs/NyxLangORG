@@ -7,6 +7,12 @@ pub struct PerformanceScaling {
     pub query_heatmap: HashMap<String, usize>, // Column -> Access Count
 }
 
+impl Default for PerformanceScaling {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PerformanceScaling {
     pub fn new() -> Self {
         Self {

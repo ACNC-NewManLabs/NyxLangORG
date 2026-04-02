@@ -104,7 +104,7 @@ fn find_calls_in_stmts(stmts: &[Stmt], calls: &mut HashSet<String>) {
 fn find_calls_in_expr(expr: &Expr, calls: &mut HashSet<String>) {
     match expr {
         Expr::Call { callee, args, .. } => {
-            if let Expr::Identifier(name) = callee.as_ref() {
+            if let Expr::Identifier { name, .. } = callee.as_ref() {
                 calls.insert(name.clone());
             }
             for arg in args {

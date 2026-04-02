@@ -14,7 +14,7 @@
   <!-- Sidebar Navigation -->
   <aside id="sidebar">
     <div class="sidebar-logo">
-      <span class="glyph">🌌</span>
+      <img src="assets/nyx_icon.svg" class="nyx-logo" alt="Nyx Logo" />
       <div>
         <div class="brand-name">Nyx <span class="accent-text">Nexus</span></div>
         <div class="brand-ver">v1.0 APEX</div>
@@ -46,6 +46,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 7 13.5 7 10.5 3 1 3"/><polyline points="23 20 1 20"/><line x1="7" y1="3" x2="7" y2="20"/><line x1="11.5" y1="7" x2="11.5" y2="20"/><line x1="17" y1="11" x2="17" y2="20"/></svg>
         System Vitals
       </a>
+      <div class="nav-divider"></div>
+      <div class="nav-label">SAVE</div>
+      <a href="#" class="nav-item" id="nav-screenshot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Screenshot
+      </a>
     </nav>
 
     <div class="sidebar-footer">
@@ -66,6 +72,10 @@
         <div class="metric-chip">RAM <span id="tb-ram">--</span> MB</div>
         <div class="metric-chip">Uptime <span id="tb-uptime">--</span></div>
         <button class="refresh-btn" id="refresh-btn" title="Refresh All">↻</button>
+        <div class="window-controls">
+          <button class="win-btn minimize" title="Minimize">—</button>
+          <button class="win-btn close" title="Close">×</button>
+        </div>
       </div>
     </header>
 

@@ -42,7 +42,7 @@ fn main() {
     }
 
     // 3. Check for compiler
-    if let Ok(_) = which("rustc") {
+    if which("rustc").is_ok() {
         println!("{} Rust Compiler: Found", "✓".green());
     } else {
         println!("{} Rust Compiler: Missing (required for JIT/Tooling rebuilds)", "✗".red());

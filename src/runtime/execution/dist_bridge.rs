@@ -37,8 +37,8 @@ pub fn dist_barrier_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, Ev
     let world_size = m.world_size;
     if world_size <= 1 { return Ok(Value::Bool(true)); }
 
-    let rx_arc = m.rx_stream.as_ref().unwrap();
-    let tx_arc = m.tx_stream.as_ref().unwrap();
+    let rx_arc = m.rx_stream.as_ref().expect("rx_stream uninitialized");
+    let tx_arc = m.tx_stream.as_ref().expect("tx_stream uninitialized");
 
     let signal = [1u8];
     let mut buf = [0u8; 1];
@@ -82,7 +82,7 @@ pub fn dist_reinit_node(rank: usize, _world_size: usize, master_addr: &str) -> b
 }
 
 pub fn dist_reduce_scatter_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), shape)), Some(Value::Str(op))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), shape)), Some(Value::Str(op))) = (args.first(), args.get(1)) {
         let m_arc = DIST_MANAGER.get().ok_or_else(|| err("Dist manager not initialized"))?;
         let m = m_arc.lock().map_err(|_| err("DistManager lock poisoned"))?;
         let rank = m.rank;
@@ -92,7 +92,7 @@ pub fn dist_reduce_scatter_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Val
         let shard_len = total_len / world_size;
         
         // 1. Download full tensor
-        let mut full_data = gpu_bridge::download_from_gpu(&buf, total_len).ok_or_else(|| err("Failed to download tensor"))?;
+        let mut full_data = gpu_bridge::download_from_gpu(buf, total_len).ok_or_else(|| err("Failed to download tensor"))?;
         
         let rx_arc = m.rx_stream.as_ref().ok_or_else(|| err("Rx stream missing"))?;
         let tx_arc = m.tx_stream.as_ref().ok_or_else(|| err("Tx stream missing"))?;
@@ -113,8 +113,8 @@ pub fn dist_reduce_scatter_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Val
             let recv_bytes_mut: &mut [u8] = bytemuck::cast_slice_mut(&mut recv_buf);
 
             // Send to Right, Recv from Left
-            tx_arc.lock().unwrap().write_all(send_bytes).map_err(|e| err(e.to_string()))?;
-            rx_arc.lock().unwrap().read_exact(recv_bytes_mut).map_err(|e| err(e.to_string()))?;
+            tx_arc.lock().unwrap_or_else(|e| e.into_inner()).write_all(send_bytes).map_err(|e| err(e.to_string()))?;
+            rx_arc.lock().unwrap_or_else(|e| e.into_inner()).read_exact(recv_bytes_mut).map_err(|e| err(e.to_string()))?;
 
             // Reduce (Sum for gradients)
             if op == "sum" {
@@ -133,7 +133,7 @@ pub fn dist_reduce_scatter_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Val
 }
 
 pub fn dist_all_gather_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Tensor(TensorStorage::Cpu(shard_arc), _shape)) = args.get(0) {
+    if let Some(Value::Tensor(TensorStorage::Cpu(shard_arc), _shape)) = args.first() {
         let m_arc = DIST_MANAGER.get().ok_or_else(|| err("Dist manager not initialized"))?;
         let m = m_arc.lock().map_err(|_| err("DistManager lock poisoned"))?;
         let rank = m.rank;
@@ -141,7 +141,7 @@ pub fn dist_all_gather_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
         
         if world_size <= 1 { return Ok(args[0].clone()); }
 
-        let shard = shard_arc.read().unwrap();
+        let shard = shard_arc.read().unwrap_or_else(|e| e.into_inner());
         let shard_len = shard.len();
         let total_len = shard_len * world_size;
         let mut full_data = vec![0.0f32; total_len];
@@ -164,8 +164,8 @@ pub fn dist_all_gather_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
             let mut recv_buf = vec![0.0f32; shard_len];
             let recv_bytes_mut: &mut [u8] = bytemuck::cast_slice_mut(&mut recv_buf);
 
-            tx_arc.lock().unwrap().write_all(send_bytes).map_err(|e| err(e.to_string()))?;
-            rx_arc.lock().unwrap().read_exact(recv_bytes_mut).map_err(|e| err(e.to_string()))?;
+            tx_arc.lock().unwrap_or_else(|e| e.into_inner()).write_all(send_bytes).map_err(|e| err(e.to_string()))?;
+            rx_arc.lock().unwrap_or_else(|e| e.into_inner()).read_exact(recv_bytes_mut).map_err(|e| err(e.to_string()))?;
 
             full_data[recv_start..recv_end].copy_from_slice(&recv_buf);
         }
@@ -216,12 +216,12 @@ pub fn dist_init_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
         let mut streams = Vec::new();
         while connected_clients < world_size - 1 {
             let (mut stream, addr) = master_listener.accept().map_err(|e| err(e.to_string()))?;
-            stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
-            stream.set_write_timeout(Some(Duration::from_secs(10))).unwrap();
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
             let mut buf = [0u8; 12];
             stream.read_exact(&mut buf).map_err(|e| err(e.to_string()))?;
-            let client_rank = u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize;
-            let client_port = u32::from_le_bytes(buf[4..8].try_into().unwrap());
+            let client_rank = u32::from_le_bytes(buf[0..4].try_into().unwrap_or([0; 4])) as usize;
+            let client_port = u32::from_le_bytes(buf[4..8].try_into().unwrap_or([0; 4]));
             
             routing_table[client_rank] = format!("{}:{}", addr.ip(), client_port);
             streams.push(stream);
@@ -234,16 +234,16 @@ pub fn dist_init_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
         let rt_len = rt_bytes.len() as u32;
 
         for mut stream in streams {
-            stream.write_all(&rt_len.to_le_bytes()).unwrap();
-            stream.write_all(rt_bytes).unwrap();
+            let _ = stream.write_all(&rt_len.to_le_bytes());
+            let _ = stream.write_all(rt_bytes);
         }
     } else {
         // Worker Node
         let mut master_stream = None;
         for _ in 0..10 {
             if let Ok(stream) = TcpStream::connect(master_addr) {
-                stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
-                stream.set_write_timeout(Some(Duration::from_secs(10))).unwrap();
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
                 master_stream = Some(stream);
                 break;
             }
@@ -266,24 +266,24 @@ pub fn dist_init_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
         let rt_len = u32::from_le_bytes(len_buf) as usize;
         let mut rt_buf = vec![0u8; rt_len];
         master_stream.read_exact(&mut rt_buf).map_err(|e| err(e.to_string()))?;
-        let routing_table_str = String::from_utf8(rt_buf).unwrap();
+        let routing_table_str = String::from_utf8_lossy(&rt_buf).into_owned();
         routing_table = routing_table_str.split(',').map(|s| s.to_string()).collect();
     }
 
     let right_neighbor_addr = &routing_table[(rank + 1) % world_size];
     
     let left_rx_thread = thread::spawn(move || {
-        let (rx_stream, _) = listener.accept().unwrap();
-        rx_stream.set_read_timeout(Some(Duration::from_secs(30))).unwrap(); // Heartbeat aware timeout
-        rx_stream.set_write_timeout(Some(Duration::from_secs(30))).unwrap();
+        let (rx_stream, _) = listener.accept().expect("Accept failed");
+        let _ = rx_stream.set_read_timeout(Some(Duration::from_secs(30))); // Heartbeat aware timeout
+        let _ = rx_stream.set_write_timeout(Some(Duration::from_secs(30)));
         rx_stream
     });
 
     let mut tx_stream = None;
     for _ in 0..10 {
         if let Ok(stream) = TcpStream::connect(right_neighbor_addr) {
-            stream.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
-            stream.set_write_timeout(Some(Duration::from_secs(30))).unwrap();
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
             tx_stream = Some(stream);
             break;
         }
@@ -291,7 +291,7 @@ pub fn dist_init_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     }
     
     let tx_stream = tx_stream.ok_or_else(|| err("Failed to connect to right neighbor in ring"))?;
-    let rx_stream = left_rx_thread.join().unwrap(); 
+    let rx_stream = left_rx_thread.join().expect("Thread panicked"); 
 
     let mut manager = DistManager::new(rank, world_size, master_addr.to_string());
     let tx_arc = Arc::new(Mutex::new(tx_stream));
@@ -336,12 +336,12 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
     };
 
     let mut buf = {
-        let map = tensor_obj_arc.read().unwrap();
+        let map = tensor_obj_arc.read().unwrap_or_else(|e| e.into_inner());
         let data_val = map.get("data").ok_or_else(|| err("Tensor missing 'data' field"))?;
         match data_val {
-            Value::Tensor(TensorStorage::Cpu(f32_arc), _) => f32_arc.read().unwrap().clone(),
-            Value::Array(arr) => arr.read().unwrap().iter().map(|v| v.as_f64().unwrap_or(0.0) as f32).collect(),
-            Value::FloatArray(arr) => arr.read().unwrap().clone(),
+            Value::Tensor(TensorStorage::Cpu(f32_arc), _) => f32_arc.read().unwrap_or_else(|e| e.into_inner()).clone(),
+            Value::Array(arr) => arr.read().unwrap_or_else(|e| e.into_inner()).iter().map(|v| v.as_f64().unwrap_or(0.0) as f32).collect(),
+            Value::FloatArray(arr) => arr.read().unwrap_or_else(|e| e.into_inner()).clone(),
             Value::Tensor(TensorStorage::Gpu(buf_arc), _) => {
                 let size_bytes = buf_arc.bucket_size;
                 if let Some(data) = gpu_bridge::download_from_gpu(buf_arc, size_bytes as usize / 4) {
@@ -366,10 +366,10 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
         return Ok(Value::Object(tensor_obj_arc.clone()));
     }
 
-    let rx_arc = manager.rx_stream.as_ref().unwrap();
-    let tx_arc = manager.tx_stream.as_ref().unwrap();
+    let rx_arc = manager.rx_stream.as_ref().expect("rx_stream uninitialized");
+    let tx_arc = manager.tx_stream.as_ref().expect("tx_stream uninitialized");
             
-            let chunk_size = (total_elements + world_size - 1) / world_size;
+            let chunk_size = total_elements.div_ceil(world_size);
             let mut send_buf = vec![0.0f32; chunk_size];
 
             for step in 0..(world_size - 1) {
@@ -378,11 +378,11 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
                 
                 let send_start = send_chunk_id * chunk_size;
                 let send_end = std::cmp::min(send_start + chunk_size, total_elements);
-                let actual_send_size = if send_end > send_start { send_end - send_start } else { 0 };
+                let actual_send_size = send_end.saturating_sub(send_start);
                 
                 let recv_start = recv_chunk_id * chunk_size;
                 let recv_end = std::cmp::min(recv_start + chunk_size, total_elements);
-                let actual_recv_size = if recv_end > recv_start { recv_end - recv_start } else { 0 };
+                let actual_recv_size = recv_end.saturating_sub(recv_start);
 
                 if actual_send_size > 0 {
                     send_buf[..actual_send_size].copy_from_slice(&buf[send_start..send_end]);
@@ -391,8 +391,8 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
                 let send_bytes: &[u8] = bytemuck::cast_slice(&send_buf[..actual_send_size]);
                 let mut recv_bytes = vec![0u8; actual_recv_size * 4];
 
-                tx_arc.lock().unwrap().write_all(send_bytes).map_err(|e| err(format!("Dist Error (Write) Node {}: {}", rank, e)))?;
-                rx_arc.lock().unwrap().read_exact(&mut recv_bytes).map_err(|e| err(format!("Dist Error (Read) Node {}: {}", rank, e)))?;
+                tx_arc.lock().unwrap_or_else(|e| e.into_inner()).write_all(send_bytes).map_err(|e| err(format!("Dist Error (Write) Node {}: {}", rank, e)))?;
+                rx_arc.lock().unwrap_or_else(|e| e.into_inner()).read_exact(&mut recv_bytes).map_err(|e| err(format!("Dist Error (Read) Node {}: {}", rank, e)))?;
 
                 let recv_f32: &[f32] = bytemuck::cast_slice(&recv_bytes);
                 
@@ -409,11 +409,11 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
                 
                 let send_start = send_chunk_id * chunk_size;
                 let send_end = std::cmp::min(send_start + chunk_size, total_elements);
-                let actual_send_size = if send_end > send_start { send_end - send_start } else { 0 };
+                let actual_send_size = send_end.saturating_sub(send_start);
                 
                 let recv_start = recv_chunk_id * chunk_size;
                 let recv_end = std::cmp::min(recv_start + chunk_size, total_elements);
-                let actual_recv_size = if recv_end > recv_start { recv_end - recv_start } else { 0 };
+                let actual_recv_size = recv_end.saturating_sub(recv_start);
 
                 if actual_send_size > 0 {
                     send_buf[..actual_send_size].copy_from_slice(&buf[send_start..send_end]);
@@ -422,11 +422,11 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
                 let send_bytes: &[u8] = bytemuck::cast_slice(&send_buf[..actual_send_size]);
                 let mut recv_bytes = vec![0u8; actual_recv_size * 4];
 
-                tx_arc.lock().unwrap().write_all(send_bytes).map_err(|e| {
+                tx_arc.lock().unwrap_or_else(|e| e.into_inner()).write_all(send_bytes).map_err(|e| {
                     println!("[Auto-Mend] Write failure on Node {}: {}. Triggering recovery...", rank, e);
                     err(e.to_string())
                 })?;
-                rx_arc.lock().unwrap().read_exact(&mut recv_bytes).map_err(|e| {
+                rx_arc.lock().unwrap_or_else(|e| e.into_inner()).read_exact(&mut recv_bytes).map_err(|e| {
                     println!("[Auto-Mend] Read failure on Node {}: {}. Triggering recovery...", rank, e);
                     err(e.to_string())
                 })?;
@@ -446,16 +446,16 @@ pub fn dist_all_reduce_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
             }
 
             let shape_vec = {
-                let map = tensor_obj_arc.read().unwrap();
+                let map = tensor_obj_arc.read().unwrap_or_else(|e| e.into_inner());
                 let shape_val = map.get("shape");
                 if let Some(Value::Array(arr)) = shape_val {
-                    arr.read().unwrap().iter().map(|v| v.as_f64().unwrap_or(0.0) as usize).collect()
+                    arr.read().unwrap_or_else(|e| e.into_inner()).iter().map(|v| v.as_f64().unwrap_or(0.0) as usize).collect()
                 } else {
                     vec![total_elements]
                 }
             };
             
-            let mut map = tensor_obj_arc.write().unwrap();
+            let mut map = tensor_obj_arc.write().unwrap_or_else(|e| e.into_inner());
             let data_val = map.get_mut("data").ok_or_else(|| err("Tensor missing 'data' field"))?;
             match data_val {
                 Value::Tensor(TensorStorage::Gpu(buf_arc), _) => {
@@ -479,8 +479,8 @@ pub fn dist_checkpoint_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
     };
     
     let data = match &args[0] {
-        Value::Tensor(TensorStorage::Cpu(arc), _) => arc.read().unwrap().clone(),
-        Value::FloatArray(arc) => arc.read().unwrap().clone(),
+        Value::Tensor(TensorStorage::Cpu(arc), _) => arc.read().unwrap_or_else(|e| e.into_inner()).clone(),
+        Value::FloatArray(arc) => arc.read().unwrap_or_else(|e| e.into_inner()).clone(),
         _ => return Err(err("checkpoint only supports CPU tensors/arrays")),
     };
 
@@ -507,13 +507,13 @@ pub fn dist_recover_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 
 pub fn dist_get_rank_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> {
     let manager = DIST_MANAGER.get().ok_or_else(|| err("Dist manager not initialized"))?;
-    let rank = manager.lock().unwrap().rank;
+    let rank = manager.lock().unwrap_or_else(|e| e.into_inner()).rank;
     Ok(Value::Int(rank as i64))
 }
 
 pub fn dist_get_world_size_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> {
     let manager = DIST_MANAGER.get().ok_or_else(|| err("Dist manager not initialized"))?;
-    let size = manager.lock().unwrap().world_size;
+    let size = manager.lock().unwrap_or_else(|e| e.into_inner()).world_size;
     Ok(Value::Int(size as i64))
 }
 

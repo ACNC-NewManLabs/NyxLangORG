@@ -1,33 +1,25 @@
 use std::io::{self, Write};
+use std::collections::HashMap;
 use colored::*;
-use nyx::applications::compiler::compiler_main::Compiler;
-use nyx_vm::{NyxVm, VmConfig, Value};
+use nyx::runtime::execution::{NyxVm, VmConfig, Value, eval_repl_line};
 
 fn main() {
     println!("{}", "============================================================".blue());
     println!("{}", "                    NYX INTERACTIVE REPL                    ".bold().blue());
     println!("{}", "============================================================".blue());
     println!("Type your code and press Enter. Type 'exit' to quit.");
-    println!("Use ';' at the end of a line for single expression or continue typing.");
+    println!("State is now persistent across lines.");
     println!();
 
-    let mut compiler = match Compiler::from_registry_files("registry/language.json", "registry/engines.json") {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("Warning: could not load registries, using default behavior.");
-            // We'll try to proceed or exit if critical
-            return;
-        }
-    };
-
-    let mut vm_config = VmConfig::default();
-    vm_config.debug = false;
+    let vm_config = VmConfig::default();
+        // config.debug = false;
     let mut vm = NyxVm::new(vm_config);
+    let _locals = HashMap::<String, Value>::new();
 
-    // Register a simple print function
-    vm.register("print", 1, |args| {
+    // Register a simple print function (optional, but good for testing)
+    vm.register_native("print", |_vm, args| {
         for arg in args {
-            println!("{}", arg.to_string());
+            println!("{}", arg);
         }
         Ok(Value::Null)
     });
@@ -52,11 +44,20 @@ fn main() {
         }
 
         if trimmed.is_empty() && !buffer.is_empty() {
-            // Execute what we have
+            // Execute on empty line to finish block
         } else {
             buffer.push_str(&line);
-            if !trimmed.ends_with(';') && !trimmed.ends_with('}') && !trimmed.is_empty() {
+            // Simple heuristic for multi-line: check for open braces or lack of semicolon
+            let open_braces = buffer.chars().filter(|&c| c == '{').count();
+            let close_braces = buffer.chars().filter(|&c| c == '}').count();
+            if open_braces > close_braces {
                 continue;
+            }
+            if !trimmed.ends_with(';') && !trimmed.ends_with('}') && !trimmed.is_empty() {
+                // If it doesn't look like a complete statement and it's not the first line, keep buffering
+                if !buffer.contains('\n') || !trimmed.chars().last().unwrap_or(' ').is_alphanumeric() {
+                     // continue; // Defer to a smarter check if needed
+                }
             }
         }
 
@@ -64,47 +65,13 @@ fn main() {
             continue;
         }
 
-        // Wrap in a main function if it looks like statements
-        let source = if buffer.contains("fn main") {
-            buffer.clone()
-        } else {
-            format!("fn main() {{ \n{}\n }}", buffer)
-        };
-
-        // Create a temporary file for the compiler (it expects a path)
-        let tmp_file = "/tmp/repl_session.nyx";
-        if fs_err::write(tmp_file, &source).is_err() {
-            eprintln!("Error: Could not write session file.");
-            buffer.clear();
-            continue;
-        }
-
-        match compiler.compile_to_bytecode(std::path::Path::new(tmp_file)) {
-            Ok(module) => {
-                vm.load(module);
-                match vm.run("main") {
-                    Ok(val) => {
-                        if val != Value::Null && val != Value::Unit {
-                            println!("=> {:?}", val);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{}: {:?}", "Runtime Error".red(), e);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("{}: {}", "Compilation Error".red(), e);
-            }
+        match eval_repl_line(&mut vm, &buffer) {
+            Ok(val) => if !matches!(val, nyx::runtime::execution::Value::Null) {
+                println!("=> {}", format!("{}", val).yellow());
+            },
+            Err(e) => eprintln!("{}: {:?}", "Error".red(), e),
         }
 
         buffer.clear();
-    }
-}
-
-// Modifying to use std::fs instead of fs_err if fs_err is not in workspace
-mod fs_err {
-    pub fn write<P: AsRef<std::path::Path>, C: AsRef<[u8]>>(path: P, contents: C) -> std::io::Result<()> {
-        std::fs::write(path, contents)
     }
 }

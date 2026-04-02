@@ -12,6 +12,12 @@ pub struct RetentionPolicyManager {
     pub glacier_threshold_years: u64,
 }
 
+impl Default for RetentionPolicyManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RetentionPolicyManager {
     pub fn new() -> Self {
         Self {

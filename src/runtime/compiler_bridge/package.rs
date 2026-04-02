@@ -229,7 +229,7 @@ fn resolve_dependency(
         root.join(format!("{dep}.nyx")),
         root.join("src").join(format!("{dep}.nyx")),
         root.join("stdlib").join(format!("{dep}.nyx")),
-        root.join("stdlib").join(format!("{dep}")).join("mod.nyx"),
+        root.join("stdlib").join(dep).join("mod.nyx"),
     ];
 
     for candidate in direct_candidates {

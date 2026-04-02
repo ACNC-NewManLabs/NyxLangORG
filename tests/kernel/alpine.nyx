@@ -1,0 +1,102 @@
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  Nyx-Alpine v3.19 Native Simulator                                         ║
+# ║  Providing the Alpine Linux experience on the Nyx Hypervisor              ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+fn main() {
+    let FB_BASE = std::kernel::vm::get_fb_ptr()
+    let INPUT_BASE = std::kernel::vm::get_input_ptr()
+    let WIDTH      = 800
+    let HEIGHT     = 600
+    
+    # UI Theme (Alpine Charcoal + Cyan)
+    let C_BG       = 0xFF121212
+    let C_TEXT     = 0xFFE0E0E0
+    let C_ACCENT   = 0xFF00F2FF
+    let C_LOG      = 0xFF888888
+    
+    # State
+    let mut boot_frame = 0
+    let mut log_count  = 0
+    let mut show_login = 0
+    let mut input_ptr  = 0
+    
+    # Input state
+    let mut last_mx = 0
+    let mut last_my = 0
+    let mut last_mdown = 0
+    
+    loop {
+        # 1. Clear Frame (Charcoal Dark)
+        draw_rect(FB_BASE, 0, 0, WIDTH, HEIGHT, C_BG)
+        
+        # 2. Alpine Header
+        draw_rect(FB_BASE, 20, 20, 760, 2, C_ACCENT)
+        # (Text rendering would be a helper, but we simulate it with rects for logo)
+        draw_alpine_logo(FB_BASE, 600, 50)
+        
+        # 3. Boot Animation Logs
+        boot_frame = boot_frame + 1
+        
+        # Simulated log sequences
+        if boot_frame > 10  { draw_log(FB_BASE, 40,   60, "[  OK  ] Starting klogd...", C_LOG) }
+        if boot_frame > 30  { draw_log(FB_BASE, 40,   80, "[  OK  ] Bringing up interface lo...", C_LOG) }
+        if boot_frame > 50  { draw_log(FB_BASE, 40,  100, "[  OK  ] Mounting /sys /proc", C_LOG) }
+        if boot_frame > 70  { draw_log(FB_BASE, 40,  120, "[  OK  ] Starting ntpd", C_LOG) }
+        if boot_frame > 90  { draw_log(FB_BASE, 40,  140, "Welcome to Alpine Linux 3.19", C_TEXT) }
+        if boot_frame > 110 { draw_log(FB_BASE, 40,  160, "Kernel 6.6.14-0-virt on x86_64", C_TEXT) }
+        
+        # 4. Login Prompt
+        if boot_frame > 130 {
+            show_login = 1
+            draw_log(FB_BASE, 40, 200, "localhost login: ", C_ACCENT)
+            # Simulated typing animation if not interactive
+            draw_rect(FB_BASE, 210, 200, 10, 16, 0xFFFFFFFF) # Cursor
+        }
+        
+        # 5. Input Processing (Keyboard & Mouse)
+        let mx    = std::kernel::memory::read_u32(INPUT_BASE)
+        let my    = std::kernel::memory::read_u32(INPUT_BASE + 4)
+        let mdown = std::kernel::memory::read_u32(INPUT_BASE + 8)
+        
+        # Interactive feedback (Drawing a cyan dot at mouse)
+        draw_rect(FB_BASE, mx - 2, my - 2, 4, 4, C_ACCENT)
+
+        # 6. Performance Sync
+        std::kernel::cpu::hlt()
+    }
+}
+
+fn draw_log(fb, x, y, text, color) {
+    # In this primitive Nyx kernel, we represent text blocks as horizontal indicator bars
+    # until the full font renderer is ported. 
+    # For now, we draw a 200px accent bar to show "activity".
+    let len = 300
+    draw_rect(fb, x, y + 14, len, 1, 0xFF333333)
+    draw_rect(fb, x, y, 4, 12, color)
+}
+
+fn draw_alpine_logo(fb, x, y) {
+    # Alpine "A" Triangle Logo
+    draw_rect(fb, x + 40, y + 0,  2, 80, 0xFFFFFFFF) # Left
+    draw_rect(fb, x + 80, y + 0,  2, 80, 0xFFFFFFFF) # Right
+    draw_rect(fb, x + 40, y + 40, 40, 2,  0xFFFFFFFF) # Mid
+    # Glowing shadow
+    draw_rect(fb, x + 38, y - 2, 44, 84, 0x3300F2FF)
+}
+
+fn draw_rect(fb, x, y, w, h, color) {
+    let mut r = 0
+    while r < h {
+        let mut c = 0
+        while c < w {
+            let py = y + r
+            let px = x + c
+            if px >= 0 && px < 800 && py >= 0 && py < 600 {
+                std::kernel::memory::write_u32(fb + (py * 800 + px) * 4, color)
+            }
+            c = c + 1
+        }
+        r = r + 1
+    }
+}

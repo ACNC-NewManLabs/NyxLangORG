@@ -19,6 +19,12 @@ pub struct CooperativeScheduler {
     queues: [VecDeque<Box<dyn Task>>; 4],
 }
 
+impl Default for CooperativeScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CooperativeScheduler {
     pub fn new() -> Self {
         Self {

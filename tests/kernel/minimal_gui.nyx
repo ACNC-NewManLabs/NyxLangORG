@@ -1,0 +1,22 @@
+fn main() {
+    # Designated framebuffer base in Nyx Hypervisor: 0x10000000
+    let fb_base = 268435456
+    
+    # Cyan color (0x00FFFF) for two 32-bit pixels: 0x0000FFFF0000FFFF
+    let color_pair = 281470681808895
+    
+    # Draw a 200x200 cyan square in the center
+    # 800x600 resolution
+    for y in 200..400 {
+        # x goes from 150 to 250, but we write 2 pixels at a time => 200 pixels width
+        for x in 150..250 {
+            # offset = (y * width + x_actual) * bytes_per_pixel
+            # x_actual = x * 2
+            let offset = (y * 800 + x * 2) * 4
+            std::kernel::memory::write_u64(fb_base + offset, color_pair)
+        }
+    }
+    
+    # Signal completion via serial (COM1 = 0x3F8) if supported, or just halt
+    std::kernel::cpu::hlt()
+}

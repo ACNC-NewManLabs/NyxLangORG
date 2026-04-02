@@ -8,6 +8,12 @@ pub struct Timeline {
     started_at: Instant,
 }
 
+impl Default for Timeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Timeline {
     pub fn new() -> Self {
         Self {

@@ -559,6 +559,7 @@ pub trait ModuleAPI {
 
 /// Extension configuration loaded from nyx.toml
 #[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
 pub struct ExtensionConfig {
     /// Engine configurations
     pub engines: Vec<EngineConfig>,
@@ -568,15 +569,6 @@ pub struct ExtensionConfig {
     pub stdlib: Vec<String>,
 }
 
-impl Default for ExtensionConfig {
-    fn default() -> Self {
-        Self {
-            engines: Vec::new(),
-            plugins: Vec::new(),
-            stdlib: Vec::new(),
-        }
-    }
-}
 
 /// Plugin configuration
 #[derive(Debug, Clone, Deserialize)]

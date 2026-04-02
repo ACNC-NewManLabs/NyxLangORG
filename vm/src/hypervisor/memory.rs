@@ -4,6 +4,7 @@
 //! address translation, and memory virtualization.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Guest physical address
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,15 +150,89 @@ pub struct VirtualMemory {
     /// Page table root (CR3)
     pub root: u64,
     /// Guest physical memory
-    guest_memory: Vec<u8>,
+    pub guest_memory: Arc<Mutex<PageAlignedBuffer>>,
     /// Memory size
     memory_size: u64,
     /// Number of pages
-    num_pages: u64,
+    _num_pages: u64,
     /// Active page table
     active_pt: PageTable,
     /// Shadow page tables
-    shadow_pts: HashMap<u64, PageTable>,
+    _shadow_pts: HashMap<u64, PageTable>,
+}
+
+/// Page-aligned buffer for guest memory
+#[derive(Debug)]
+pub struct PageAlignedBuffer {
+    ptr: *mut u8,
+    layout: std::alloc::Layout,
+}
+
+impl serde::Serialize for PageAlignedBuffer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        serializer.serialize_bytes(self.as_slice())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PageAlignedBuffer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let bytes: Vec<u8> = serde::Deserialize::deserialize(deserializer)?;
+        let mut buf = Self::new(bytes.len());
+        buf.copy_from_slice(&bytes);
+        Ok(buf)
+    }
+}
+
+impl PageAlignedBuffer {
+    pub fn new(size: usize) -> Self {
+        // KVM requires 4KB alignment
+        let layout = std::alloc::Layout::from_size_align(size, 4096).unwrap();
+        let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
+        if ptr.is_null() {
+            panic!("Failed to allocate guest memory of size {}", size);
+        }
+        Self { ptr, layout }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr, self.layout.size()) }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.layout.size()) }
+    }
+}
+
+impl std::ops::Deref for PageAlignedBuffer {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl std::ops::DerefMut for PageAlignedBuffer {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        self.as_mut_slice()
+    }
+}
+
+unsafe impl Send for PageAlignedBuffer {}
+unsafe impl Sync for PageAlignedBuffer {}
+
+impl Drop for PageAlignedBuffer {
+    fn drop(&mut self) {
+        unsafe { std::alloc::dealloc(self.ptr, self.layout) };
+    }
+}
+
+impl Clone for PageAlignedBuffer {
+    fn clone(&self) -> Self {
+        let mut new = Self::new(self.layout.size());
+        new.copy_from_slice(self.as_slice());
+        new
+    }
 }
 
 impl VirtualMemory {
@@ -167,66 +242,135 @@ impl VirtualMemory {
         
         Self {
             root: 0,
-            guest_memory: vec![0u8; memory_size as usize],
+            guest_memory: Arc::new(Mutex::new(PageAlignedBuffer::new(memory_size as usize))),
             memory_size,
-            num_pages,
+            _num_pages: num_pages,
             active_pt: PageTable::new(512),
-            shadow_pts: HashMap::new(),
+            _shadow_pts: HashMap::new(),
         }
     }
     
     /// Read from guest physical memory
     pub fn read_phys(&self, addr: GuestPhysicalAddr, size: usize) -> Result<u64, String> {
-        let addr = addr.0 as usize;
-        if addr + size > self.memory_size as usize {
-            return Err("Invalid physical memory access".to_string());
+        let addr_val = addr.0 as usize;
+        if addr_val + size > self.memory_size as usize {
+            return Err(format!("Invalid physical memory access at 0x{:x}", addr_val));
         }
         
+        let mem = self.guest_memory.lock().unwrap();
         match size {
-            1 => Ok(self.guest_memory[addr] as u64),
-            2 => Ok(u16::from_le_bytes([self.guest_memory[addr], self.guest_memory[addr + 1]]) as u64),
-            4 => Ok(u32::from_le_bytes([self.guest_memory[addr], self.guest_memory[addr + 1],
-                                         self.guest_memory[addr + 2], self.guest_memory[addr + 3]]) as u64),
-            8 => Ok(u64::from_le_bytes([self.guest_memory[addr], self.guest_memory[addr + 1],
-                                         self.guest_memory[addr + 2], self.guest_memory[addr + 3],
-                                         self.guest_memory[addr + 4], self.guest_memory[addr + 5],
-                                         self.guest_memory[addr + 6], self.guest_memory[addr + 7]])),
-            _ => Err("Invalid size".to_string()),
+            1 => Ok(mem[addr_val] as u64),
+            2 => {
+                let bytes = [mem[addr_val], mem[addr_val+1]];
+                Ok(u16::from_le_bytes(bytes) as u64)
+            }
+            4 => {
+                let bytes = [mem[addr_val], mem[addr_val+1], mem[addr_val+2], mem[addr_val+3]];
+                Ok(u32::from_le_bytes(bytes) as u64)
+            }
+            8 => {
+                let bytes = [mem[addr_val], mem[addr_val+1], mem[addr_val+2], mem[addr_val+3], 
+                             mem[addr_val+4], mem[addr_val+5], mem[addr_val+6], mem[addr_val+7]];
+                Ok(u64::from_le_bytes(bytes))
+            }
+            _ => Err(format!("Unsupported read size: {}", size)),
         }
+    }
+
+    /// Read a buffer from guest physical memory
+    pub fn read_buf(&self, addr: GuestPhysicalAddr, buf: &mut [u8]) -> Result<(), String> {
+        let addr_val = addr.0 as usize;
+        if addr_val + buf.len() > self.memory_size as usize {
+            return Err(format!("Invalid physical memory access at 0x{:x}", addr_val));
+        }
+        let mem = self.guest_memory.lock().unwrap();
+        buf.copy_from_slice(&mem[addr_val..addr_val + buf.len()]);
+        Ok(())
     }
     
     /// Write to guest physical memory
     pub fn write_phys(&mut self, addr: GuestPhysicalAddr, size: usize, value: u64) -> Result<(), String> {
-        let addr = addr.0 as usize;
-        if addr + size > self.memory_size as usize {
-            return Err("Invalid physical memory access".to_string());
+        let addr_val = addr.0 as usize;
+        if addr_val + size > self.memory_size as usize {
+            return Err(format!("Invalid physical memory access at 0x{:x}", addr_val));
         }
         
+        let mut mem = self.guest_memory.lock().unwrap();
         match size {
-            1 => self.guest_memory[addr] = value as u8,
-            2 => self.guest_memory[addr..addr + 2].copy_from_slice(&(value as u16).to_le_bytes()),
-            4 => self.guest_memory[addr..addr + 4].copy_from_slice(&(value as u32).to_le_bytes()),
-            8 => self.guest_memory[addr..addr + 8].copy_from_slice(&value.to_le_bytes()),
-            _ => return Err("Invalid size".to_string()),
+            1 => mem[addr_val] = value as u8,
+            2 => mem[addr_val..addr_val + 2].copy_from_slice(&(value as u16).to_le_bytes()),
+            4 => mem[addr_val..addr_val + 4].copy_from_slice(&(value as u32).to_le_bytes()),
+            8 => mem[addr_val..addr_val + 8].copy_from_slice(&value.to_le_bytes()),
+            _ => return Err(format!("Unsupported write size: {}", size)),
         }
         Ok(())
     }
-    
-    /// Translate virtual address to physical
-    pub fn translate(&self, virt_addr: VirtAddr) -> Option<PhysAddr> {
-        // Simplified page table walk
-        let vpn = virt_addr.page_number();
-        
-        // Level 4 (PML4)
-        let pml4_idx = ((vpn >> 27) & 0x1FF) as usize;
-        let pml4_entry = self.active_pt.get_entry(pml4_idx)?;
-        
-        if !pml4_entry.is_present() {
-            return None;
+
+    /// Write a buffer to guest physical memory
+    pub fn write_buf(&mut self, addr: GuestPhysicalAddr, buf: &[u8]) -> Result<(), String> {
+        let addr_val = addr.0 as usize;
+        if addr_val + buf.len() > self.memory_size as usize {
+            return Err(format!("Invalid physical memory access at 0x{:x}", addr_val));
         }
+        let mut mem = self.guest_memory.lock().unwrap();
+        mem[addr_val..addr_val + buf.len()].copy_from_slice(buf);
+        Ok(())
+    }
+    
+    /// Translate virtual address to physical using 4-level page tables (x86_64)
+    pub fn translate(&self, virt_addr: VirtAddr, cr3: u64) -> Option<PhysAddr> {
+        if cr3 == 0 {
+            // Paging disabled or root not set; return identity map for now
+            return Some(PhysAddr(virt_addr.0));
+        }
+
+        let _vpn = virt_addr.page_number();
+        let offset = virt_addr.offset();
+
+        // Level indices
+        let pml4_idx = ((virt_addr.0 >> 39) & 0x1FF) as u64;
+        let pdpt_idx = ((virt_addr.0 >> 30) & 0x1FF) as u64;
+        let pd_idx   = ((virt_addr.0 >> 21) & 0x1FF) as u64;
+        let pt_idx   = ((virt_addr.0 >> 12) & 0x1FF) as u64;
+
+        // 1. PML4
+        let pml4_entry_addr = cr3 + (pml4_idx * 8);
+        let pml4_val = self.read_phys(GuestPhysicalAddr(pml4_entry_addr), 8).ok()?;
+        let pml4_entry = PageTableEntry { value: pml4_val };
+        if !pml4_entry.is_present() { return None; }
+
+        // 2. PDPT
+        let pdpt_addr = pml4_entry.frame_address() + (pdpt_idx * 8);
+        let pdpt_val = self.read_phys(GuestPhysicalAddr(pdpt_addr), 8).ok()?;
+        let pdpt_entry = PageTableEntry { value: pdpt_val };
+        if !pdpt_entry.is_present() { return None; }
         
-        // For simplicity, return identity mapping
-        Some(PhysAddr(virt_addr.0))
+        // 1GB huge page check
+        if (pdpt_entry.value & 0x80) != 0 {
+            let phys = (pdpt_entry.frame_address() & !0x3FFFFFFF) | (virt_addr.0 & 0x3FFFFFFF);
+            return Some(PhysAddr(phys));
+        }
+
+        // 3. PD
+        let pd_addr = pdpt_entry.frame_address() + (pd_idx * 8);
+        let pd_val = self.read_phys(GuestPhysicalAddr(pd_addr), 8).ok()?;
+        let pd_entry = PageTableEntry { value: pd_val };
+        if !pd_entry.is_present() { return None; }
+
+        // 2MB huge page check
+        if (pd_entry.value & 0x80) != 0 {
+            let phys = (pd_entry.frame_address() & !0x1FFFFF) | (virt_addr.0 & 0x1FFFFF);
+            return Some(PhysAddr(phys));
+        }
+
+        // 4. PT
+        let pt_addr = pd_entry.frame_address() + (pt_idx * 8);
+        let pt_val = self.read_phys(GuestPhysicalAddr(pt_addr), 8).ok()?;
+        let pt_entry = PageTableEntry { value: pt_val };
+        if !pt_entry.is_present() { return None; }
+
+        let phys = pt_entry.frame_address() | offset;
+        Some(PhysAddr(phys))
     }
     
     /// Map a virtual address to physical
@@ -237,6 +381,17 @@ impl VirtualMemory {
         self.active_pt.set_entry(pml4_idx, PageTableEntry::new(phys.frame_number(), flags));
     }
     
+    /// Get host pointer to guest physical memory
+    pub fn get_host_ptr(&self, addr: GuestPhysicalAddr, size: usize) -> Result<*mut u8, String> {
+        let addr = addr.0 as usize;
+        if addr + size > self.memory_size as usize {
+            return Err("Invalid physical memory access".to_string());
+        }
+        
+        let mem = self.guest_memory.lock().unwrap();
+        Ok(unsafe { mem.as_ptr().add(addr) as *mut u8 })
+    }
+
     /// Get memory size
     pub fn memory_size(&self) -> u64 {
         self.memory_size

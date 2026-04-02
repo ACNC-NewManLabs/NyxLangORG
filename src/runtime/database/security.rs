@@ -6,6 +6,12 @@ pub struct AdvancedSecurity {
     pub memory_quota: usize,
 }
 
+impl Default for AdvancedSecurity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AdvancedSecurity {
     pub fn new() -> Self {
         Self {

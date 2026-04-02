@@ -476,7 +476,7 @@ fn extract_vars_and_types(stmts: &[Stmt], vars: &mut HashMap<String, Range>, v_t
                  }
             }
             Stmt::While { body, .. } | Stmt::Loop { body, .. } => extract_vars_and_types(body, vars, v_types),
-            Stmt::Expr(Expr::Block(body, _)) => extract_vars_and_types(body, vars, v_types),
+            Stmt::Expr(Expr::Block { stmts: body, .. }) => extract_vars_and_types(body, vars, v_types),
             _ => {}
         }
     }

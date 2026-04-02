@@ -1,0 +1,15 @@
+fn main() {
+    let n = 100000000;
+    let total = 0;
+    let i = 0;
+
+    let start = __native_time_ms();
+    while i < n {
+        total = total + i;
+        i = i + 1;
+    }
+    let end = __native_time_ms();
+
+    println("Nyx (Aero-Loops) Result: " + total);
+    println("Nyx (Aero-Loops) 100M iterations: " + (end - start) + "ms");
+}

@@ -106,8 +106,7 @@ fn bench_numeric_jit() {
     let module = create_numeric_module(iterations);
     
     // Interpreter
-    let mut config_int = VmConfig::default();
-    config_int.enable_jit = false;
+    let config_int = VmConfig { enable_jit: false, ..Default::default() };
     let mut vm_int = NyxVm::new(config_int);
     vm_int.load(module.clone());
     let start_int = Instant::now();
@@ -116,8 +115,7 @@ fn bench_numeric_jit() {
     println!("Numeric Interpreter: {:?} (result: {:?})", duration_int, res_int);
     
     // JIT
-    let mut config_jit = VmConfig::default();
-    config_jit.enable_jit = true;
+    let config_jit = VmConfig { enable_jit: true, ..Default::default() };
     let mut vm_jit = NyxVm::new(config_jit);
     vm_jit.load(module);
     let start_jit = Instant::now();
@@ -134,8 +132,7 @@ fn bench_ic_jit() {
     let module = create_ic_module(iterations);
     
     // Interpreter
-    let mut config_int = VmConfig::default();
-    config_int.enable_jit = false;
+    let config_int = VmConfig { enable_jit: false, ..Default::default() };
     let mut vm_int = NyxVm::new(config_int);
     vm_int.load(module.clone());
     let start_int = Instant::now();
@@ -144,8 +141,7 @@ fn bench_ic_jit() {
     println!("IC Interpreter: {:?} (result: {:?})", duration_int, res_int);
     
     // JIT
-    let mut config_jit = VmConfig::default();
-    config_jit.enable_jit = true;
+    let config_jit = VmConfig { enable_jit: true, ..Default::default() };
     let mut vm_jit = NyxVm::new(config_jit);
     vm_jit.load(module);
     let start_jit = Instant::now();

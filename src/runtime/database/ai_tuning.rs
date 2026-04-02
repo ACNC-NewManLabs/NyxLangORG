@@ -6,6 +6,12 @@ pub struct AITuningConvergence {
     pub tuning_threshold_ms: f64,
 }
 
+impl Default for AITuningConvergence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AITuningConvergence {
     pub fn new() -> Self {
         Self {

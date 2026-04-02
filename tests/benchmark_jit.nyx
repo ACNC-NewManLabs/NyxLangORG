@@ -1,0 +1,13 @@
+let n = 10000000;
+let total = 0;
+let i = 0;
+
+let start = __native_time_ms();
+while i < n {
+    total = total + i;
+    i = i + 1;
+}
+let end = __native_time_ms();
+
+print("Nyx (JIT Loop) Result: " + total);
+print("Nyx (JIT Loop) 10M iterations: " + (end - start) + "ms");

@@ -12,6 +12,12 @@ pub struct StorageIntelligence {
     pub cold_threshold_days: usize,
 }
 
+impl Default for StorageIntelligence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StorageIntelligence {
     pub fn new() -> Self {
         Self {

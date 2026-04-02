@@ -28,13 +28,13 @@ impl BytecodeLoader {
     /// Load bytecode from bytes
     pub fn load_bytes(bytes: &[u8]) -> VmResult<BytecodeModule> {
         deserialize_module(bytes)
-            .map_err(|e| VmError::InvalidOperand(e))
+            .map_err(VmError::InvalidOperand)
     }
 
     /// Save bytecode to file
     pub fn save_file(module: &BytecodeModule, path: &Path) -> VmResult<()> {
         let bytes = serialize_module(module)
-            .map_err(|e| VmError::InvalidOperand(e))?;
+            .map_err(VmError::InvalidOperand)?;
         
         let mut file = File::create(path)
             .map_err(|e| VmError::IoError(e.to_string()))?;

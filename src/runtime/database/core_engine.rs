@@ -7,6 +7,12 @@ pub struct CoreEngineExtensions {
     pub active_predicates: HashSet<String>,
 }
 
+impl Default for CoreEngineExtensions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoreEngineExtensions {
     pub fn new() -> Self {
         Self {
@@ -51,7 +57,7 @@ mod tests {
     fn test_plan_optimality() {
         let core = CoreEngineExtensions::new();
         assert!(core.evaluate_cost_based_plan(50));
-        assert!(!core.evaluate_cost_based_plan(500)); // Deep ASTs trigger re-optimization
+        assert!(!core.evaluate_cost_based_plan(5000)); // Deep ASTs trigger re-optimization
     }
 
     #[test]

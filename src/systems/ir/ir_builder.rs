@@ -3,6 +3,7 @@ use crate::systems::ir::nyx_ir::*;
 use std::collections::HashMap;
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct IrBuilder {
     label_counter: usize,
     loop_stack: Vec<LoopLabels>,
@@ -20,26 +21,6 @@ pub struct IrBuilder {
     defer_stack: Vec<Vec<Vec<Instruction>>>,
 }
 
-impl Default for IrBuilder {
-    fn default() -> Self {
-        Self {
-            label_counter: 0,
-            loop_stack: Vec::new(),
-            struct_defs: HashMap::new(),
-            synthetic_structs: HashMap::new(),
-            local_types: HashMap::new(),
-            generic_fns: HashMap::new(),
-            impl_methods: HashMap::new(),
-            pending_monomorphized: Vec::new(),
-            seen_monomorphized: HashMap::new(),
-            closure_counter: 0,
-            closure_locals: HashMap::new(),
-            synthetic_functions: Vec::new(),
-            type_subst: None,
-            defer_stack: Vec::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 struct LoopLabels {
@@ -135,7 +116,7 @@ impl IrBuilder {
             functions.push(builder.lower_fn(&req.decl, Some(&req.subst), Some(&name))?);
         }
 
-        functions.extend(builder.synthetic_functions.drain(..));
+        functions.append(&mut builder.synthetic_functions);
 
         let mut structs: Vec<StructDef> = builder
             .struct_defs
@@ -439,6 +420,9 @@ impl IrBuilder {
                     });
                 }
             }
+            Stmt::Yield { .. } => {
+                return Err("error[E110]: yield is not yet supported in AOT compilation (IR lowering)".to_string());
+            }
         }
         Ok(())
     }
@@ -451,20 +435,20 @@ impl IrBuilder {
         tmp: &mut usize,
     ) -> Result<Value, String> {
         match expr {
-            Expr::IntLiteral(n) => Ok(Value::Int(*n)),
-            Expr::BigIntLiteral(_) => {
+            Expr::IntLiteral { value: n, .. } => Ok(Value::Int(*n)),
+            Expr::BigIntLiteral { value: _, .. } => {
                 Err("error[E110]: big integer literals are not supported in IR lowering".to_string())
             }
-            Expr::FloatLiteral(f) => Ok(Value::Float(*f)),
-            Expr::StringLiteral(s) => Ok(Value::Str(s.clone())),
-            Expr::BoolLiteral(b) => Ok(Value::Bool(*b)),
-            Expr::CharLiteral(c) => Ok(Value::Int(*c as i64)),
-            Expr::NullLiteral => Ok(Value::Null),
+            Expr::FloatLiteral { value: f, .. } => Ok(Value::Float(*f)),
+            Expr::StringLiteral { value: s, .. } => Ok(Value::Str(s.clone())),
+            Expr::BoolLiteral { value: b, .. } => Ok(Value::Bool(*b)),
+            Expr::CharLiteral { value: c, .. } => Ok(Value::Int(*c as i64)),
+            Expr::NullLiteral { .. } => Ok(Value::Null),
             // css`` literals are evaluated by the VM, not the IR path.
-            Expr::CssLiteral(_) => Ok(Value::Null),
-            Expr::Identifier(n) => Ok(Value::Local(n.clone())),
-            Expr::Path(parts) => Ok(Value::Local(parts.join("::"))),
-            Expr::Binary { left, op, right } => {
+            Expr::CssLiteral { value: _, .. } => Ok(Value::Null),
+            Expr::Identifier { name: n, .. } => Ok(Value::Local(n.clone())),
+            Expr::Path { segments: parts, .. } => Ok(Value::Local(parts.join("::"))),
+            Expr::Binary { left, op, right, .. } => {
                 let lv = self.lower_expr(left, out, tmp)?;
                 let rv = self.lower_expr(right, out, tmp)?;
                 if op == "??" {
@@ -541,7 +525,7 @@ impl IrBuilder {
                 });
                 Ok(Value::Temp(dst))
             }
-            Expr::Unary { op, right } => {
+            Expr::Unary { op, right, .. } => {
                 let rv = self.lower_expr(right, out, tmp)?;
                 let ir_op = match op.as_str() {
                     "-" => BinaryOp::Sub,
@@ -565,6 +549,7 @@ impl IrBuilder {
                 condition,
                 then_expr,
                 else_expr,
+                ..
             } => {
                 let cond_val = self.lower_expr(condition, out, tmp)?;
                 let then_lbl = self.new_label("tern_then");
@@ -597,7 +582,7 @@ impl IrBuilder {
                 out.push(Instruction::Label(end_lbl));
                 Ok(Value::Temp(dst))
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 let callee_str = expr_to_local(callee)?;
                 if let Some(closure) = self.closure_locals.get(&callee_str).cloned() {
                     let mut call_args = Vec::new();
@@ -650,7 +635,7 @@ impl IrBuilder {
                 });
                 Ok(Value::Temp(dst))
             }
-            Expr::FieldAccess { object, field } => {
+            Expr::FieldAccess { object, field, .. } => {
                 let base = expr_to_local(object)?;
                 let struct_ty = self
                     .local_types
@@ -683,10 +668,10 @@ impl IrBuilder {
                 Ok(Value::Temp(dst))
             }
             Expr::Cast { expr, .. } => self.lower_expr(expr, out, tmp),
-            Expr::Await(e) | Expr::Move(e) | Expr::Deref(e) | Expr::TryOp(e) => {
+            Expr::Await { expr: e, .. } | Expr::Move { expr: e, .. } | Expr::Deref { expr: e, .. } | Expr::TryOp { expr: e, .. } => {
                 self.lower_expr(e, out, tmp)
             }
-            Expr::Block(stmts, tail) => {
+            Expr::Block { stmts, tail_expr: tail, .. } => {
                 self.push_defer_scope();
                 for s in stmts {
                     self.lower_stmt(s, out, tmp)?;
@@ -711,7 +696,7 @@ impl IrBuilder {
                 res
             }
             Expr::Match { .. } => self.lower_match_expr(expr, out, tmp),
-            Expr::StructLiteral { name, fields } => {
+            Expr::StructLiteral { name, fields, .. } => {
                 let struct_name = name.clone();
                 let def = self
                     .struct_defs
@@ -754,7 +739,7 @@ impl IrBuilder {
                     .insert(dst.clone(), IrType::Struct(struct_name));
                 Ok(Value::Temp(dst))
             }
-            Expr::ArrayLiteral(items) => {
+            Expr::ArrayLiteral { elements: items, .. } => {
                 let elem_ty = self.infer_array_elem_type(items)?;
                 let len_val = Value::Int(items.len() as i64);
                 let dst = format!("_t{}", {
@@ -780,7 +765,7 @@ impl IrBuilder {
                     .insert(dst.clone(), IrType::Array(Box::new(elem_ty)));
                 Ok(Value::Temp(dst))
             }
-            Expr::ArrayRepeat { value, len } => {
+            Expr::ArrayRepeat { value, len, .. } => {
                 let elem_ty = self.infer_expr_type(value)?;
                 let len_val = self.lower_expr(len, out, tmp)?;
                 let dst = format!("_t{}", {
@@ -857,7 +842,7 @@ impl IrBuilder {
                     .insert(dst.clone(), IrType::Array(Box::new(elem_ty)));
                 Ok(Value::Temp(dst))
             }
-            Expr::Index { object, index } => {
+            Expr::Index { object, index, .. } => {
                 let base = expr_to_local(object)?;
                 let arr_ty = self
                     .local_types
@@ -884,7 +869,7 @@ impl IrBuilder {
                 Ok(Value::Temp(dst))
             }
             Expr::Slice { .. } => Err("error[E110]: slice expressions are not supported in IR lowering".to_string()),
-            Expr::MethodCall { receiver, method, args } => {
+            Expr::MethodCall { receiver, method, args, .. } => {
                 let recv_val = self.lower_expr(receiver, out, tmp)?;
                 let recv_ty = self.infer_expr_type(receiver)?;
                 let callee =
@@ -913,7 +898,7 @@ impl IrBuilder {
                 });
                 Ok(Value::Temp(dst))
             }
-            Expr::TupleLiteral(items) => {
+            Expr::TupleLiteral { elements: items, .. } => {
                 let mut elem_vals = Vec::new();
                 let mut elem_tys = Vec::new();
                 for item in items {
@@ -945,6 +930,7 @@ impl IrBuilder {
                 params,
                 return_ty: _,
                 body,
+                ..
             } => {
                 let captures = self.collect_closure_captures(body, params)?;
                 let mut capture_tys = Vec::new();
@@ -1010,12 +996,58 @@ impl IrBuilder {
                 );
                 Ok(Value::Temp(dst))
             }
-            | Expr::BlockLiteral(_)
+            Expr::IfExpr {
+                branches,
+                else_body,
+                ..
+            } => {
+                let end_lbl = self.new_label("ifexpr_end");
+                let dst = format!("_t{}", {
+                    let t = *tmp;
+                    *tmp += 1;
+                    t
+                });
+                
+                for branch in branches {
+                    let then_lbl = self.new_label("ifexpr_then");
+                    let next_lbl = self.new_label("ifexpr_next");
+                    let cond_val = self.lower_expr(&branch.condition, out, tmp)?;
+                    out.push(Instruction::Branch {
+                        cond: cond_val,
+                        then_label: then_lbl.clone(),
+                        else_label: next_lbl.clone(),
+                    });
+                    out.push(Instruction::Label(then_lbl));
+                    // Evaluate branch body as expression (take the last stmt)
+                    let mut val = Value::Null;
+                    for stmt in &branch.body {
+                        self.lower_stmt(stmt, out, tmp)?;
+                        // If it's an Expr stmt, it might be the value
+                        if let Stmt::Expr(e) = stmt {
+                            val = self.lower_expr(e, out, tmp)?;
+                        }
+                    }
+                    out.push(Instruction::Let { name: dst.clone(), value: val });
+                    out.push(Instruction::Jump(end_lbl.clone()));
+                    out.push(Instruction::Label(next_lbl));
+                }
+                
+                // Else body
+                let mut else_val = Value::Null;
+                if let Some(body_expr) = else_body {
+                    else_val = self.lower_expr(body_expr, out, tmp)?;
+                }
+                out.push(Instruction::Let { name: dst.clone(), value: else_val });
+                out.push(Instruction::Jump(end_lbl.clone()));
+                out.push(Instruction::Label(end_lbl));
+                
+                Ok(Value::Temp(dst))
+            }
+            Expr::BlockLiteral { .. }
             | Expr::Range { .. }
             | Expr::Reference { .. }
-            | Expr::IfExpr { .. }
-            | Expr::AsyncBlock(_)
-            | Expr::Loop(_) => {
+            | Expr::AsyncBlock { .. }
+            | Expr::Loop { .. } => {
                 Err("error[E110]: unsupported expression in IR lowering".to_string())
             }
         }
@@ -1118,7 +1150,7 @@ impl IrBuilder {
         out: &mut Vec<Instruction>,
         tmp: &mut usize,
     ) -> Result<Value, String> {
-        let Expr::Match { expr, arms } = expr else {
+        let Expr::Match { expr, arms, .. } = expr else {
             return Err("error[E110]: internal match lowering error".into());
         };
         let result_name = format!("_match{}", {
@@ -1389,15 +1421,15 @@ impl IrBuilder {
 
     fn lower_literal_expr(&self, expr: &Expr) -> Result<Value, String> {
         match expr {
-            Expr::IntLiteral(n) => Ok(Value::Int(*n)),
-            Expr::BigIntLiteral(_) => Err("error[E110]: big integer match literals not supported".into()),
-            Expr::FloatLiteral(_) => Err("error[E110]: float match literals not yet supported".into()),
-            Expr::StringLiteral(_) => {
+            Expr::IntLiteral { value: n, .. } => Ok(Value::Int(*n)),
+            Expr::BigIntLiteral { value: _, .. } => Err("error[E110]: big integer match literals not supported".into()),
+            Expr::FloatLiteral { value: _, .. } => Err("error[E110]: float match literals not yet supported".into()),
+            Expr::StringLiteral { value: _, .. } => {
                 Err("error[E110]: string match literals not yet supported".into())
             }
-            Expr::BoolLiteral(b) => Ok(Value::Bool(*b)),
-            Expr::CharLiteral(c) => Ok(Value::Int(*c as i64)),
-            Expr::NullLiteral => Ok(Value::Null),
+            Expr::BoolLiteral { value: b, .. } => Ok(Value::Bool(*b)),
+            Expr::CharLiteral { value: c, .. } => Ok(Value::Int(*c as i64)),
+            Expr::NullLiteral { .. } => Ok(Value::Null),
             _ => Err("error[E110]: match literal must be a simple literal".into()),
         }
     }
@@ -1504,6 +1536,7 @@ impl IrBuilder {
                 start,
                 end,
                 inclusive,
+                ..
             } => {
                 let Some(start) = start else {
                     return Err("error[E110]: range start is required in for-in".into());
@@ -1530,10 +1563,10 @@ impl IrBuilder {
                     compare_op,
                 })
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 let name = match callee.as_ref() {
-                    Expr::Identifier(n) => n.as_str(),
-                    Expr::Path(p) => p.last().map(|s| s.as_str()).unwrap_or(""),
+                    Expr::Identifier { name: n, .. } => n.as_str(),
+                    Expr::Path { segments: p, .. } => p.last().map(|s| s.as_str()).unwrap_or(""),
                     _ => "",
                 };
                 if name != "range" {
@@ -1548,11 +1581,11 @@ impl IrBuilder {
                 let end_v = self.lower_expr(&args[1], out, tmp)?;
                 let step = if args.len() == 3 {
                     match args[2] {
-                        Expr::IntLiteral(n) if n != 0 => n,
-                        Expr::IntLiteral(_) => {
+                        Expr::IntLiteral { value: n, .. } if n != 0 => n,
+                        Expr::IntLiteral { value: _, .. } => {
                             return Err("error[E110]: range step cannot be zero".into())
                         }
-                        Expr::BigIntLiteral(_) => {
+                        Expr::BigIntLiteral { value: _, .. } => {
                             return Err(
                                 "error[E110]: range step must be a small integer literal".into(),
                             )
@@ -1824,8 +1857,8 @@ impl IrBuilder {
 
     fn propagate_closure_local(&mut self, expr: &Expr, name: &str) {
         let src = match expr {
-            Expr::Identifier(n) => Some(n.clone()),
-            Expr::Path(parts) => Some(parts.join("::")),
+            Expr::Identifier { name: n, .. } => Some(n.clone()),
+            Expr::Path { segments: parts, .. } => Some(parts.join("::")),
             _ => None,
         };
         if let Some(src) = src {
@@ -1870,14 +1903,14 @@ impl IrBuilder {
         captures: &mut std::collections::HashSet<String>,
     ) {
         match expr {
-            Expr::Identifier(name) => {
+            Expr::Identifier { name, .. } => {
                 if !locals.iter().any(|s| s.contains(name))
                     && self.local_types.contains_key(name)
                 {
                     captures.insert(name.clone());
                 }
             }
-            Expr::Block(stmts, tail) => {
+            Expr::Block { stmts, tail_expr: tail, .. } => {
                 locals.push(std::collections::HashSet::new());
                 for s in stmts {
                     self.walk_stmt_for_captures(s, locals, captures);
@@ -1887,7 +1920,7 @@ impl IrBuilder {
                 }
                 locals.pop();
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 self.walk_expr_for_captures(callee, locals, captures);
                 for a in args {
                     self.walk_expr_for_captures(a, locals, captures);
@@ -1904,20 +1937,20 @@ impl IrBuilder {
                 self.walk_expr_for_captures(right, locals, captures);
             }
             Expr::Unary { right, .. }
-            | Expr::Await(right)
-            | Expr::Move(right)
-            | Expr::Deref(right)
-            | Expr::TryOp(right) => {
+            | Expr::Await { expr: right, .. }
+            | Expr::Move { expr: right, .. }
+            | Expr::Deref { expr: right, .. }
+            | Expr::TryOp { expr: right, .. } => {
                 self.walk_expr_for_captures(right, locals, captures);
             }
             Expr::FieldAccess { object, .. } => {
                 self.walk_expr_for_captures(object, locals, captures);
             }
-            Expr::Index { object, index } => {
+            Expr::Index { object, index, .. } => {
                 self.walk_expr_for_captures(object, locals, captures);
                 self.walk_expr_for_captures(index, locals, captures);
             }
-            Expr::Slice { object, start, end } => {
+            Expr::Slice { object, start, end, .. } => {
                 self.walk_expr_for_captures(object, locals, captures);
                 if let Some(s) = start {
                     self.walk_expr_for_captures(s, locals, captures);
@@ -1931,16 +1964,16 @@ impl IrBuilder {
                     self.walk_expr_for_captures(&f.value, locals, captures);
                 }
             }
-            Expr::ArrayLiteral(items) | Expr::TupleLiteral(items) => {
+            Expr::ArrayLiteral { elements: items, .. } | Expr::TupleLiteral { elements: items, .. } => {
                 for it in items {
                     self.walk_expr_for_captures(it, locals, captures);
                 }
             }
-            Expr::ArrayRepeat { value, len } => {
+            Expr::ArrayRepeat { value, len, .. } => {
                 self.walk_expr_for_captures(value, locals, captures);
                 self.walk_expr_for_captures(len, locals, captures);
             }
-            Expr::IfExpr { branches, else_body } => {
+            Expr::IfExpr { branches, else_body, .. } => {
                 for b in branches {
                     self.walk_expr_for_captures(&b.condition, locals, captures);
                     locals.push(std::collections::HashSet::new());
@@ -1957,12 +1990,13 @@ impl IrBuilder {
                 condition,
                 then_expr,
                 else_expr,
+                ..
             } => {
                 self.walk_expr_for_captures(condition, locals, captures);
                 self.walk_expr_for_captures(then_expr, locals, captures);
                 self.walk_expr_for_captures(else_expr, locals, captures);
             }
-            Expr::Match { expr, arms } => {
+            Expr::Match { expr, arms, .. } => {
                 self.walk_expr_for_captures(expr, locals, captures);
                 for arm in arms {
                     locals.push(std::collections::HashSet::new());
@@ -2193,18 +2227,18 @@ impl IrBuilder {
 
     fn infer_expr_type(&mut self, expr: &Expr) -> Result<IrType, String> {
         Ok(match expr {
-            Expr::IntLiteral(_) | Expr::BoolLiteral(_) | Expr::CharLiteral(_) => IrType::I64,
-            Expr::BigIntLiteral(_) => {
+            Expr::IntLiteral { value: _, .. } | Expr::BoolLiteral { value: _, .. } | Expr::CharLiteral { value: _, .. } => IrType::I64,
+            Expr::BigIntLiteral { value: _, .. } => {
                 return Err("error[E110]: big integer literals are not supported in IR types".into())
             }
-            Expr::FloatLiteral(_) => IrType::F64,
-            Expr::StringLiteral(_) => IrType::Ptr,
+            Expr::FloatLiteral { value: _, .. } => IrType::F64,
+            Expr::StringLiteral { value: _, .. } => IrType::Ptr,
             Expr::StructLiteral { name, .. } => IrType::Struct(name.clone()),
-            Expr::ArrayLiteral(items) => {
+            Expr::ArrayLiteral { elements: items, .. } => {
                 let elem = self.infer_array_elem_type(items)?;
                 IrType::Array(Box::new(elem))
             }
-            Expr::TupleLiteral(items) => {
+            Expr::TupleLiteral { elements: items, .. } => {
                 let mut elem_tys = Vec::new();
                 for it in items {
                     elem_tys.push(self.infer_expr_type(it)?);
@@ -2212,7 +2246,7 @@ impl IrBuilder {
                 let name = self.ensure_tuple_struct(&elem_tys);
                 IrType::Struct(name)
             }
-            Expr::Identifier(name) => self
+            Expr::Identifier { name, .. } => self
                 .local_types
                 .get(name)
                 .cloned()
@@ -2276,9 +2310,9 @@ struct RangeIter {
 
 fn expr_to_local(e: &Expr) -> Result<String, String> {
     match e {
-        Expr::Identifier(n) => Ok(n.clone()),
-        Expr::Path(parts) => Ok(parts.join("::")),
-        Expr::FieldAccess { object, field } => {
+        Expr::Identifier { name: n, .. } => Ok(n.clone()),
+        Expr::Path { segments: parts, .. } => Ok(parts.join("::")),
+        Expr::FieldAccess { object, field, .. } => {
             Ok(format!("{}.{field}", expr_to_local(object)?))
         }
         _ => Err("error[E110]: assignment target must be an identifier or field".into()),

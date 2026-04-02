@@ -17,6 +17,12 @@ pub struct FusedKernel {
     pub num_inputs: usize,
 }
 
+impl Default for FusedKernel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FusedKernel {
     pub fn new() -> Self {
         Self { ops: Vec::new(), num_inputs: 0 }
@@ -32,36 +38,36 @@ impl FusedKernel {
                     OpNode::Const(c) => stack.push(*c),
                     OpNode::Input(idx) => stack.push(inputs[*idx][i]),
                     OpNode::Add => {
-                        let b = stack.pop().unwrap();
-                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap_or(0.0);
+                        let a = stack.pop().unwrap_or(0.0);
                         stack.push(a + b);
                     }
                     OpNode::Sub => {
-                        let b = stack.pop().unwrap();
-                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap_or(0.0);
+                        let a = stack.pop().unwrap_or(0.0);
                         stack.push(a - b);
                     }
                     OpNode::Mul => {
-                        let b = stack.pop().unwrap();
-                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap_or(0.0);
+                        let a = stack.pop().unwrap_or(0.0);
                         stack.push(a * b);
                     }
                     OpNode::Div => {
-                        let b = stack.pop().unwrap();
-                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap_or(0.0);
+                        let a = stack.pop().unwrap_or(0.0);
                         stack.push(a / b);
                     }
                     OpNode::ReLU => {
-                        let a = stack.pop().unwrap();
+                        let a = stack.pop().unwrap_or(0.0);
                         stack.push(if a > 0.0 { a } else { 0.0 });
                     }
                     OpNode::Sigmoid => {
-                        let a = stack.pop().unwrap();
+                        let a = stack.pop().unwrap_or(0.0);
                         stack.push(1.0 / (1.0 + (-a).exp()));
                     }
                 }
             }
-            *val = stack.pop().unwrap();
+            *val = stack.pop().unwrap_or(0.0);
         });
         
         out
@@ -75,13 +81,13 @@ pub fn get_or_create_fused_kernel(signature: &str, builder_fn: impl FnOnce() -> 
     let cache = KERNEL_CACHE.get_or_init(|| RwLock::new(std::collections::HashMap::new()));
     
     {
-        let read = cache.read().unwrap();
+        let read = cache.read().unwrap_or_else(|e| e.into_inner());
         if let Some(kernel) = read.get(signature) {
             return kernel.clone();
         }
     }
     
     let kernel = Arc::new(builder_fn());
-    cache.write().unwrap().insert(signature.to_string(), kernel.clone());
+    cache.write().unwrap_or_else(|e| e.into_inner()).insert(signature.to_string(), kernel.clone());
     kernel
 }

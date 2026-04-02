@@ -18,6 +18,12 @@ pub struct BytecodeRuntimeSession {
     snapshot: RuntimeStateSnapshot,
 }
 
+impl Default for BytecodeRuntimeSession {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BytecodeRuntimeSession {
     pub fn new() -> Self {
         let mut config = VmConfig::default();
@@ -133,11 +139,11 @@ fn rt_to_vm_value(val: RuntimeValue) -> VmValue {
         RuntimeValue::Bool(b) => VmValue::Bool(b),
         RuntimeValue::Str(s) => VmValue::String(s),
         RuntimeValue::Array(arr_rc) => {
-            let vm_arr = arr_rc.read().unwrap().iter().map(|v| rt_to_vm_value(v.clone())).collect();
+            let vm_arr = arr_rc.read().unwrap_or_else(|e| e.into_inner()).iter().map(|v| rt_to_vm_value(v.clone())).collect();
             VmValue::Array(vm_arr)
         }
         RuntimeValue::Object(obj_rc) => {
-            let vm_obj = obj_rc.read().unwrap().iter().map(|(k, v)| (k.clone(), rt_to_vm_value(v.clone()))).collect();
+            let vm_obj = obj_rc.read().unwrap_or_else(|e| e.into_inner()).iter().map(|(k, v)| (k.clone(), rt_to_vm_value(v.clone()))).collect();
             VmValue::Object(vm_obj)
         }
         _ => VmValue::Null,

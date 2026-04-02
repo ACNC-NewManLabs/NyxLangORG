@@ -10,7 +10,7 @@ pub struct Bitmap {
 
 impl Bitmap {
     pub fn new_all_valid(len: usize) -> Self {
-        let byte_len = (len + 7) / 8;
+        let byte_len = len.div_ceil(8);
         Self {
             data: Arc::new(vec![0xFF; byte_len]),
             len,
@@ -25,7 +25,7 @@ impl Bitmap {
     }
 
     pub fn filter(&self, indices: &[usize]) -> Self {
-        let byte_len = (indices.len() + 7) / 8;
+        let byte_len = indices.len().div_ceil(8);
         let mut new_data = vec![0u8; byte_len];
         for (new_idx, &old_idx) in indices.iter().enumerate() {
             if self.get(old_idx) {
@@ -89,7 +89,46 @@ impl ColumnData {
                 let vec = Arc::make_mut(v);
                 if let Value::Bool(b) = val { vec[i] = b; }
             }
-            _ => {} // TODO: Implement Str and Categorical updates if needed
+            ColumnData::Str { data, offsets } => {
+                let arc_data = Arc::make_mut(data);
+                let arc_offsets = Arc::make_mut(offsets);
+                if let Value::Str(s) = val {
+                    let new_bytes = s.as_bytes();
+                    let old_start = arc_offsets[i];
+                    let old_end = arc_offsets[i + 1];
+                    let old_len = old_end - old_start;
+                    let new_len = new_bytes.len();
+                    
+                    if old_len != new_len {
+                        let diff = new_len as isize - old_len as isize;
+                        if diff > 0 {
+                            arc_data.splice(old_end..old_end, std::iter::repeat_n(0, diff as usize));
+                            arc_data[old_start..old_start + new_len].copy_from_slice(new_bytes);
+                        } else {
+                            arc_data.drain(old_start..old_start + (-diff) as usize);
+                            arc_data[old_start..old_start + new_len].copy_from_slice(new_bytes);
+                        }
+                        for offset in arc_offsets.iter_mut().skip(i + 1) {
+                            *offset = (*offset as isize + diff) as usize;
+                        }
+                    } else {
+                         arc_data[old_start..old_end].copy_from_slice(new_bytes);
+                    }
+                }
+            }
+            ColumnData::Categorical { codes, dict } => {
+                let arc_codes = Arc::make_mut(codes);
+                let arc_dict = Arc::make_mut(dict);
+                if let Value::Str(s) = val {
+                    if let Some(pos) = arc_dict.iter().position(|x| x == &s) {
+                        arc_codes[i] = pos as u32;
+                    } else {
+                        arc_dict.push(s.clone());
+                        arc_codes[i] = (arc_dict.len() - 1) as u32;
+                    }
+                }
+            }
+            ColumnData::Bitmap(_) => {}
         }
     }
 
@@ -112,7 +151,7 @@ impl ColumnData {
                 ColumnData::Bool(Arc::new(res))
             }
             ColumnData::Bitmap(bm) => {
-                let byte_len = (indices.len() + 7) / 8;
+                let byte_len = indices.len().div_ceil(8);
                 let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
                     let mut byte = 0u8;
                     for bit in 0..8 {
@@ -231,7 +270,7 @@ impl Column {
             ColumnData::F64(v) => v.len() * 8,
             ColumnData::I64(v) => v.len() * 8,
             ColumnData::Bool(v) => v.len(),
-            ColumnData::Bitmap(bm) => (bm.len + 7) / 8,
+            ColumnData::Bitmap(bm) => bm.len.div_ceil(8),
             ColumnData::Str { data, offsets } => data.len() + offsets.len() * 8,
             ColumnData::Categorical { codes, dict } => codes.len() * 4 + dict.iter().map(|s| s.len()).sum::<usize>(),
         };

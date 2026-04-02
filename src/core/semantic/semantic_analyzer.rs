@@ -250,6 +250,11 @@ impl SemanticAnalyzer {
                 let mut d_seen = std::collections::HashSet::new();
                 self.analyze_stmt(stmt, syms, ctx, &mut d_seen)?;
             }
+            Stmt::Yield { expr, .. } => {
+                if let Some(e) = expr {
+                    self.infer_expr(e, syms, ctx)?;
+                }
+            }
         }
         Ok(())
     }
@@ -261,28 +266,28 @@ impl SemanticAnalyzer {
         ctx: &AnalysisCtx,
     ) -> Result<NyxType, String> {
         match expr {
-            Expr::IntLiteral(_) => Ok(NyxType::I64),
-            Expr::FloatLiteral(_) => Ok(NyxType::F64),
-            Expr::StringLiteral(_) => Ok(NyxType::String),
-            Expr::CharLiteral(_) => Ok(NyxType::Char),
-            Expr::BoolLiteral(_) => Ok(NyxType::Bool),
-            Expr::BigIntLiteral(_) => Ok(NyxType::Unknown),
-            Expr::NullLiteral => Ok(NyxType::Unknown),
-            Expr::ArrayLiteral(_)
+            Expr::IntLiteral { value: _, .. } => Ok(NyxType::I64),
+            Expr::FloatLiteral { value: _, .. } => Ok(NyxType::F64),
+            Expr::StringLiteral { value: _, .. } => Ok(NyxType::String),
+            Expr::CharLiteral { value: _, .. } => Ok(NyxType::Char),
+            Expr::BoolLiteral { value: _, .. } => Ok(NyxType::Bool),
+            Expr::BigIntLiteral { value: _, .. } => Ok(NyxType::Unknown),
+            Expr::NullLiteral { .. } => Ok(NyxType::Unknown),
+            Expr::ArrayLiteral { elements: _, .. }
             | Expr::ArrayRepeat { .. }
-            | Expr::TupleLiteral(_)
-            | Expr::BlockLiteral(_)
-            | Expr::Loop(_)
-            | Expr::CssLiteral(_) => Ok(NyxType::Unknown),
-            Expr::Identifier(name) => {
+            | Expr::TupleLiteral { elements: _, .. }
+            | Expr::BlockLiteral { items: _, .. }
+            | Expr::Loop { expr: _, .. }
+            | Expr::CssLiteral { value: _, .. } => Ok(NyxType::Unknown),
+            Expr::Identifier { name, .. } => {
                 if let Some(ty) = syms.lookup(name) {
                     return Ok(ty.clone());
                 }
                 // Permissive: don't fail on unknown identifiers (may be stdlib/cross-module)
                 Ok(NyxType::Unknown)
             }
-            Expr::Path(_) => Ok(NyxType::Unknown),
-            Expr::Binary { left, op, right } => {
+            Expr::Path { segments: _, .. } => Ok(NyxType::Unknown),
+            Expr::Binary { left, op, right, .. } => {
                 let lt = self.infer_expr(left, syms, ctx).unwrap_or(NyxType::Unknown);
                 let _rt = self
                     .infer_expr(right, syms, ctx)
@@ -295,18 +300,18 @@ impl SemanticAnalyzer {
                     _ => lt,
                 })
             }
-            Expr::Unary { op, right } => {
+            Expr::Unary { op, right, .. } => {
                 let rt = self
                     .infer_expr(right, syms, ctx)
                     .unwrap_or(NyxType::Unknown);
                 Ok(if op == "!" { NyxType::Bool } else { rt })
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 // Validate known function arity
                 let mut call_name = None;
                 match callee.as_ref() {
-                    Expr::Identifier(name) => { call_name = Some(name.clone()); }
-                    Expr::Path(parts) => { call_name = Some(parts.join("::")); }
+                    Expr::Identifier { name, .. } => { call_name = Some(name.clone()); }
+                    Expr::Path { segments: parts, .. } => { call_name = Some(parts.join("::")); }
                     _ => {}
                 }
                 
@@ -394,12 +399,12 @@ impl SemanticAnalyzer {
                 self.infer_expr(object, syms, ctx)?;
                 Ok(NyxType::Unknown)
             }
-            Expr::Index { object, index } => {
+            Expr::Index { object, index, .. } => {
                 self.infer_expr(object, syms, ctx)?;
                 self.infer_expr(index, syms, ctx)?;
                 Ok(NyxType::Unknown)
             }
-            Expr::Slice { object, start, end } => {
+            Expr::Slice { object, start, end, .. } => {
                 self.infer_expr(object, syms, ctx)?;
                 if let Some(s) = start {
                     self.infer_expr(s, syms, ctx)?;
@@ -422,7 +427,7 @@ impl SemanticAnalyzer {
                 }
                 Ok(NyxType::Unknown)
             }
-            Expr::Await(e) | Expr::Move(e) | Expr::Deref(e) | Expr::TryOp(e) => {
+            Expr::Await { expr: e, .. } | Expr::Move { expr: e, .. } | Expr::Deref { expr: e, .. } | Expr::TryOp { expr: e, .. } => {
                 self.infer_expr(e, syms, ctx)
             }
             Expr::Reference { expr, .. } => {
@@ -430,7 +435,7 @@ impl SemanticAnalyzer {
                 Ok(NyxType::Unknown)
             }
             Expr::Closure { .. } => Ok(NyxType::Unknown),
-            Expr::Block(stmts, tail) => {
+            Expr::Block { stmts, tail_expr: tail, .. } => {
                 let mut block_syms = syms.clone();
                 let mut block_seen = std::collections::HashSet::new();
                 for s in stmts {
@@ -442,10 +447,11 @@ impl SemanticAnalyzer {
                     Ok(NyxType::Void)
                 }
             }
-            Expr::StructLiteral { .. } | Expr::AsyncBlock(_) => Ok(NyxType::Unknown),
+            Expr::StructLiteral { .. } | Expr::AsyncBlock { body: _, .. } => Ok(NyxType::Unknown),
             Expr::IfExpr {
                 branches,
                 else_body,
+                ..
             } => {
                 for b in branches {
                     self.infer_expr(&b.condition, syms, ctx)?;
@@ -460,13 +466,14 @@ impl SemanticAnalyzer {
                 condition,
                 then_expr,
                 else_expr,
+                ..
             } => {
                 self.infer_expr(condition, syms, ctx)?;
                 let _ = self.infer_expr(then_expr, syms, ctx)?;
                 let _ = self.infer_expr(else_expr, syms, ctx)?;
                 Ok(NyxType::Unknown)
             }
-            Expr::Match { expr, arms } => {
+            Expr::Match { expr, arms, .. } => {
                 self.infer_expr(expr, syms, ctx)?;
                 for arm in arms {
                     match &arm.body {
@@ -493,9 +500,9 @@ impl SemanticAnalyzer {
 
     fn asm_output_name(&self, expr: &Expr) -> Result<String, String> {
         match expr {
-            Expr::Identifier(n) => Ok(n.clone()),
-            Expr::Path(parts) => Ok(parts.join("::")),
-            Expr::FieldAccess { object, field } => {
+            Expr::Identifier { name: n, .. } => Ok(n.clone()),
+            Expr::Path { segments: parts, .. } => Ok(parts.join("::")),
+            Expr::FieldAccess { object, field, .. } => {
                 Ok(format!("{}.{field}", self.asm_output_name(object)?))
             }
             _ => Err("error[E110]: asm output must be identifier/path/field".into()),

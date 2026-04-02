@@ -6,6 +6,12 @@ pub struct Condvar {
     inner: StdCondvar,
 }
 
+impl Default for Condvar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Condvar {
     pub fn new() -> Condvar {
         Condvar { inner: StdCondvar::new() }

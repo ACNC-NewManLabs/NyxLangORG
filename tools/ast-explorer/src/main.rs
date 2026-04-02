@@ -31,10 +31,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    let registry = match nyx::core::registry::language_registry::LanguageRegistry::load("registry/language.json") {
-        Ok(r) => r,
-        Err(_) => nyx::core::registry::language_registry::LanguageRegistry::default(),
-    };
+    let registry = nyx::core::registry::language_registry::LanguageRegistry::load("registry/language.json").unwrap_or_default();
 
     let mut lexer = Lexer::from_source(source);
     let tokens = match lexer.tokenize() {

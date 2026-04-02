@@ -325,9 +325,9 @@ impl SecurityScanner {
     fn scan_expr(&self, expr: &Expr, file_path: &Path, vulnerabilities: &mut Vec<Vulnerability>) {
          let file_str = file_path.display().to_string();
          match expr {
-             Expr::Call { callee, args } => {
+             Expr::Call { callee, args, .. } => {
                  // Check if callee is an identifier
-                 if let Expr::Identifier(ident) = &**callee {
+                 if let Expr::Identifier { name: ident, .. } = &**callee {
                       for pattern in &self.vulnerability_patterns {
                           if pattern.pattern.is_match(ident) {
                              let description = if let Some(info) = self.cwe_database.get(pattern.cwe_id) {
@@ -362,10 +362,10 @@ impl SecurityScanner {
              Expr::Unary { right: inner, .. } => {
                   self.scan_expr(inner, file_path, vulnerabilities);
              }
-             Expr::Block(body, _) => {
+             Expr::Block { stmts: body, .. } => {
                   self.scan_stmts(body, file_path, vulnerabilities);
              }
-             Expr::IfExpr { branches, else_body } => {
+             Expr::IfExpr { branches, else_body, .. } => {
                   for branch in branches {
                       self.scan_expr(&branch.condition, file_path, vulnerabilities);
                       self.scan_stmts(&branch.body, file_path, vulnerabilities);

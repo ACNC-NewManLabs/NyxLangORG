@@ -154,8 +154,7 @@ fn test_vm_jit_with_closures() {
     };
     module.add_function(main_fn);
 
-    let mut config = VmConfig::default();
-    config.enable_jit = true;
+    let config = VmConfig { enable_jit: true, ..Default::default() };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();
@@ -190,8 +189,7 @@ fn test_vm_jit_mid_entry() {
     };
     module.add_function(main_fn);
 
-    let mut config = VmConfig::default();
-    config.enable_jit = true;
+    let config = VmConfig { enable_jit: true, ..Default::default() };
     // Force JIT entry after 2 instructions.
     // We can't easily force it, but if we run with JIT enabled, it will try to enter at every step now.
     let mut vm = NyxVm::new(config);
@@ -207,7 +205,7 @@ fn test_jit_arity_16() {
     
     let mut instrs = Vec::new();
     for i in 0..16 {
-        instrs.push(Instruction::with_operand(OpCode::LOAD, i as i32, 0));
+        instrs.push(Instruction::with_operand(OpCode::LOAD, i, 0));
     }
     for _ in 0..(16-1) {
         instrs.push(Instruction::new(OpCode::ADD, vec![], 0));
@@ -255,8 +253,7 @@ fn test_jit_arity_16() {
     };
     module.add_function(main_fn);
 
-    let mut config = VmConfig::default();
-    config.enable_jit = true;
+    let config = VmConfig { enable_jit: true, ..Default::default() };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();
@@ -271,7 +268,7 @@ fn test_jit_arity_32() {
     
     let mut instrs = Vec::new();
     for i in 0..32 {
-        instrs.push(Instruction::with_operand(OpCode::LOAD, i as i32, 0));
+        instrs.push(Instruction::with_operand(OpCode::LOAD, i, 0));
     }
     for _ in 0..(32-1) {
         instrs.push(Instruction::new(OpCode::ADD, vec![], 0));
@@ -335,8 +332,7 @@ fn test_jit_arity_32() {
     };
     module.add_function(main_fn);
 
-    let mut config = VmConfig::default();
-    config.enable_jit = true;
+    let config = VmConfig { enable_jit: true, ..Default::default() };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();
@@ -399,8 +395,7 @@ fn test_jit_hardening_mutation() {
     };
     module.add_function(main_fn);
     
-    let mut config = VmConfig::default();
-    config.enable_jit = true;
+    let config = VmConfig { enable_jit: true, ..Default::default() };
     let mut vm = NyxVm::new(config);
     vm.load(module);
     let result = vm.run("main").unwrap();

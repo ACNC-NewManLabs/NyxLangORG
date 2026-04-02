@@ -10,10 +10,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 pub fn generate_synthetic_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(rows)), Some(Value::Object(schema_map_rc))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Int(rows)), Some(Value::Object(schema_map_rc))) = (args.first(), args.get(1)) {
         let n = *rows as usize;
         let mut columns = Vec::new();
-        let schema_map = schema_map_rc.read().unwrap();
+        let schema_map = schema_map_rc.read().unwrap_or_else(|e| e.into_inner());
         
         for (name, dtype_val) in schema_map.iter() {
             let dtype = match dtype_val {
@@ -104,7 +104,7 @@ fn as_f64(v: &Value) -> Option<f64> {
 }
 
 fn extract_floats(arr: &Arc<RwLock<Vec<Value>>>) -> Vec<f64> {
-    arr.read().unwrap().iter().map(|v| as_f64(v).unwrap_or(0.0)).collect()
+    arr.read().unwrap_or_else(|e| e.into_inner()).iter().map(|v| as_f64(v).unwrap_or(0.0)).collect()
 }
 
 fn floats_to_value_arr(v: Vec<f64>) -> Value {
@@ -125,8 +125,8 @@ fn value_to_string(v: &Value) -> String {
 
 
 pub fn register_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(name)), Some(Value::Object(df_rc))) = (args.get(0), args.get(1)) {
-        let df = df_rc.read().unwrap();
+    if let (Some(Value::Str(name)), Some(Value::Object(df_rc))) = (args.first(), args.get(1)) {
+        let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
         let chunk = df_to_data_chunk(&df)?;
         df_engine::register_table(name.clone(), Arc::new(vec![chunk]));
         return Ok(Value::Bool(true));
@@ -135,7 +135,7 @@ pub fn register_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, E
 }
 
 pub fn start_df_server_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(port)) = args.get(0) {
+    if let Some(Value::Int(port)) = args.first() {
         let p = *port as u16;
         println!("[df.server] Starting HTTP server on 0.0.0.0:{}...", p);
         
@@ -152,9 +152,9 @@ pub fn start_df_server_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
                                         Ok(n) if n > 0 => {
                                             let req = String::from_utf8_lossy(&buf[..n]);
                                             let (res_line, res_body) = if req.contains("GET /tables") {
-                                                let catalog = df_engine::global_catalog().lock().unwrap();
+                                                let catalog = df_engine::global_catalog().lock().unwrap_or_else(|e| e.into_inner());
                                                 let tables: Vec<_> = catalog.keys().cloned().collect();
-                                                ("HTTP/1.1 200 OK", serde_json::to_string(&tables).unwrap())
+                                                ("HTTP/1.1 200 OK", serde_json::to_string(&tables).unwrap_or_else(|_| "[]".to_string()))
                                             } else if req.contains("POST /query") {
                                                 ("HTTP/1.1 200 OK", "{\"status\":\"ok\",\"info\":\"Nyx DataFrame Server v1.0 Ready\"}".to_string())
                                             } else {
@@ -182,7 +182,7 @@ pub fn start_df_server_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
 // ── arithmetic ────────────────────────────────────────────────────────────────
 
 pub fn col_add_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.first(), args.get(1)) {
         let av = extract_floats(a);
         let bv = extract_floats(b);
         let n = av.len().min(bv.len());
@@ -193,7 +193,7 @@ pub fn col_add_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_sub_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.first(), args.get(1)) {
         let av = extract_floats(a);
         let bv = extract_floats(b);
         let n = av.len().min(bv.len());
@@ -204,7 +204,7 @@ pub fn col_sub_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_mul_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.first(), args.get(1)) {
         let av = extract_floats(a);
         let bv = extract_floats(b);
         let n = av.len().min(bv.len());
@@ -215,7 +215,7 @@ pub fn col_mul_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_div_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.first(), args.get(1)) {
         let av = extract_floats(a);
         let bv = extract_floats(b);
         let n = av.len().min(bv.len());
@@ -230,9 +230,9 @@ pub fn col_div_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 // ── filter ────────────────────────────────────────────────────────────────────
 
 pub fn col_filter_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(data)), Some(Value::Array(mask))) = (args.get(0), args.get(1)) {
-        let d = data.read().unwrap();
-        let m = mask.read().unwrap();
+    if let (Some(Value::Array(data)), Some(Value::Array(mask))) = (args.first(), args.get(1)) {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let m = mask.read().unwrap_or_else(|e| e.into_inner());
         let result: Vec<Value> = d.iter().zip(m.iter()).filter_map(|(val, flag)| {
             match flag {
                 Value::Bool(true) => Some(val.clone()),
@@ -248,9 +248,9 @@ pub fn col_filter_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 // ── sort (stable argsort) ─────────────────────────────────────────────────────
 
 pub fn col_sort_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
+    if let Some(Value::Array(data)) = args.first() {
         let descending = matches!(args.get(1), Some(Value::Bool(true)));
-        let d = data.read().unwrap();
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let mut indexed: Vec<(usize, f64)> = d.iter().enumerate()
             .map(|(i, v)| (i, as_f64(v).unwrap_or(0.0)))
             .collect();
@@ -268,9 +268,9 @@ pub fn col_sort_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 // ── aggregations ──────────────────────────────────────────────────────────────
 
 pub fn col_min_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let min = d.iter().filter_map(|v| as_f64(v))
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let min = d.iter().filter_map(as_f64)
             .fold(f64::INFINITY, f64::min);
         if min.is_infinite() { return Ok(Value::Null); }
         return Ok(Value::Float(min));
@@ -279,9 +279,9 @@ pub fn col_min_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_max_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let max = d.iter().filter_map(|v| as_f64(v))
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let max = d.iter().filter_map(as_f64)
             .fold(f64::NEG_INFINITY, f64::max);
         if max.is_infinite() { return Ok(Value::Null); }
         return Ok(Value::Float(max));
@@ -290,9 +290,9 @@ pub fn col_max_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_std_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         let n = vals.len() as f64;
         if n < 2.0 { return Ok(Value::Float(0.0)); }
         let mean = vals.iter().sum::<f64>() / n;
@@ -303,9 +303,9 @@ pub fn col_std_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_var_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         let n = vals.len() as f64;
         if n < 2.0 { return Ok(Value::Float(0.0)); }
         let mean = vals.iter().sum::<f64>() / n;
@@ -316,23 +316,23 @@ pub fn col_var_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 pub fn col_median_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let mut vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let mut vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         if vals.is_empty() { return Ok(Value::Null); }
         vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let n = vals.len();
-        let med = if n % 2 == 0 { (vals[n/2 - 1] + vals[n/2]) / 2.0 } else { vals[n/2] };
+        let med = if n.is_multiple_of(2) { (vals[n/2 - 1] + vals[n/2]) / 2.0 } else { vals[n/2] };
         return Ok(Value::Float(med));
     }
     Ok(Value::Null)
 }
 
 pub fn col_quantile_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(data)), Some(q_val)) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(data)), Some(q_val)) = (args.first(), args.get(1)) {
         let q = match q_val { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => return Ok(Value::Null) };
-        let d = data.read().unwrap();
-        let mut vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let mut vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         if vals.is_empty() { return Ok(Value::Null); }
         vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let idx = ((vals.len() - 1) as f64 * q).round() as usize;
@@ -344,8 +344,8 @@ pub fn col_quantile_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 // ── rolling window ────────────────────────────────────────────────────────────
 
 pub fn rolling_sum_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(data)), Some(Value::Int(w))) = (args.get(0), args.get(1)) {
-        let d = data.read().unwrap();
+    if let (Some(Value::Array(data)), Some(Value::Int(w))) = (args.first(), args.get(1)) {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let vals = extract_floats(&Arc::new(RwLock::new(d.clone())));
         let window = *w as usize;
         let result: Vec<Value> = (0..vals.len()).map(|i| {
@@ -358,8 +358,8 @@ pub fn rolling_sum_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 pub fn rolling_mean_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(data)), Some(Value::Int(w))) = (args.get(0), args.get(1)) {
-        let d = data.read().unwrap();
+    if let (Some(Value::Array(data)), Some(Value::Int(w))) = (args.first(), args.get(1)) {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let vals = extract_floats(&Arc::new(RwLock::new(d.clone())));
         let window = *w as usize;
         let wf = window as f64;
@@ -375,7 +375,7 @@ pub fn rolling_mean_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 // ── statistics ────────────────────────────────────────────────────────────────
 
 pub fn pearson_corr_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.first(), args.get(1)) {
         let av = extract_floats(a);
         let bv = extract_floats(b);
         let n = av.len().min(bv.len()) as f64;
@@ -395,9 +395,9 @@ pub fn pearson_corr_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 // ── describe ──────────────────────────────────────────────────────────────────
 
 pub fn col_describe_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         let n = vals.len() as f64;
         let mut map = std::collections::HashMap::new();
         if n == 0.0 {
@@ -412,11 +412,11 @@ pub fn col_describe_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
         map.insert("count".to_string(), Value::Float(n));
         map.insert("mean".to_string(), Value::Float(mean));
         map.insert("std".to_string(), Value::Float(var.sqrt()));
-        map.insert("min".to_string(), Value::Float(*sorted.first().unwrap()));
+        map.insert("min".to_string(), Value::Float(*sorted.first().unwrap_or(&0.0)));
         map.insert("25%".to_string(), Value::Float(q(0.25)));
         map.insert("50%".to_string(), Value::Float(q(0.50)));
         map.insert("75%".to_string(), Value::Float(q(0.75)));
-        map.insert("max".to_string(), Value::Float(*sorted.last().unwrap()));
+        map.insert("max".to_string(), Value::Float(*sorted.last().unwrap_or(&0.0)));
         return Ok(Value::Object(Arc::new(RwLock::new(map))));
     }
     Ok(Value::Null)
@@ -426,7 +426,7 @@ pub fn col_describe_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 
 pub fn read_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     // args: [path_str, delimiter_str, has_header_bool]
-    let path = match args.get(0) { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
+    let path = match args.first() { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
     let delimiter = match args.get(1) { Some(Value::Str(s)) => s.chars().next().unwrap_or(','), _ => ',' };
     let has_header = !matches!(args.get(2), Some(Value::Bool(false)));
 
@@ -473,7 +473,7 @@ pub fn read_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
     // Return as Array of {name, data} objects
     let mut result_map = std::collections::HashMap::new();
-    let columns_arr: Vec<Value> = headers.iter().zip(col_data.into_iter()).map(|(name, data)| {
+    let columns_arr: Vec<Value> = headers.iter().zip(col_data).map(|(name, data)| {
         let mut col_map = std::collections::HashMap::new();
         col_map.insert("name".to_string(), Value::Str(name.clone()));
         col_map.insert("data".to_string(), Value::Array(Arc::new(RwLock::new(data))));
@@ -485,17 +485,17 @@ pub fn read_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 pub fn write_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     // args: [col_names_array, col_data_array_of_arrays, path_str]
-    let col_names_arr = match args.get(0) { Some(Value::Array(a)) => a.clone(), _ => return Ok(Value::Bool(false)) };
+    let col_names_arr = match args.first() { Some(Value::Array(a)) => a.clone(), _ => return Ok(Value::Bool(false)) };
     let col_data_arr  = match args.get(1) { Some(Value::Array(a)) => a.clone(), _ => return Ok(Value::Bool(false)) };
     let path = match args.get(2) { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Bool(false)) };
 
-    let names = col_names_arr.read().unwrap();
-    let cols = col_data_arr.read().unwrap();
+    let names = col_names_arr.read().unwrap_or_else(|e| e.into_inner());
+    let cols = col_data_arr.read().unwrap_or_else(|e| e.into_inner());
     let ncols = names.len().min(cols.len());
     if ncols == 0 { return Ok(Value::Bool(false)); }
 
     // Number of rows from first column
-    let nrows = match &cols[0] { Value::Array(a) => a.read().unwrap().len(), _ => 0 };
+    let nrows = match &cols[0] { Value::Array(a) => a.read().unwrap_or_else(|e| e.into_inner()).len(), _ => 0 };
 
     let mut out = String::new();
     // Header
@@ -509,7 +509,7 @@ pub fn write_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
         for c in 0..ncols {
             if c > 0 { out.push(','); }
             if let Value::Array(col_arr) = &cols[c] {
-                let cd = col_arr.read().unwrap();
+                let cd = col_arr.read().unwrap_or_else(|e| e.into_inner());
                 if r < cd.len() {
                     match &cd[r] {
                         Value::Float(f) => out.push_str(&f.to_string()),
@@ -533,8 +533,8 @@ pub fn write_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 
 // ── value_counts ──────────────────────────────────────────────────────────────
 pub fn value_counts_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let mut counts: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
         let mut order: Vec<String> = Vec::new();
         for v in d.iter() {
@@ -561,7 +561,7 @@ pub fn value_counts_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 
 // ── t-test (Welch) ────────────────────────────────────────────────────────────
 pub fn t_test_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Array(a)), Some(Value::Array(b))) = (args.first(), args.get(1)) {
         let av = extract_floats(a);
         let bv = extract_floats(b);
         let na = av.len() as f64;
@@ -584,9 +584,9 @@ pub fn t_test_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 
 // ── normalize / standardize ───────────────────────────────────────────────────
 pub fn col_normalize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         if vals.is_empty() { return Ok(Value::Array(Arc::new(RwLock::new(vec![])))); }
         let mn = vals.iter().cloned().fold(f64::INFINITY, f64::min);
         let mx = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
@@ -598,9 +598,9 @@ pub fn col_normalize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Ev
 }
 
 pub fn col_standardize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
-        let vals: Vec<f64> = d.iter().filter_map(|v| as_f64(v)).collect();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
+        let vals: Vec<f64> = d.iter().filter_map(as_f64).collect();
         if vals.is_empty() { return Ok(Value::Array(Arc::new(RwLock::new(vec![])))); }
         let n = vals.len() as f64;
         let mean = vals.iter().sum::<f64>() / n;
@@ -613,8 +613,8 @@ pub fn col_standardize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
 
 // ── encode categorical ────────────────────────────────────────────────────────
 pub fn encode_categorical_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let d = data.read().unwrap();
+    if let Some(Value::Array(data)) = args.first() {
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let mut mapping: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
         let mut next_id: i64 = 0;
         let encoded: Vec<Value> = d.iter().map(|v| {
@@ -642,10 +642,10 @@ pub fn encode_categorical_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Valu
 // ── Engine V2 Bridge ────────────────────────────────────────────────────────
 
 pub fn scan_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let path = match args.get(0) { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
+    let path = match args.first() { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
     let mut options = std::collections::HashMap::new();
     if let Some(Value::Object(opt_rc)) = args.get(1) {
-        let opts = opt_rc.read().unwrap();
+        let opts = opt_rc.read().unwrap_or_else(|e| e.into_inner());
         for (k, v) in opts.iter() {
             options.insert(k.clone(), value_to_string(v));
         }
@@ -663,7 +663,7 @@ pub fn scan_csv_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 pub fn scan_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let path = match args.get(0) { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
+    let path = match args.first() { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
     let mut obj = std::collections::HashMap::new();
     obj.insert("_op".to_string(), Value::Str("p_scan".to_string()));
     obj.insert("source_id".to_string(), Value::Str(path));
@@ -671,16 +671,16 @@ pub fn scan_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 }
 
 pub fn execute_plan_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(plan_val) = args.get(0) {
+    if let Some(plan_val) = args.first() {
         let logical_plan = value_to_logical_plan(plan_val)?;
         let mut ctx = df_engine::ExecutionContext { sources: HashMap::new() };
         
         // Extract sources if provided in 2nd arg
         if let Some(Value::Object(sources_rc)) = args.get(1) {
-            let sources = sources_rc.read().unwrap();
+            let sources = sources_rc.read().unwrap_or_else(|e| e.into_inner());
             for (id, val) in sources.iter() {
                 if let Value::Object(df_rc) = val {
-                    let df = df_rc.read().unwrap();
+                    let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
                     let chunk = df_to_data_chunk(&df)?;
                     let fields = chunk.columns.iter().map(|c| Field { 
                     name: c.name.clone(), 
@@ -713,7 +713,7 @@ pub fn execute_plan_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 
 fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
     if let Value::Object(obj_rc) = v {
-        let obj = obj_rc.read().unwrap();
+        let obj = obj_rc.read().unwrap_or_else(|e| e.into_inner());
         let op = obj.get("_op").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None })
             .ok_or_else(|| EvalError { message: "Plan node missing '_op'".to_string(), stack: vec![] })?;
         
@@ -726,7 +726,7 @@ fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
                 
                 let mut exprs = Vec::new();
                 let mut names = Vec::new();
-                let e_arr = exprs_val.read().unwrap();
+                let e_arr = exprs_val.read().unwrap_or_else(|e| e.into_inner());
                 for e in e_arr.iter() {
                     let (expr, name) = value_to_named_expr(e)?;
                     exprs.push(expr);
@@ -746,7 +746,7 @@ fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
                     .ok_or_else(|| EvalError { message: "Scan missing source_id".to_string(), stack: vec![] })?;
                 let mut options = None;
                 if let Some(Value::Object(opt_rc)) = obj.get("options") {
-                    let opt_map = opt_rc.read().unwrap();
+                    let opt_map = opt_rc.read().unwrap_or_else(|e| e.into_inner());
                     let mut res_map = std::collections::HashMap::new();
                     for (k, v) in opt_map.iter() {
                         if let Value::Str(s) = v { res_map.insert(k.clone(), s.clone()); }
@@ -765,7 +765,7 @@ fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
                 
                 let mut keys = Vec::new();
                 let mut key_names = Vec::new();
-                for k in keys_val.read().unwrap().iter() {
+                for k in keys_val.read().unwrap_or_else(|e| e.into_inner()).iter() {
                     let (expr, name) = value_to_named_expr(k)?;
                     keys.push(expr);
                     key_names.push(name);
@@ -774,14 +774,14 @@ fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
                 let mut aggs = Vec::new();
                 let mut ops = Vec::new();
                 let mut agg_names = Vec::new();
-                for a in aggs_val.read().unwrap().iter() { 
+                for a in aggs_val.read().unwrap_or_else(|e| e.into_inner()).iter() { 
                     let (expr, name) = value_to_named_expr(a)?;
                     aggs.push(expr);
                     agg_names.push(name);
                     
                     let mut op_str = "sum".to_string();
                     if let Value::Object(obj_rc) = a {
-                        let obj = obj_rc.read().unwrap();
+                        let obj = obj_rc.read().unwrap_or_else(|e| e.into_inner());
                         let kind = obj.get("_kind").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None }).unwrap_or("");
                         
                         if kind == "agg" {
@@ -789,10 +789,10 @@ fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
                         } else if kind == "alias" {
                             let args = obj.get("_args").and_then(|v| match v { Value::Array(ar) => Some(ar), _ => None });
                             if let Some(ar_rc) = args {
-                                let ar = ar_rc.read().unwrap();
+                                let ar = ar_rc.read().unwrap_or_else(|e| e.into_inner());
                                 if !ar.is_empty() {
                                     if let Value::Object(inner_rc) = &ar[0] {
-                                        let inner = inner_rc.read().unwrap();
+                                        let inner = inner_rc.read().unwrap_or_else(|e| e.into_inner());
                                         let inner_kind = inner.get("_kind").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None }).unwrap_or("");
                                         if inner_kind == "agg" {
                                             op_str = inner.get("_value").and_then(|v| match v { Value::Str(s) => Some(s.clone()), _ => None }).unwrap_or_else(|| "sum".to_string());
@@ -847,10 +847,10 @@ fn value_to_logical_plan(v: &Value) -> Result<LogicalPlan, EvalError> {
 
 fn value_to_named_expr(v: &Value) -> Result<(Expr, String), EvalError> {
     if let Value::Str(s) = v {
-        return Ok((Expr::Identifier(s.clone()), s.clone()));
+        return Ok((Expr::ident(s.clone()), s.clone()));
     }
     if let Value::Object(obj_rc) = v {
-        let obj = obj_rc.read().unwrap();
+        let obj = obj_rc.read().unwrap_or_else(|e| e.into_inner());
         let kind = obj.get("_kind").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None })
             .ok_or_else(|| EvalError { message: "Expr node missing '_kind'".to_string(), stack: vec![] })?;
         
@@ -859,7 +859,7 @@ fn value_to_named_expr(v: &Value) -> Result<(Expr, String), EvalError> {
                 .ok_or_else(|| EvalError { message: "alias missing name".to_string(), stack: vec![] })?;
             let args_val = obj.get("_args").and_then(|v| match v { Value::Array(a) => Some(a), _ => None })
                 .ok_or_else(|| EvalError { message: "alias missing args".to_string(), stack: vec![] })?;
-            let args = args_val.read().unwrap();
+            let args = args_val.read().unwrap_or_else(|e| e.into_inner());
             if args.is_empty() { return Err(EvalError { message: "alias requires 1 arg".to_string(), stack: vec![] }); }
             let (inner_expr, _) = value_to_named_expr(&args[0])?;
             return Ok((inner_expr, name));
@@ -867,7 +867,7 @@ fn value_to_named_expr(v: &Value) -> Result<(Expr, String), EvalError> {
         
         let expr = value_to_expr(v)?;
         let name = match &expr {
-            Expr::Identifier(s) => s.clone(),
+            Expr::Identifier { name: s, .. } => s.clone(),
             _ => "column".to_string(),
         };
         Ok((expr, name))
@@ -879,10 +879,10 @@ fn value_to_named_expr(v: &Value) -> Result<(Expr, String), EvalError> {
 
 fn value_to_expr(v: &Value) -> Result<Expr, EvalError> {
     if let Value::Str(s) = v {
-        return Ok(Expr::Identifier(s.clone()));
+        return Ok(Expr::ident(s.clone()));
     }
     if let Value::Object(obj_rc) = v {
-        let obj = obj_rc.read().unwrap();
+        let obj = obj_rc.read().unwrap_or_else(|e| e.into_inner());
         let kind = obj.get("_kind").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None })
             .ok_or_else(|| EvalError { message: "Expr node missing '_kind'".to_string(), stack: vec![] })?;
         
@@ -890,15 +890,15 @@ fn value_to_expr(v: &Value) -> Result<Expr, EvalError> {
             "col" => {
                 let name = obj.get("_value").and_then(|v| match v { Value::Str(s) => Some(s.clone()), _ => None })
                     .ok_or_else(|| EvalError { message: "col expr missing name".to_string(), stack: vec![] })?;
-                Ok(Expr::Identifier(name))
+                Ok(Expr::ident(name))
             }
             "lit" => {
                 let val = obj.get("_value").ok_or_else(|| EvalError { message: "lit expr missing value".to_string(), stack: vec![] })?;
                 match val {
-                    Value::Int(i) => Ok(Expr::IntLiteral(*i)),
-                    Value::Float(f) => Ok(Expr::FloatLiteral(*f)),
-                    Value::Bool(b) => Ok(Expr::BoolLiteral(*b)),
-                    Value::Str(s) => Ok(Expr::StringLiteral(s.clone())),
+                    Value::Int(i) => Ok(Expr::int(*i)),
+                    Value::Float(f) => Ok(Expr::float(*f)),
+                    Value::Bool(b) => Ok(Expr::bool(*b)),
+                    Value::Str(s) => Ok(Expr::string(s.clone())),
                     _ => Err(EvalError { message: "Unsupported literal value".to_string(), stack: vec![] }),
                 }
             }
@@ -908,17 +908,17 @@ fn value_to_expr(v: &Value) -> Result<Expr, EvalError> {
                 
                 let args_val = obj.get("_args").and_then(|v| match v { Value::Array(a) => Some(a), _ => None })
                     .ok_or_else(|| EvalError { message: "binop missing args".to_string(), stack: vec![] })?;
-                let args = args_val.read().unwrap();
+                let args = args_val.read().unwrap_or_else(|e| e.into_inner());
                 if args.len() != 2 { return Err(EvalError { message: "binop must have 2 args".to_string(), stack: vec![] }); }
                 
                 let left = value_to_expr(&args[0])?;
                 let right = value_to_expr(&args[1])?;
-                Ok(Expr::Binary { left: Box::new(left), op: op_str.to_string(), right: Box::new(right) })
+                Ok(Expr::Binary { left: Box::new(left), op: op_str.to_string(), right: Box::new(right), span: crate::core::diagnostics::Span::default() })
             }
             "agg" | "alias" | "cast" | "unary" | "fill_null" => {
                 let args_val = obj.get("_args").and_then(|v| match v { Value::Array(a) => Some(a), _ => None })
                     .ok_or_else(|| EvalError { message: "expr missing args".to_string(), stack: vec![] })?;
-                let args = args_val.read().unwrap();
+                let args = args_val.read().unwrap_or_else(|e| e.into_inner());
                 if args.is_empty() { return Err(EvalError { message: "expr must have at least 1 arg".to_string(), stack: vec![] }); }
                 value_to_expr(&args[0])
             }
@@ -926,10 +926,10 @@ fn value_to_expr(v: &Value) -> Result<Expr, EvalError> {
         }
     } else {
         match v {
-            Value::Int(i) => Ok(Expr::IntLiteral(*i)),
-            Value::Float(f) => Ok(Expr::FloatLiteral(*f)),
-            Value::Bool(b) => Ok(Expr::BoolLiteral(*b)),
-            Value::Str(s) => Ok(Expr::StringLiteral(s.clone())),
+            Value::Int(i) => Ok(Expr::int(*i)),
+            Value::Float(f) => Ok(Expr::float(*f)),
+            Value::Bool(b) => Ok(Expr::bool(*b)),
+            Value::Str(s) => Ok(Expr::string(s.clone())),
             _ => Err(EvalError { message: "Invalid expr value".to_string(), stack: vec![] }),
         }
     }
@@ -940,19 +940,19 @@ fn df_to_data_chunk(df: &HashMap<String, Value>) -> Result<DataChunk, EvalError>
     let columns_val = df.get("_columns").and_then(|v| match v { Value::Array(a) => Some(a), _ => None })
         .ok_or_else(|| EvalError { message: "DataFrame missing _columns".to_string(), stack: vec![] })?;
     
-    let cols = columns_val.read().unwrap();
+    let cols = columns_val.read().unwrap_or_else(|e| e.into_inner());
     let mut dc_cols = Vec::with_capacity(cols.len());
     let mut size = 0;
     
     for c_val in cols.iter() {
         if let Value::Object(c_rc) = c_val {
-            let c = c_rc.read().unwrap();
+            let c = c_rc.read().unwrap_or_else(|e| e.into_inner());
             let name = match c.get("_name") { Some(Value::Str(s)) => s.clone(), _ => "unknown".to_string() };
             
             let data = match c.get("_data") {
-                Some(Value::Array(a)) => a.read().unwrap().clone(),
+                Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()).clone(),
                 Some(Value::DoubleArray(da)) => {
-                    let d = da.read().unwrap();
+                    let d = da.read().unwrap_or_else(|e| e.into_inner());
                     d.iter().map(|&f| Value::Float(f)).collect::<Vec<_>>()
                 },
                 _ => return Err(EvalError { message: format!("Column '{}' missing _data or incorrect type", name), stack: vec![] }),
@@ -960,7 +960,7 @@ fn df_to_data_chunk(df: &HashMap<String, Value>) -> Result<DataChunk, EvalError>
             
             if size == 0 { size = data.len(); }
             
-            let first_val = data.get(0).unwrap_or(&Value::Null);
+            let first_val = data.first().unwrap_or(&Value::Null);
             let dc_col = match first_val {
                 Value::Str(_) => {
                     let mut cb = df_engine::ColumnBuilder::new("str");
@@ -1053,7 +1053,7 @@ fn data_chunks_to_dataframe(chunks: Vec<DataChunk>) -> Result<Value, EvalError> 
 }
 
 pub fn scan_parquet_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(path)) = args.get(0) {
+    if let Some(Value::Str(path)) = args.first() {
         let mut obj = std::collections::HashMap::new();
         obj.insert("_op".to_string(), Value::Str("p_scan".to_string()));
         obj.insert("source_id".to_string(), Value::Str(path.clone()));
@@ -1063,18 +1063,18 @@ pub fn scan_parquet_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 }
 
 pub fn check_health_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Object(df_rc)) = args.get(0) {
-        let df = df_rc.read().unwrap();
+    if let Some(Value::Object(df_rc)) = args.first() {
+        let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
         let mut report = std::collections::HashMap::new();
         let cols_val = df.get("_columns").and_then(|v| match v { Value::Array(a) => Some(a), _ => None }).ok_or_else(|| EvalError{message:"Invalid DF".to_string(), stack:vec![]})?;
-        let cols = cols_val.read().unwrap();
+        let cols = cols_val.read().unwrap_or_else(|e| e.into_inner());
         
         for c_val in cols.iter() {
             if let Value::Object(c_rc) = c_val {
-                let c = c_rc.read().unwrap();
+                let c = c_rc.read().unwrap_or_else(|e| e.into_inner());
                 let name = c.get("_name").and_then(|v| match v { Value::Str(s) => Some(s.clone()), _ => None }).unwrap_or_default();
                 let data_val = c.get("_data").and_then(|v| match v { Value::Array(a) => Some(a), _ => None }).ok_or_else(|| EvalError{message:"Column missing data".to_string(), stack:vec![]})?;
-                let data = data_val.read().unwrap();
+                let data = data_val.read().unwrap_or_else(|e| e.into_inner());
                 
                 let mut nans = 0;
                 let mut nulls = 0;
@@ -1106,9 +1106,9 @@ pub fn write_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 
     // Extract columns from DataFrame object
     let columns = if let Value::Object(obj) = df_obj {
-        let obj_read = obj.read().unwrap();
+        let obj_read = obj.read().unwrap_or_else(|e| e.into_inner());
         if let Some(Value::Array(cols)) = obj_read.get("_columns") {
-            cols.read().unwrap().clone()
+            cols.read().unwrap_or_else(|e| e.into_inner()).clone()
         } else {
             return Err(EvalError { message: "Invalid DataFrame object: _columns missing".to_string(), stack: vec![] });
         }
@@ -1125,9 +1125,9 @@ pub fn write_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 
     let num_rows = {
         if let Value::Object(col) = &columns[0] {
-            let col_read = col.read().unwrap();
+            let col_read = col.read().unwrap_or_else(|e| e.into_inner());
             if let Some(Value::Array(data)) = col_read.get("_data") {
-                data.read().unwrap().len()
+                data.read().unwrap_or_else(|e| e.into_inner()).len()
             } else { 0 }
         } else { 0 }
     };
@@ -1136,13 +1136,13 @@ pub fn write_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
         let mut row_obj = serde_json::Map::new();
         for col_val in &columns {
             if let Value::Object(col) = col_val {
-                let col_read = col.read().unwrap();
+                let col_read = col.read().unwrap_or_else(|e| e.into_inner());
                 let name = match col_read.get("_name") {
                     Some(Value::Str(s)) => s.clone(),
                     _ => "unknown".to_string(),
                 };
                 if let Some(Value::Array(data)) = col_read.get("_data") {
-                    let data_read = data.read().unwrap();
+                    let data_read = data.read().unwrap_or_else(|e| e.into_inner());
                     if i < data_read.len() {
                         let val = match &data_read[i] {
                             Value::Int(v) => serde_json::Value::Number((*v).into()),
@@ -1198,7 +1198,7 @@ pub fn parse_csv_line_rfc4180(line: &str, delimiter: char) -> Vec<String> {
 }
 
 pub fn read_parquet_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let path = match args.get(0) { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
+    let path = match args.first() { Some(Value::Str(s)) => s.clone(), _ => return Ok(Value::Null) };
     println!("[df.io] Parquet reader: path='{}' — real Parquet requires the 'parquet2' feature. Returning null.", path);
     Ok(Value::Null)
 }
@@ -1212,9 +1212,9 @@ pub fn write_parquet_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, E
 
 /// Rank values (1-based, dense rank within ties) in a column array.
 pub fn window_rank_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
+    if let Some(Value::Array(data)) = args.first() {
         let ascending = !matches!(args.get(1), Some(Value::Bool(false)));
-        let d = data.read().unwrap();
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let sorted_vals: Vec<f64> = d.iter().map(|v| as_f64(v).unwrap_or(f64::NAN)).collect();
         let n = sorted_vals.len();
         let mut indexed: Vec<(usize, f64)> = sorted_vals.iter().cloned().enumerate().collect();
@@ -1244,8 +1244,8 @@ pub fn window_rank_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 
 /// Assign sequential row numbers (1-based).
 pub fn window_row_number_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
-        let n = data.read().unwrap().len();
+    if let Some(Value::Array(data)) = args.first() {
+        let n = data.read().unwrap_or_else(|e| e.into_inner()).len();
         let result: Vec<Value> = (1..=(n as i64)).map(Value::Int).collect();
         return Ok(Value::Array(Arc::new(RwLock::new(result))));
     }
@@ -1254,8 +1254,8 @@ pub fn window_row_number_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value
 
 /// Apply a Nyx closure (row value → value) to each element — row-by-row UDF.
 pub fn apply_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(data)), Some(Value::Closure(clo))) = (args.get(0), args.get(1)) {
-        let d = data.read().unwrap().clone();
+    if let (Some(Value::Array(data)), Some(Value::Closure(clo))) = (args.first(), args.get(1)) {
+        let d = data.read().unwrap_or_else(|e| e.into_inner()).clone();
         let mut result = Vec::with_capacity(d.len());
         for val in d.iter() {
             let out = vm.call_closure(clo, vec![val.clone()])?;
@@ -1268,7 +1268,7 @@ pub fn apply_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 
 /// Apply a Nyx closure to the entire column array at once — column-level UDF.
 pub fn apply_col_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(arr), Some(Value::Closure(clo))) = (args.get(0), args.get(1)) {
+    if let (Some(arr), Some(Value::Closure(clo))) = (args.first(), args.get(1)) {
         let out = vm.call_closure(clo, vec![arr.clone()])?;
         return Ok(out);
     }
@@ -1279,9 +1279,9 @@ pub fn apply_col_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 /// Percentage change: (val[i] - val[i-n]) / val[i-n]
 pub fn pct_change_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
+    if let Some(Value::Array(data)) = args.first() {
         let n = match args.get(1) { Some(Value::Int(i)) => *i as usize, _ => 1 };
-        let d = data.read().unwrap();
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let vals: Vec<f64> = d.iter().map(|v| as_f64(v).unwrap_or(f64::NAN)).collect();
         let result: Vec<Value> = (0..vals.len()).map(|i| {
             if i < n { Value::Null }
@@ -1297,13 +1297,13 @@ pub fn pct_change_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 
 /// Exponential weighted mean with smoothing factor alpha.
 pub fn ewm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
+    if let Some(Value::Array(data)) = args.first() {
         let alpha = match args.get(1) {
             Some(Value::Float(f)) => *f,
             Some(Value::Int(i))   => *i as f64,
             _ => 0.5,
         };
-        let d = data.read().unwrap();
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let mut result = Vec::with_capacity(d.len());
         let mut ema = f64::NAN;
         for v in d.iter() {
@@ -1319,10 +1319,10 @@ pub fn ewm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 /// Resample: group by integer bucket index and aggregate.
 /// args: [data_array, bucket_size: int, agg_op: str ("sum"|"mean"|"count"|"min"|"max")]
 pub fn resample_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(data)) = args.get(0) {
+    if let Some(Value::Array(data)) = args.first() {
         let bucket_size = match args.get(1) { Some(Value::Int(i)) => (*i as usize).max(1), _ => 1 };
         let agg_op = match args.get(2) { Some(Value::Str(s)) => s.as_str().to_string(), _ => "sum".to_string() };
-        let d = data.read().unwrap();
+        let d = data.read().unwrap_or_else(|e| e.into_inner());
         let vals: Vec<f64> = d.iter().map(|v| as_f64(v).unwrap_or(0.0)).collect();
         let mut result = Vec::new();
         let mut i = 0;
@@ -1349,19 +1349,19 @@ pub fn resample_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 /// Convert a Nyx tensor {data:[], shape:[rows,cols]} to a DataFrame-like object.
 pub fn to_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Object(df_rc)), Some(Value::Str(col_name))) = (args.get(0), args.get(1)) {
-        let df = df_rc.read().unwrap();
+    if let (Some(Value::Object(df_rc)), Some(Value::Str(col_name))) = (args.first(), args.get(1)) {
+        let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
         let cols = match df.get("_columns") { 
-            Some(Value::Array(a)) => a.read().unwrap(),
+            Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()),
             _ => return Ok(Value::Null),
         };
         
         for c_val in cols.iter() {
             if let Value::Object(c_rc) = c_val {
-                let c = c_rc.read().unwrap();
+                let c = c_rc.read().unwrap_or_else(|e| e.into_inner());
                 let name = match c.get("_name") { Some(Value::Str(s)) => s, _ => "" };
                 if name == col_name {
-                    let data_val = c.get("_data").and_then(|v| match v { Value::Array(a) => Some(a.read().unwrap()), _ => None })
+                    let data_val = c.get("_data").and_then(|v| match v { Value::Array(a) => Some(a.read().unwrap_or_else(|e| e.into_inner())), _ => None })
                         .ok_or_else(|| EvalError{message:"Column missing data".to_string(), stack:vec![]})?;
                     
                     let mut float_data = Vec::with_capacity(data_val.len());
@@ -1381,8 +1381,8 @@ pub fn to_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 
 /// Convert a Nyx tensor {data:[], shape:[rows,cols]} to a DataFrame-like object.
 pub fn from_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Object(tensor_rc)) = args.get(0) {
-        let tensor = tensor_rc.read().unwrap();
+    if let Some(Value::Object(tensor_rc)) = args.first() {
+        let tensor = tensor_rc.read().unwrap_or_else(|e| e.into_inner());
         let data_arr = match tensor.get("data").or_else(|| tensor.get("_data")) {
             Some(Value::Array(a)) => a.clone(),
             _ => return Ok(Value::Null),
@@ -1391,15 +1391,15 @@ pub fn from_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
             Some(Value::Array(a)) => a.clone(),
             _ => return Ok(Value::Null),
         };
-        let shape = shape_arr.read().unwrap();
-        let rows = match shape.get(0) { Some(Value::Int(i)) => *i as usize, _ => return Ok(Value::Null) };
+        let shape = shape_arr.read().unwrap_or_else(|e| e.into_inner());
+        let rows = match shape.first() { Some(Value::Int(i)) => *i as usize, _ => return Ok(Value::Null) };
         let cols_count = match shape.get(1) { Some(Value::Int(i)) => *i as usize, _ => return Ok(Value::Null) };
-        let flat = data_arr.read().unwrap();
+        let flat = data_arr.read().unwrap_or_else(|e| e.into_inner());
 
         let nyx_cols: Vec<Value> = (0..cols_count).map(|c| {
             let col_name = match args.get(1) {
                 Some(Value::Array(names)) => {
-                    let n = names.read().unwrap();
+                    let n = names.read().unwrap_or_else(|e| e.into_inner());
                     match n.get(c) { Some(Value::Str(s)) => s.clone(), _ => format!("col_{}", c) }
                 }
                 _ => format!("col_{}", c),
@@ -1423,15 +1423,15 @@ pub fn from_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 
 /// Serialize DataFrame columns to Arrow IPC-compatible JSON bytes (stub for Python interop).
 pub fn export_arrow_ipc_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Object(df_rc)) = args.get(0) {
-        let df = df_rc.read().unwrap();
+    if let Some(Value::Object(df_rc)) = args.first() {
+        let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
         let cols = match df.get("_columns") {
-            Some(Value::Array(a)) => a.read().unwrap().clone(),
+            Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Ok(Value::Null),
         };
         let num_rows = if let Some(Value::Object(c0)) = cols.first() {
-            let cr = c0.read().unwrap();
-            if let Some(Value::Array(d)) = cr.get("_data") { d.read().unwrap().len() } else { 0 }
+            let cr = c0.read().unwrap_or_else(|e| e.into_inner());
+            if let Some(Value::Array(d)) = cr.get("_data") { d.read().unwrap_or_else(|e| e.into_inner()).len() } else { 0 }
         } else { 0 };
 
         let mut records: Vec<serde_json::Value> = Vec::with_capacity(num_rows);
@@ -1439,10 +1439,10 @@ pub fn export_arrow_ipc_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value,
             let mut obj = serde_json::Map::new();
             for col_v in &cols {
                 if let Value::Object(col_rc) = col_v {
-                    let col = col_rc.read().unwrap();
+                    let col = col_rc.read().unwrap_or_else(|e| e.into_inner());
                     let name = match col.get("_name") { Some(Value::Str(s)) => s.clone(), _ => "col".to_string() };
                     if let Some(Value::Array(data)) = col.get("_data") {
-                        let d = data.read().unwrap();
+                        let d = data.read().unwrap_or_else(|e| e.into_inner());
                         let jv = match d.get(row) {
                             Some(Value::Float(f)) => serde_json::Number::from_f64(*f).map(serde_json::Value::Number).unwrap_or(serde_json::Value::Null),
                             Some(Value::Int(i))   => serde_json::Value::Number((*i).into()),
@@ -1465,24 +1465,42 @@ pub fn export_arrow_ipc_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value,
 // ── Phase 7: SIMD / Rayon High-Throughput Kernels ────────────────────────────
 
 pub fn sum_simd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(arr_rc)) = args.get(0) {
-        let arr = arr_rc.read().unwrap();
-        // Use Rayon for parallel sum if size > threshold
-        let sum: f64 = if arr.len() > 1000 {
-            arr.par_iter().map(|v| v.as_f64().unwrap_or(0.0)).sum()
-        } else {
-            arr.iter().map(|v| v.as_f64().unwrap_or(0.0)).sum()
-        };
-        Ok(Value::Float(sum))
-    } else {
-        Ok(Value::Float(0.0))
+    match args.first() {
+        Some(Value::Array(arr_rc)) => {
+            let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
+            let sum: f64 = if arr.len() > 1000 {
+                arr.par_iter().map(|v| v.as_f64().unwrap_or(0.0)).sum()
+            } else {
+                arr.iter().map(|v| v.as_f64().unwrap_or(0.0)).sum()
+            };
+            Ok(Value::Float(sum))
+        }
+        Some(Value::DoubleArray(arr_rc)) => {
+            let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
+            let sum: f64 = if arr.len() > 1000 {
+                arr.par_iter().sum()
+            } else {
+                arr.iter().sum()
+            };
+            Ok(Value::Float(sum))
+        }
+        Some(Value::FloatArray(arr_rc)) => {
+            let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
+            let sum: f64 = if arr.len() > 1000 {
+                arr.par_iter().map(|&x| x as f64).sum()
+            } else {
+                arr.iter().map(|&x| x as f64).sum()
+            };
+            Ok(Value::Float(sum))
+        }
+        _ => Ok(Value::Float(0.0)),
     }
 }
 
 pub fn dot_simd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a_rc)), Some(Value::Array(b_rc))) = (args.get(0), args.get(1)) {
-        let a = a_rc.read().unwrap();
-        let b = b_rc.read().unwrap();
+    if let (Some(Value::Array(a_rc)), Some(Value::Array(b_rc))) = (args.first(), args.get(1)) {
+        let a = a_rc.read().unwrap_or_else(|e| e.into_inner());
+        let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
         let len = a.len().min(b.len());
         
         let dot: f64 = if len > 1000 {
@@ -1506,7 +1524,7 @@ pub fn dot_simd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 
 pub fn set_memory_limit_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let limit = match args.get(0) {
+    let limit = match args.first() {
         Some(Value::Int(i))   => *i as usize,
         Some(Value::Float(f)) => *f as usize,
         _ => return Ok(Value::Bool(false)),
@@ -1520,21 +1538,21 @@ pub fn set_memory_limit_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value,
 
 thread_local! {
     static LAST_METRICS: std::cell::RefCell<Vec<(String, f64)>> =
-        std::cell::RefCell::new(Vec::new());
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Execute a logical plan and return execution metrics (total_ms, chunks, rows).
 pub fn profile_plan_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(plan_val) = args.get(0) {
+    if let Some(plan_val) = args.first() {
         let logical = value_to_logical_plan(plan_val)?;
         let mut ctx = df_engine::ExecutionContext { sources: HashMap::new() };
         
         // Extract sources if provided in 2nd arg
         if let Some(Value::Object(sources_rc)) = args.get(1) {
-            let sources = sources_rc.read().unwrap();
+            let sources = sources_rc.read().unwrap_or_else(|e| e.into_inner());
             for (id, val) in sources.iter() {
                 if let Value::Object(df_rc) = val {
-                    let df = df_rc.read().unwrap();
+                    let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
                     let chunk = df_to_data_chunk(&df)?;
                     let fields = chunk.columns.iter().map(|c| Field { 
                         name: c.name.clone(), 
@@ -1590,7 +1608,7 @@ pub fn get_metrics_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, Eva
 
 /// Render an ASCII logical plan tree.
 pub fn explain_plan_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(plan_val) = args.get(0) {
+    if let Some(plan_val) = args.first() {
         let tree = render_plan_ascii(plan_val, 0);
         println!("{}", tree);
         return Ok(Value::Str(tree));
@@ -1603,7 +1621,7 @@ fn render_plan_ascii(v: &Value, depth: usize) -> String {
     let arrow = if depth == 0 { "".to_string() } else { format!("{}└─ ", "  ".repeat(depth - 1)) };
     match v {
         Value::Object(obj_rc) => {
-            let obj = obj_rc.read().unwrap();
+            let obj = obj_rc.read().unwrap_or_else(|e| e.into_inner());
             let op = match obj.get("_op") { Some(Value::Str(s)) => s.clone(), _ => "?".to_string() };
             let mut lines = format!("{}[{}]", arrow, op.to_ascii_uppercase());
             if let Some(col_val) = obj.get("column") {
@@ -1634,9 +1652,9 @@ fn render_plan_ascii(v: &Value, depth: usize) -> String {
 /// Evaluate a simple expression string against a data array in a secure sandbox.
 /// Only allows: numeric literals and binary operators (+, -, *, /, >, <, >=, <=, ==, !=).
 pub fn sandboxed_eval_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let expr_str = match args.get(0) { Some(Value::Str(s)) => s.trim().to_string(), _ => return Ok(Value::Null) };
+    let expr_str = match args.first() { Some(Value::Str(s)) => s.trim().to_string(), _ => return Ok(Value::Null) };
     let data = match args.get(1) { Some(Value::Array(a)) => a.clone(), _ => return Ok(Value::Null) };
-    let d = data.read().unwrap().clone();
+    let d = data.read().unwrap_or_else(|e| e.into_inner()).clone();
     // Try operators in descending length order to avoid prefix matching bugs
     let ops: &[(&str, bool)] = &[
         (">=", false), ("<=", false), ("==", false), ("!=", false),
@@ -1673,17 +1691,17 @@ pub fn sandboxed_eval_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, E
 
 /// Remove duplicate rows from a DataFrame-like object.
 pub fn df_distinct_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Object(df_rc)) = args.get(0) {
-        let df = df_rc.read().unwrap();
+    if let Some(Value::Object(df_rc)) = args.first() {
+        let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
         let cols = match df.get("_columns") {
-            Some(Value::Array(a)) => a.read().unwrap().clone(),
+            Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Ok(Value::Object(Arc::new(RwLock::new(df.clone())))),
         };
         if cols.is_empty() { return Ok(Value::Object(Arc::new(RwLock::new(df.clone())))); }
 
         let num_rows = if let Some(Value::Object(c0)) = cols.first() {
-            let cr = c0.read().unwrap();
-            if let Some(Value::Array(d)) = cr.get("_data") { d.read().unwrap().len() } else { 0 }
+            let cr = c0.read().unwrap_or_else(|e| e.into_inner());
+            if let Some(Value::Array(d)) = cr.get("_data") { d.read().unwrap_or_else(|e| e.into_inner()).len() } else { 0 }
         } else { 0 };
 
         let mut seen = std::collections::HashSet::<String>::new();
@@ -1692,9 +1710,9 @@ pub fn df_distinct_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         for row in 0..num_rows {
             let key: String = cols.iter().map(|cv| {
                 if let Value::Object(cr) = cv {
-                    let col = cr.read().unwrap();
+                    let col = cr.read().unwrap_or_else(|e| e.into_inner());
                     if let Some(Value::Array(da)) = col.get("_data") {
-                        value_to_string(da.read().unwrap().get(row).unwrap_or(&Value::Null))
+                        value_to_string(da.read().unwrap_or_else(|e| e.into_inner()).get(row).unwrap_or(&Value::Null))
                     } else { String::new() }
                 } else { String::new() }
             }).collect::<Vec<_>>().join("\x00");
@@ -1703,11 +1721,11 @@ pub fn df_distinct_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 
         let new_cols: Vec<Value> = cols.iter().map(|cv| {
             if let Value::Object(cr) = cv {
-                let col = cr.read().unwrap();
+                let col = cr.read().unwrap_or_else(|e| e.into_inner());
                 let name  = match col.get("_name")  { Some(Value::Str(s)) => s.clone(), _ => "col".to_string() };
                 let dtype = match col.get("_dtype") { Some(Value::Str(s)) => s.clone(), _ => "str".to_string() };
                 if let Some(Value::Array(da)) = col.get("_data") {
-                    let d = da.read().unwrap();
+                    let d = da.read().unwrap_or_else(|e| e.into_inner());
                     let nd: Vec<Value> = kept.iter().map(|&r| d.get(r).cloned().unwrap_or(Value::Null)).collect();
                     let mut nc: HashMap<String, Value> = HashMap::new();
                     nc.insert("_name".to_string(),  Value::Str(name));
@@ -1729,8 +1747,8 @@ pub fn df_distinct_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 /// Computes a weighted sum of right-hand-side features based on ID similarity.
 pub fn soft_join_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.len() < 5 { return Ok(Value::Null); }
-    let left_df = match &args[0] { Value::Object(o) => o.read().unwrap(), _ => return Ok(Value::Null) };
-    let right_df = match &args[1] { Value::Object(o) => o.read().unwrap(), _ => return Ok(Value::Null) };
+    let left_df = match &args[0] { Value::Object(o) => o.read().unwrap_or_else(|e| e.into_inner()), _ => return Ok(Value::Null) };
+    let right_df = match &args[1] { Value::Object(o) => o.read().unwrap_or_else(|e| e.into_inner()), _ => return Ok(Value::Null) };
     let left_on = match &args[2] { Value::Str(s) => s, _ => return Ok(Value::Null) };
     let right_on = match &args[3] { Value::Str(s) => s, _ => return Ok(Value::Null) };
     let temp = args[4].as_f64().unwrap_or(0.1) as f32;
@@ -1747,18 +1765,18 @@ pub fn soft_join_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     // Join logic: for each row in left, find weighted average of right features
     // We'll join all columns from right_df except the ID column.
     let right_cols = match right_df.get("_columns") {
-        Some(Value::Array(a)) => a.read().unwrap(),
+        Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()),
         _ => return Ok(Value::Null),
     };
 
     for r_col_val in right_cols.iter() {
         if let Value::Object(c_rc) = r_col_val {
-            let c = c_rc.read().unwrap();
+            let c = c_rc.read().unwrap_or_else(|e| e.into_inner());
             let name = match c.get("_name") { Some(Value::Str(s)) => s, _ => "" };
             if name == right_on { continue; }
             
             let data = match c.get("_data") {
-                Some(Value::Array(a)) => a.read().unwrap(),
+                Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()),
                 _ => continue,
             };
             
@@ -1798,16 +1816,16 @@ pub fn soft_join_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 
 fn get_col_data(df: &HashMap<String, Value>, name: &str) -> Result<Vec<f64>, EvalError> {
     let cols = match df.get("_columns") { 
-        Some(Value::Array(a)) => a.read().unwrap(),
+        Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()),
         _ => return Err(EvalError{message:"Invalid DF".to_string(), stack:vec![]}),
     };
     for c_val in cols.iter() {
         if let Value::Object(c_rc) = c_val {
-            let c = c_rc.read().unwrap();
+            let c = c_rc.read().unwrap_or_else(|e| e.into_inner());
             if let Some(Value::Str(n)) = c.get("_name") {
                 if n == name {
                     let data = match c.get("_data") {
-                        Some(Value::Array(a)) => a.read().unwrap(),
+                        Some(Value::Array(a)) => a.read().unwrap_or_else(|e| e.into_inner()),
                         _ => return Err(EvalError{message:"Column missing data".to_string(), stack:vec![]}),
                     };
                     return Ok(data.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect());
@@ -1826,7 +1844,7 @@ pub fn db_begin_transaction_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<V
 }
 
 pub fn db_commit_transaction_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(tx_id)) = args.get(0) {
+    if let Some(Value::Int(tx_id)) = args.first() {
         let pending = df_engine::global_tx_context().commit(*tx_id as u64)
             .map_err(|e| EvalError { message: e, stack: vec![] })?;
         
@@ -1840,7 +1858,7 @@ pub fn db_commit_transaction_native(_vm: &mut NyxVm, args: &[Value]) -> Result<V
 }
 
 pub fn db_abort_transaction_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(tx_id)) = args.get(0) {
+    if let Some(Value::Int(tx_id)) = args.first() {
         df_engine::global_tx_context().abort(*tx_id as u64)
             .map_err(|e| EvalError { message: e, stack: vec![] })?;
         return Ok(Value::Bool(true));
@@ -1849,8 +1867,8 @@ pub fn db_abort_transaction_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Va
 }
 
 pub fn save_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(name)), Some(Value::Str(path))) = (args.get(0), args.get(1)) {
-        let catalog = df_engine::global_catalog().lock().unwrap();
+    if let (Some(Value::Str(name)), Some(Value::Str(path))) = (args.first(), args.get(1)) {
+        let catalog = df_engine::global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         if let Some(chunks) = catalog.get(name) {
             // Need schema
             if chunks.is_empty() { return Ok(Value::Bool(false)); }
@@ -1861,7 +1879,7 @@ pub fn save_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
             }).collect();
             let schema = Schema::new(fields);
             
-            crate::runtime::execution::nyx_table_writer::NyxTableWriter::write_to_file(path, &schema, &chunks)
+            crate::runtime::execution::nyx_table_writer::NyxTableWriter::write_to_file(path, &schema, chunks)
                 .map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
             return Ok(Value::Bool(true));
         }
@@ -1870,7 +1888,7 @@ pub fn save_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 pub fn load_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(name)), Some(Value::Str(path))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(name)), Some(Value::Str(path))) = (args.first(), args.get(1)) {
         let (_schema, chunks) = crate::runtime::execution::nyx_table_writer::NyxTableWriter::read_from_file(path)
             .map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
         df_engine::register_table(name.clone(), Arc::new(chunks));
@@ -1880,8 +1898,8 @@ pub fn load_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 pub fn db_add_pending_table_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(tx_id)), Some(Value::Str(name)), Some(Value::Object(df_rc))) = (args.get(0), args.get(1), args.get(2)) {
-        let df = df_rc.read().unwrap();
+    if let (Some(Value::Int(tx_id)), Some(Value::Str(name)), Some(Value::Object(df_rc))) = (args.first(), args.get(1), args.get(2)) {
+        let df = df_rc.read().unwrap_or_else(|e| e.into_inner());
         let chunk = df_to_data_chunk(&df)?;
         let fields = chunk.columns.iter().map(|c| Field { 
             name: c.name.clone(), 

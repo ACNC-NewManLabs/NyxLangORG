@@ -127,7 +127,7 @@ fn check_for_break(stmts: &[Stmt], has_break: &mut bool) {
                  for branch in branches { check_for_break(&branch.body, has_break); }
                  if let Some(eb) = else_body { check_for_break(eb, has_break); }
             }
-            Stmt::Expr(Expr::Block(body, _)) => check_for_break(body, has_break),
+            Stmt::Expr(Expr::Block { stmts: body, .. }) => check_for_break(body, has_break),
             _ => {}
         }
     }

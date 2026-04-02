@@ -10,6 +10,7 @@ pub mod atomic;
 pub mod channels;
 pub mod task;
 pub mod executor;
+pub mod actor;
 
 /// Initialize concurrent runtime
 pub fn init() {
@@ -24,3 +25,4 @@ pub use condvar::Condvar;
 pub use channels::Channel;
 pub use task::Task;
 pub use executor::Executor;
+pub use actor::Actor;

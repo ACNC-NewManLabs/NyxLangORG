@@ -98,6 +98,7 @@ pub enum TokenKind {
     KwNot, // `not` — logical NOT alias
     KwSecure,   // `secure`
     KwProtocol, // `protocol`
+    KwYield,    // `yield`
 
     // ── Arithmetic operators ───────────────────────────────────────────────
     Plus,
@@ -223,6 +224,7 @@ impl TokenKind {
                 | TokenKind::KwNot
                 | TokenKind::KwSecure
                 | TokenKind::KwProtocol
+                | TokenKind::KwYield
         )
     }
 
@@ -282,6 +284,7 @@ impl TokenKind {
             TokenKind::KwNot => "not",
             TokenKind::KwSecure => "secure",
             TokenKind::KwProtocol => "protocol",
+            TokenKind::KwYield => "yield",
             TokenKind::Plus => "+",
             TokenKind::Minus => "-",
             TokenKind::Star => "*",
@@ -395,6 +398,7 @@ pub static KEYWORDS: &[(&str, TokenKind)] = &[
     ("not", TokenKind::KwNot),
     ("secure", TokenKind::KwSecure),
     ("protocol", TokenKind::KwProtocol),
+    ("yield", TokenKind::KwYield),
 ];
 
 /// Look up a lexed identifier string and return its keyword kind, or

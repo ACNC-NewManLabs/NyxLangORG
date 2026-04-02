@@ -1,0 +1,17 @@
+use std::time;
+
+fn main() {
+    let n = 10000000;
+    let mut total = 0;
+    let mut i = 0;
+    
+    let start = time::now();
+    while i < n {
+        total = total + i;
+        i = i + 1;
+    }
+    let end = time::now();
+    
+    println("Nyx (Loop) Result: " + total);
+    println("Nyx (Loop) Time: " + (end - start) + "ms");
+}

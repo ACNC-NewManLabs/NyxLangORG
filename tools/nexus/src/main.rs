@@ -564,7 +564,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 match event {
                     Ok(ev) => {
                         if let Ok(text) = serde_json::to_string(&ev) {
-                            if socket.send(Message::Text(text.into())).await.is_err() {
+                            if socket.send(Message::Text(text)).await.is_err() {
                                 break;
                             }
                         }

@@ -1,0 +1,30 @@
+// 1. Variadic Arguments
+fn sum_all(...numbers) {
+    let mut total = 0;
+    for n in numbers {
+        total += n;
+    }
+    return total;
+}
+print("Sum of 1, 2, 3, 4: " + sum_all(1, 2, 3, 4).to_string());
+
+// 2. Generators
+fn count_to_three() {
+    yield 1;
+    yield 2;
+    yield 3;
+}
+
+let counter = count_to_three();
+print("Gen 1: " + counter.next().get("value").to_string());
+print("Gen 2: " + counter.next().get("value").to_string());
+print("Gen 3: " + counter.next().get("value").to_string());
+print("Gen 4 (done): " + counter.next().get("done").to_string());
+
+// 3. Dynamic Metaprogramming
+let obj = { name: "Nyx" };
+obj.set("greet", |self, msg| {
+    print(msg + " from " + self.get("name"));
+});
+
+obj.greet("Hello");

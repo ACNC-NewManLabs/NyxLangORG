@@ -6,6 +6,12 @@ pub struct QueryIntelligence {
     pub table_stats: HashMap<String, usize>, // Table -> Row Count
 }
 
+impl Default for QueryIntelligence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryIntelligence {
     pub fn new() -> Self {
         Self {

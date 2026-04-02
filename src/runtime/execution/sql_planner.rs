@@ -10,6 +10,12 @@ pub struct SqlPlanner {
     pub ctes: HashMap<String, LogicalPlan>,
 }
 
+impl Default for SqlPlanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SqlPlanner {
     pub fn new() -> Self {
         Self { ctes: HashMap::new() }
@@ -260,8 +266,8 @@ impl SqlPlanner {
                         // For Production Zero: We only support simple BinaryExpr equality for ON
                         // Example: ON a.id = b.id
                         if let sqlparser::ast::Expr::BinaryOp { left, op: sqlparser::ast::BinaryOperator::Eq, right } = expr {
-                            (left.to_string().split('.').last().unwrap().to_string(), 
-                             right.to_string().split('.').last().unwrap().to_string())
+                            (left.to_string().split('.').next_back().unwrap_or("").to_string(), 
+                             right.to_string().split('.').next_back().unwrap_or("").to_string())
                         } else {
                             return Err("Only simple equality constraints supported in ON clause".to_string());
                         }
@@ -367,7 +373,7 @@ impl SqlPlanner {
 
     fn map_expr(&mut self, expr: &SqlExpr) -> Result<NyxExpr, String> {
         match expr {
-            SqlExpr::Identifier(ident) => Ok(NyxExpr::Identifier(ident.to_string())),
+            SqlExpr::Identifier(ident) => Ok(NyxExpr::ident(ident.value.clone())),
             SqlExpr::BinaryOp { left, op, right } => {
                 let l = Box::new(self.map_expr(left)?);
                 let r = Box::new(self.map_expr(right)?);
@@ -384,21 +390,21 @@ impl SqlPlanner {
                     BinaryOperator::Divide => "/".to_string(),
                     _ => return Err(format!("Unsupported binary operator: {:?}", op)),
                 };
-                Ok(NyxExpr::Binary { left: l, op: nyx_op, right: r })
+                Ok(NyxExpr::Binary { left: l, op: nyx_op, right: r, span: crate::core::diagnostics::Span::default() })
             }
             SqlExpr::Value(val) => {
                 use sqlparser::ast::Value;
                 match val {
                     Value::Number(n, _) => {
                         if n.contains('.') {
-                            Ok(NyxExpr::FloatLiteral(n.parse().unwrap_or(0.0)))
+                            Ok(NyxExpr::float(n.parse::<f64>().unwrap_or(0.0)))
                         } else {
-                            Ok(NyxExpr::IntLiteral(n.parse().unwrap_or(0)))
+                            Ok(NyxExpr::int(n.parse::<i64>().unwrap_or(0)))
                         }
                     }
-                    Value::SingleQuotedString(s) => Ok(NyxExpr::StringLiteral(s.clone())),
-                    Value::Boolean(b) => Ok(NyxExpr::BoolLiteral(*b)),
-                    Value::Null => Ok(NyxExpr::Identifier("null".to_string())),
+                    Value::SingleQuotedString(s) => Ok(NyxExpr::string(s.clone())),
+                    Value::Boolean(b) => Ok(NyxExpr::bool(*b)),
+                    Value::Null => Ok(NyxExpr::ident("null".to_string())),
                     _ => Err(format!("Unsupported value type: {:?}", val)),
                 }
             }
@@ -406,7 +412,7 @@ impl SqlPlanner {
                 let _plan = self.plan_query(subquery)?;
                 // For now, return a placeholder identifier to avoid crash
                 // Full scalar subquery integration requires VM support
-                Ok(NyxExpr::Identifier(format!("subquery_{}", uuid::Uuid::new_v4().simple())))
+                Ok(NyxExpr::ident(format!("subquery_{}", uuid::Uuid::new_v4().simple())))
             }
             _ => Err(format!("Unsupported SQL expression: {:?}", expr)),
         }
@@ -428,17 +434,17 @@ impl SqlPlanner {
                 use sqlparser::ast::FunctionArguments;
                 match &func.args {
                     FunctionArguments::None => {
-                        return Ok(Some((NyxExpr::IntLiteral(1), AggregateOp::Count)));
+                        return Ok(Some((NyxExpr::int(1), AggregateOp::Count)));
                     }
                     FunctionArguments::List(list) => {
                         if list.args.is_empty() {
-                            return Ok(Some((NyxExpr::IntLiteral(1), AggregateOp::Count)));
+                            return Ok(Some((NyxExpr::int(1), AggregateOp::Count)));
                         }
                         use sqlparser::ast::FunctionArg;
                         let arg_expr = match &list.args[0] {
                             FunctionArg::Unnamed(arg_expr) => match arg_expr {
                                 sqlparser::ast::FunctionArgExpr::Expr(e) => self.map_expr(e)?,
-                                sqlparser::ast::FunctionArgExpr::Wildcard => NyxExpr::IntLiteral(1),
+                                sqlparser::ast::FunctionArgExpr::Wildcard => NyxExpr::int(1),
                                 _ => return Err("Unsupported function argument expression".to_string()),
                             },
                             _ => return Err("Only unnamed arguments supported".to_string()),

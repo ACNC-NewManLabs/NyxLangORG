@@ -141,13 +141,13 @@ fn test_nyx_error_new_defaults() {
     assert_eq!(e.category, ErrorCategory::Compiler);
     assert_eq!(e.severity, Severity::Error);
     assert!(e.module.is_empty());
-    assert!(e.file.is_none());
-    assert!(e.line.is_none());
-    assert!(e.column.is_none());
-    assert!(e.end_line.is_none());
-    assert!(e.end_column.is_none());
-    assert!(e.notes.is_empty());
-    assert!(e.suggestions.is_empty());
+    assert!(e.details.file.is_none());
+    assert!(e.details.line.is_none());
+    assert!(e.details.column.is_none());
+    assert!(e.details.end_line.is_none());
+    assert!(e.details.end_column.is_none());
+    assert!(e.details.notes.is_empty());
+    assert!(e.details.suggestions.is_empty());
     assert!(!e.recoverable);
 }
 
@@ -162,39 +162,39 @@ fn test_nyx_error_with_module() {
 fn test_nyx_error_with_file() {
     let e = NyxError::new(codes::TYPE_MISMATCH, "mismatch", ErrorCategory::Type)
         .with_file("main.nyx");
-    assert_eq!(e.file.as_deref(), Some("main.nyx"));
+    assert_eq!(e.details.file.as_deref(), Some("main.nyx"));
 }
 
 #[test]
 fn test_nyx_error_with_line() {
     let e = NyxError::new(codes::MISSING_RETURN, "missing return", ErrorCategory::Compiler)
         .with_line(42);
-    assert_eq!(e.line, Some(42));
+    assert_eq!(e.details.line, Some(42));
 }
 
 #[test]
 fn test_nyx_error_with_column() {
     let e = NyxError::new(codes::DUPLICATE_BINDING, "dup", ErrorCategory::Compiler)
         .with_column(10);
-    assert_eq!(e.column, Some(10));
+    assert_eq!(e.details.column, Some(10));
 }
 
 #[test]
 fn test_nyx_error_with_location() {
     let e = NyxError::new(codes::ARITY_MISMATCH, "arity", ErrorCategory::Compiler)
         .with_location(5, 15);
-    assert_eq!(e.line, Some(5));
-    assert_eq!(e.column, Some(15));
+    assert_eq!(e.details.line, Some(5));
+    assert_eq!(e.details.column, Some(15));
 }
 
 #[test]
 fn test_nyx_error_with_span() {
     let e = NyxError::new(codes::INVALID_LITERAL, "lit", ErrorCategory::Compiler)
         .with_span((1, 2), (3, 4));
-    assert_eq!(e.line, Some(1));
-    assert_eq!(e.column, Some(2));
-    assert_eq!(e.end_line, Some(3));
-    assert_eq!(e.end_column, Some(4));
+    assert_eq!(e.details.line, Some(1));
+    assert_eq!(e.details.column, Some(2));
+    assert_eq!(e.details.end_line, Some(3));
+    assert_eq!(e.details.end_column, Some(4));
 }
 
 #[test]
@@ -202,10 +202,10 @@ fn test_nyx_error_with_span_obj() {
     let span = make_span(10, 5, 10, 15);
     let e = NyxError::new(codes::IR_ERROR, "ir", ErrorCategory::Compiler)
         .with_span_obj(&span);
-    assert_eq!(e.line, Some(10));
-    assert_eq!(e.column, Some(5));
-    assert_eq!(e.end_line, Some(10));
-    assert_eq!(e.end_column, Some(15));
+    assert_eq!(e.details.line, Some(10));
+    assert_eq!(e.details.column, Some(5));
+    assert_eq!(e.details.end_line, Some(10));
+    assert_eq!(e.details.end_column, Some(15));
 }
 
 #[test]
@@ -213,9 +213,9 @@ fn test_nyx_error_with_note() {
     let e = NyxError::new(codes::BORROW_VIOLATION, "borrow", ErrorCategory::Compiler)
         .with_note("note 1")
         .with_note("note 2");
-    assert_eq!(e.notes.len(), 2);
-    assert_eq!(e.notes[0], "note 1");
-    assert_eq!(e.notes[1], "note 2");
+    assert_eq!(e.details.notes.len(), 2);
+    assert_eq!(e.details.notes[0], "note 1");
+    assert_eq!(e.details.notes[1], "note 2");
 }
 
 #[test]
@@ -223,15 +223,15 @@ fn test_nyx_error_with_notes() {
     let notes = vec!["a".to_string(), "b".to_string(), "c".to_string()];
     let e = NyxError::new(codes::BORROW_VIOLATION, "msg", ErrorCategory::Compiler)
         .with_notes(notes);
-    assert_eq!(e.notes.len(), 3);
+    assert_eq!(e.details.notes.len(), 3);
 }
 
 #[test]
 fn test_nyx_error_with_suggestion() {
     let e = NyxError::new(codes::UNDEFINED_SYMBOL, "undef", ErrorCategory::Compiler)
         .with_suggestion("Did you mean 'foo'?");
-    assert_eq!(e.suggestions.len(), 1);
-    assert_eq!(e.suggestions[0], "Did you mean 'foo'?");
+    assert_eq!(e.details.suggestions.len(), 1);
+    assert_eq!(e.details.suggestions[0], "Did you mean 'foo'?");
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn test_nyx_error_with_suggestions() {
     let sugs = vec!["fix 1".to_string(), "fix 2".to_string()];
     let e = NyxError::new(codes::UNDEFINED_SYMBOL, "undef", ErrorCategory::Compiler)
         .with_suggestions(sugs);
-    assert_eq!(e.suggestions.len(), 2);
+    assert_eq!(e.details.suggestions.len(), 2);
 }
 
 #[test]
@@ -369,7 +369,7 @@ fn test_nyx_error_with_stack_trace() {
     let e = NyxError::new(codes::INTERNAL_COMPILER_BUG, "bug", ErrorCategory::Internal)
         .with_stack_trace();
     // stack_trace is Some (even if empty in release mode)
-    assert!(e.stack_trace.is_some());
+    assert!(e.details.stack_trace.is_some());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -490,9 +490,9 @@ fn test_macros_return_nyx_error_with_builder() {
         .with_file("foo.nyx")
         .with_line(1)
         .with_note("fix this");
-    assert_eq!(e.file.as_deref(), Some("foo.nyx"));
-    assert_eq!(e.line, Some(1));
-    assert_eq!(e.notes[0], "fix this");
+    assert_eq!(e.details.file.as_deref(), Some("foo.nyx"));
+    assert_eq!(e.details.line, Some(1));
+    assert_eq!(e.details.notes[0], "fix this");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -940,8 +940,8 @@ fn test_diagnostic_into_nyx_error_preserves_message() {
         .with_suggestion("a fix");
     let e = d.into_nyx_error();
     assert_eq!(e.message, "type error");
-    assert_eq!(e.notes.len(), 1);
-    assert_eq!(e.suggestions.len(), 1);
+    assert_eq!(e.details.notes.len(), 1);
+    assert_eq!(e.details.suggestions.len(), 1);
     assert_eq!(e.severity, Severity::Error);
 }
 
@@ -950,10 +950,10 @@ fn test_diagnostic_into_nyx_error_with_span() {
     let span = make_span(3, 1, 3, 9);
     let d = Diagnostic::error(codes::PARSER_MISSING_TOKEN, "missing").with_span(span);
     let e = d.into_nyx_error();
-    assert_eq!(e.line, Some(3));
-    assert_eq!(e.column, Some(1));
-    assert_eq!(e.end_line, Some(3));
-    assert_eq!(e.end_column, Some(9));
+    assert_eq!(e.details.line, Some(3));
+    assert_eq!(e.details.column, Some(1));
+    assert_eq!(e.details.end_line, Some(3));
+    assert_eq!(e.details.end_column, Some(9));
 }
 
 #[test]
@@ -1282,9 +1282,9 @@ fn test_integration_diagnostic_converted_and_emitted() {
 
     let errors = engine.into_nyx_errors();
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].notes.len(), 1);
-    assert_eq!(errors[0].suggestions.len(), 1);
-    assert_eq!(errors[0].line, Some(1));
+    assert_eq!(errors[0].details.notes.len(), 1);
+    assert_eq!(errors[0].details.suggestions.len(), 1);
+    assert_eq!(errors[0].details.line, Some(1));
 }
 
 #[test]

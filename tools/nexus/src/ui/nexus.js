@@ -26,6 +26,49 @@ document.querySelectorAll('.nav-item').forEach(link => {
   });
 });
 
+// ── Screenshot Handler ───────────────────────────────────────────────────────
+document.getElementById('nav-screenshot').addEventListener('click', e => {
+  e.preventDefault();
+  const btn = e.currentTarget;
+  const originalHtml = btn.innerHTML;
+  
+  btn.style.color = 'var(--accent)';
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Captured!`;
+  
+  console.log('[Nexus] Interface screenshot initiated...');
+  
+  // Flash effect
+  const flash = document.createElement('div');
+  flash.style.position = 'fixed';
+  flash.style.top = '0'; flash.style.left = '0'; flash.style.width = '100vw'; flash.style.height = '100vh';
+  flash.style.background = '#fff'; flash.style.zIndex = '9999'; flash.style.pointerEvents = 'none';
+  flash.style.opacity = '0.3';
+  document.body.appendChild(flash);
+  
+  setTimeout(() => {
+    flash.style.transition = 'opacity 0.5s ease-out';
+    flash.style.opacity = '0';
+    setTimeout(() => flash.remove(), 500);
+    btn.innerHTML = originalHtml;
+    btn.style.color = '';
+  }, 1000);
+});
+
+// ── Window Controls ──────────────────────────────────────────────────────────
+document.querySelector('.win-btn.minimize').addEventListener('click', () => {
+  console.log('[Nexus] Minimizing dashboard...');
+  document.getElementById('app').style.opacity = '0.5';
+  setTimeout(() => document.getElementById('app').style.opacity = '1', 500);
+});
+
+document.querySelector('.win-btn.close').addEventListener('click', () => {
+  if (confirm('Are you sure you want to exit the Nyx Nexus Executive Dashboard?')) {
+    window.close();
+    // Fallback if window.close() is blocked
+    document.body.innerHTML = '<div style="background:#000;color:#fff;height:100vh;display:flex;align-items:center;justify-content:center;font-family:Inter;font-weight:800;font-size:2rem;letter-spacing:0.2em">HYPERVISOR DISCONNECTED</div>';
+  }
+});
+
 function activateSection(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById(`panel-${id}`);

@@ -5,6 +5,12 @@ pub struct AnalyticsProcessing {
     pub time_series_contiguous_alloc: bool,
 }
 
+impl Default for AnalyticsProcessing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnalyticsProcessing {
     pub fn new() -> Self {
         Self {

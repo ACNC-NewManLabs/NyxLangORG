@@ -313,7 +313,7 @@ fn serve_static_file(stream: &mut std::net::TcpStream, path: &std::path::Path) -
 }
 
 fn get_mime_type(path: &str) -> &'static str {
-    let ext = path.split('.').last().unwrap_or("");
+    let ext = path.split('.').next_back().unwrap_or("");
     match ext.to_lowercase().as_str() {
         "html" | "htm" => "text/html; charset=utf-8",
         "css" => "text/css",

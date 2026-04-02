@@ -1,0 +1,49 @@
+// Nyx World-Leader Verification Suite
+// Tests: Time, OS, Tracing, and Diagnostics
+
+use std::os;
+use std::time;
+use std::vm;
+
+fn test_stdlib_depth() {
+    print("--- Stdlib Depth Test ---");
+    let ts = get_timestamp();
+    print("Timestamp (ISO-8601): " + ts);
+    
+    let path = os::get_env("PATH");
+    if path != null {
+        print("OS Env (PATH): Found (Length > 0)");
+    } else {
+        print("OS Env (PATH): Not Found");
+    }
+}
+
+fn test_tracing() {
+    print("--- Tracing (Flight Recorder) Test ---");
+    vm::enable_tracing(true);
+    
+    // Perform some traceable operations
+    let a = [1.0, 2.0, 3.0, 4.0, 5.0];
+    let s = std::df::sum_simd(a);
+    print("SIMD Sum Result: " + s);
+    
+    vm::dump_trace("flight_recorder.json");
+    print("Trace dumped to flight_recorder.json");
+    vm::enable_tracing(false);
+}
+
+fn trigger_diagnostic_error() {
+    print("--- Diagnostic Error Test ---");
+    let x = 10;
+    let y = 0;
+    // This should trigger a runtime error with a span
+    let z = x / y;
+}
+
+fn main() {
+    test_stdlib_depth();
+    test_tracing();
+    
+    print("\nNext: Triggering deliberate error to demonstrate miette-style diagnostics...");
+    trigger_diagnostic_error();
+}

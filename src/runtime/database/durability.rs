@@ -40,6 +40,12 @@ pub struct DurabilityStorage {
     pub storage_path: String,
 }
 
+impl Default for DurabilityStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DurabilityStorage {
     const MAGIC: [u8; 4] = *b"NYXW";
     const VERSION: u8 = 1;
@@ -74,7 +80,7 @@ impl DurabilityStorage {
                 .as_nanos() as u64,
         };
 
-        let body = serde_json::to_vec(&entry).unwrap();
+        let body = serde_json::to_vec(&entry).map_err(std::io::Error::other)?;
         let mut hasher = Hasher::new();
         hasher.update(&body);
         let crc = hasher.finalize();
@@ -133,7 +139,7 @@ impl DurabilityStorage {
         let mut header = [0u8; 13]; // 4+1+4+4
 
         while file.read_exact(&mut header).is_ok() {
-            if &header[0..4] != &Self::MAGIC { break; }
+            if header[0..4] != Self::MAGIC { break; }
             let crc = u32::from_le_bytes(header[5..9].try_into().unwrap());
             let len = u32::from_le_bytes(header[9..13].try_into().unwrap()) as usize;
 
@@ -164,7 +170,7 @@ impl DurabilityStorage {
             .truncate(true)
             .open(path)?;
         
-        let serialized = bincode::serialize(catalog_data).unwrap();
+        let serialized = bincode::serialize(catalog_data).map_err(std::io::Error::other)?;
         let encrypted = self.encrypt_data(&serialized);
         
         file.write_all(b"NYX-CHECKPOINT-1.2-SECURED-BIN")?;
@@ -215,7 +221,7 @@ impl DurabilityStorage {
         let mut header = [0u8; 13];
 
         while file.read_exact(&mut header).is_ok() {
-            if &header[0..4] != &Self::MAGIC { break; }
+            if header[0..4] != Self::MAGIC { break; }
             let crc = u32::from_le_bytes(header[5..9].try_into().unwrap());
             let len = u32::from_le_bytes(header[9..13].try_into().unwrap()) as usize;
 
@@ -260,7 +266,10 @@ mod tests {
 
     #[test]
     fn test_wal_integrity_and_recovery() {
-        let dur = DurabilityStorage::new();
+        let mut dur = DurabilityStorage::new();
+        dur.storage_path = format!("nyx_data_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        std::fs::create_dir_all(&dur.storage_path).unwrap();
+        
         let wal_path = format!("{}/wal.log", dur.storage_path);
         if Path::new(&wal_path).exists() {
             std::fs::remove_file(&wal_path).unwrap();

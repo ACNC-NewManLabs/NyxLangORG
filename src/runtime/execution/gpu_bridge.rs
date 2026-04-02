@@ -55,7 +55,7 @@ pub fn download_from_gpu(buf: &wgpu::Buffer, size_elements: usize) -> Option<Vec
 
     let slice = read_buf.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |r| { tx.send(r).unwrap(); });
+    slice.map_async(wgpu::MapMode::Read, move |r| { let _ = tx.send(r); });
     device.poll(wgpu::Maintain::Wait);
 
     if let Ok(Ok(())) = rx.recv() {
@@ -112,6 +112,7 @@ struct BufferPool {
 }
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct NyxBuffer {
     pub inner: Option<wgpu::Buffer>,
     pub bucket_size: u64,
@@ -120,7 +121,7 @@ pub struct NyxBuffer {
 impl std::ops::Deref for NyxBuffer {
     type Target = wgpu::Buffer;
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref().unwrap()
+        self.inner.as_ref().expect("GPUContext not initialized")
     }
 }
 
@@ -128,7 +129,7 @@ impl Drop for NyxBuffer {
     fn drop(&mut self) {
         if let Some(buf) = self.inner.take() {
             if self.bucket_size > 0 {
-                let mut pool = get_pool().lock().unwrap();
+                let mut pool = get_pool().lock().unwrap_or_else(|e| e.into_inner());
                 pool.storage_pool.entry(self.bucket_size).or_default().push(buf);
             }
         }
@@ -179,7 +180,7 @@ fn get_pool() -> &'static Mutex<BufferPool> {
 
 pub(crate) fn acquire_storage_buffer(device: &wgpu::Device, size: u64, label: &str) -> Option<NyxBuffer> {
     let bucket_size = size.next_power_of_two().max(256);
-    let mut pool = get_pool().lock().unwrap();
+    let mut pool = get_pool().lock().unwrap_or_else(|e| e.into_inner());
     
     if let Some(bufs) = pool.storage_pool.get_mut(&bucket_size) {
         if let Some(buf) = bufs.pop() {
@@ -697,7 +698,7 @@ pub fn gpu_sha256_batch(input: &[u32], num_hashes: usize, blocks_per_hash: usize
         let mut cpass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         cpass.set_pipeline(&ps.pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups(((num_hashes + 63) / 64) as u32, 1, 1);
+        cpass.dispatch_workgroups(num_hashes.div_ceil(64) as u32, 1, 1);
     }
     queue.submit(Some(enc.finish()));
 
@@ -715,7 +716,7 @@ pub fn gpu_sha256_batch(input: &[u32], num_hashes: usize, blocks_per_hash: usize
     
     let slice = read_buf.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |r| { tx.send(r).unwrap(); });
+    slice.map_async(wgpu::MapMode::Read, move |r| { let _ = tx.send(r); });
     device.poll(wgpu::Maintain::Wait);
     
     if let Ok(Ok(())) = rx.recv() {
@@ -850,7 +851,7 @@ pub fn gpu_matmul_batch(a: &GpuInput, b: &GpuInput, m: usize, n: usize, k: usize
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("MatMul Pass") });
         cpass.set_pipeline(&pipeline_state.pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups(((n + 15) / 16) as u32, ((m + 15) / 16) as u32, 1);
+        cpass.dispatch_workgroups(n.div_ceil(16) as u32, m.div_ceil(16) as u32, 1);
     }
     queue.submit(Some(encoder.finish()));
 
@@ -923,7 +924,7 @@ pub fn gpu_matmul_bias_relu(a: &GpuInput, b: &GpuInput, bias: &GpuInput, m: usiz
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("Compute Pass") });
         compute_pass.set_pipeline(&pipeline_state.pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
-        compute_pass.dispatch_workgroups(((n + 15) / 16) as u32, ((m + 15) / 16) as u32, 1);
+        compute_pass.dispatch_workgroups(n.div_ceil(16) as u32, m.div_ceil(16) as u32, 1);
     }
     
     queue.submit(Some(encoder.finish()));
@@ -1145,7 +1146,7 @@ pub fn gpu_add_assign(dest: &wgpu::Buffer, src: &wgpu::Buffer, len: usize) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((len as u32 + 255) / 256, 1, 1);
+        cpass.dispatch_workgroups((len as u32).div_ceil(256), 1, 1);
     }
     queue.submit(Some(encoder.finish()));
 }
@@ -1181,7 +1182,7 @@ pub fn gpu_transpose(inp: &GpuInput, r: usize, c: usize, b: usize) -> Option<std
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((c as u32 + 15) / 16, (r as u32 + 15) / 16, b as u32);
+        cpass.dispatch_workgroups((c as u32).div_ceil(16), (r as u32).div_ceil(16), b as u32);
     }
     queue.submit(Some(encoder.finish()));
     Some(out_buf)
@@ -1287,12 +1288,12 @@ pub fn gpu_elementwise(a: &GpuInput, b: &GpuInput, op: u32, len: usize) -> Optio
     let a_len = match a {
         GpuInput::Data(v) => v.len(),
         GpuInput::Buffer(_) => len, // Assume full length for existing buffers
-        GpuInput::CpuBuffer(v) => v.read().unwrap().len(),
+        GpuInput::CpuBuffer(v) => v.read().unwrap_or_else(|e| e.into_inner()).len(),
     };
     let b_len = match b {
         GpuInput::Data(v) => v.len(),
         GpuInput::Buffer(_) => len,
-        GpuInput::CpuBuffer(v) => v.read().unwrap().len(),
+        GpuInput::CpuBuffer(v) => v.read().unwrap_or_else(|e| e.into_inner()).len(),
     };
  
     let params_data = [op, len as u32, a_len as u32, b_len as u32];
@@ -1347,7 +1348,7 @@ pub fn gpu_elementwise(a: &GpuInput, b: &GpuInput, op: u32, len: usize) -> Optio
         let mut cp = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         cp.set_pipeline(&pipeline_state.pipeline);
         cp.set_bind_group(0, &bg, &[]);
-        cp.dispatch_workgroups(((len + 255) / 256) as u32, 1, 1);
+        cp.dispatch_workgroups(len.div_ceil(256) as u32, 1, 1);
     }
     queue.submit(Some(enc.finish()));
     Some(out_buffer)
@@ -1433,7 +1434,7 @@ pub fn gpu_fma(a: &GpuInput, b: &GpuInput, c: &GpuInput, len: usize) -> Option<s
         let mut cp = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         cp.set_pipeline(&ps.pipeline);
         cp.set_bind_group(0, &bg, &[]);
-        cp.dispatch_workgroups(((len + 255) / 256) as u32, 1, 1);
+        cp.dispatch_workgroups(len.div_ceil(256) as u32, 1, 1);
     }
     queue.submit(Some(enc.finish()));
     Some(out_buf)
@@ -1513,7 +1514,7 @@ pub fn gpu_conv2d(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("Conv Pass") });
         cpass.set_pipeline(&pipeline_state.pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups((meta.out_w + 15) / 16, (meta.out_h + 15) / 16, meta.out_channels);
+        cpass.dispatch_workgroups(meta.out_w.div_ceil(16), meta.out_h.div_ceil(16), meta.out_channels);
     }
     queue.submit(Some(encoder.finish()));
 
@@ -1733,9 +1734,9 @@ pub fn gpu_probe(data: &Arc<NyxBuffer>, len: usize) -> Option<[f32; 6]> {
     
     let slice = staging.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |v| tx.send(v).unwrap());
+    slice.map_async(wgpu::MapMode::Read, move |v| { let _ = tx.send(v); });
     device.poll(wgpu::Maintain::Wait);
-    rx.recv().unwrap().ok()?;
+    rx.recv().unwrap_or(Err(wgpu::BufferAsyncError)).ok()?;
     
     let data = slice.get_mapped_range();
     let result: [f32; 8] = bytemuck::cast_slice(&data).try_into().ok()?;
@@ -2235,7 +2236,7 @@ pub fn gpu_sum_rows(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("SumRows Pass") });
         cpass.set_pipeline(&pipe);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((cols as u32 + 255) / 256, 1, 1);
+        cpass.dispatch_workgroups((cols as u32).div_ceil(256), 1, 1);
     }
     queue.submit(Some(encoder.finish()));
     
@@ -2491,7 +2492,7 @@ pub fn gpu_matmul_tiled(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("Tiled Matmul Pass") });
         cpass.set_pipeline(&ps.pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((n as u32 + 15) / 16, (m as u32 + 15) / 16, 1);
+        cpass.dispatch_workgroups((n as u32).div_ceil(16), (m as u32).div_ceil(16), 1);
     }
     queue.submit(Some(encoder.finish()));
 
@@ -2657,7 +2658,7 @@ pub fn gpu_adamw(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("AdamW Pass") });
         cpass.set_pipeline(&ps.pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((len as u32 + 255) / 256, 1, 1);
+        cpass.dispatch_workgroups((len as u32).div_ceil(256), 1, 1);
     }
     queue.submit(Some(encoder.finish()));
     true
@@ -2732,7 +2733,7 @@ pub fn gpu_lamb(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("LAMB Pass") });
         cpass.set_pipeline(&ps.pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((len as u32 + 255) / 256, 1, 1);
+        cpass.dispatch_workgroups((len as u32).div_ceil(256), 1, 1);
     }
     queue.submit(Some(encoder.finish()));
     true
@@ -2877,7 +2878,7 @@ pub fn gpu_conv3d(
         });
         Some(OptimizerPipeline { pipeline: pipe, bind_group_layout: bgl })
     });
-    let ps = match ps_opt.as_ref() { Some(p) => p, None => return None };
+    let ps = ps_opt.as_ref()?;
 
     let meta_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Conv3D Meta"), contents: bytemuck::cast_slice(&m), usage: wgpu::BufferUsages::UNIFORM,
@@ -2897,7 +2898,7 @@ pub fn gpu_conv3d(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("Conv3D Pass") });
         cpass.set_pipeline(&ps.pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((m[2] + 7) / 8, (m[1] + 7) / 8, (m[13] + 3) / 4);
+        cpass.dispatch_workgroups(m[2].div_ceil(8), m[1].div_ceil(8), m[13].div_ceil(4));
     }
     queue.submit(Some(encoder.finish()));
     Some(out_buf)
@@ -2957,7 +2958,7 @@ pub fn gpu_deformable_conv(
       let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("DefConv Pass") });
       cpass.set_pipeline(&ps.pipeline);
       cpass.set_bind_group(0, &bg, &[]);
-      cpass.dispatch_workgroups((m[0] * m[1] + 255) / 256, m[9], 1);
+      cpass.dispatch_workgroups((m[0] * m[1]).div_ceil(256), m[9], 1);
     }
     queue.submit(Some(encoder.finish()));
     Some(out_buf)
@@ -3005,7 +3006,7 @@ pub fn gpu_fused_elementwise(
     
     let cache_key = ops.join("|");
     let cache = FUSED_PIPELINES.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut cache_lock = cache.lock().unwrap();
+    let mut cache_lock = cache.lock().unwrap_or_else(|e| e.into_inner());
     
     let pipeline = if let Some(p) = cache_lock.get(&cache_key) {
         p.clone()
@@ -3053,7 +3054,7 @@ pub fn gpu_fused_elementwise(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("Fused Pass") });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((len as u32 + 255) / 256, 1, 1);
+        cpass.dispatch_workgroups((len as u32).div_ceil(256), 1, 1);
     }
     queue.submit(Some(encoder.finish()));
     true
@@ -3142,7 +3143,7 @@ pub fn gpu_moe_forward(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("Moe Pass") });
         cpass.set_pipeline(&pipe.pipeline);
         cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups((out_features as u32 + 15) / 16, (batch as u32 + 15) / 16, 1);
+        cpass.dispatch_workgroups((out_features as u32).div_ceil(16), (batch as u32).div_ceil(16), 1);
     }
     queue.submit(Some(encoder.finish()));
 

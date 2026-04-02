@@ -2,6 +2,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 pub mod gpu_bridge;
+pub mod net_bridge;
+pub mod agent_bridge;
+pub mod concurrent_bridge;
+pub mod config_bridge;
 pub mod dist_bridge;
 pub mod df_engine;
 pub mod df_kernels;
@@ -11,6 +15,7 @@ pub mod wal_engine;
 pub mod transaction_context;
 pub mod kernel_compiler;
 pub mod bytecode_vm;
+pub mod bytecode_compiler;
 pub mod module_loader;
 pub mod native_bridge;
 pub mod nyx_vm;
@@ -22,6 +27,8 @@ pub mod ui_runtime;
 pub mod sql_planner;
 pub mod optimizer;
 pub mod driver_mock;
+pub mod loop_optimizer;
+pub mod aero_jit;
 pub mod nyx_server;
 pub mod nyx_shell_client;
 
@@ -29,7 +36,8 @@ pub use bytecode_vm::BytecodeRuntimeSession;
 pub use module_loader::{ModuleHandle, ModuleLoader, NyxModule, NyxPackage};
 pub use reload::{ModulePatch, PatchReport, ReloadSnapshot, RuntimeStateSnapshot};
 
-pub type RuntimeValue = nyx_vm::Value;
+pub use nyx_vm::{NyxVm, Value, eval_repl_line, VmConfig};
+pub type RuntimeValue = Value;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeError {

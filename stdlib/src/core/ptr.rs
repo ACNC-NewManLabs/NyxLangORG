@@ -88,7 +88,7 @@ impl<T> NonNull<[T]> {
     /// Creates a NonNull that points to invalid memory of length n.
     #[inline]
     pub const fn dangling_slice(n: usize) -> NonNull<[T]> {
-        let ptr = core::mem::align_of::<T>() as usize as *mut T;
+        let ptr = core::mem::align_of::<T>() as *mut T;
         NonNull { ptr: core::ptr::slice_from_raw_parts_mut(ptr, n) }
     }
 }
@@ -256,7 +256,7 @@ pub fn is_null<T: ?Sized>(ptr: *const T) -> bool {
 #[inline]
 pub fn is_aligned<T>(ptr: *const T) -> bool {
     let addr = ptr as *const () as usize;
-    addr % core::mem::align_of::<T>() == 0
+    addr.is_multiple_of(core::mem::align_of::<T>())
 }
 
 /// Returns the address of the pointer.

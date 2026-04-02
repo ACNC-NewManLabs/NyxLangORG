@@ -445,6 +445,39 @@ impl LlvmBackend {
                                     TypedValue { repr: reg, ty: LlvmType::I64 },
                                 );
                                 continue;
+                            } else if callee == "std::kernel::memory::read_u32" && args.len() == 1 {
+                                let addr = value_to_llvm(&args[0], &locals, &strings)?;
+                                
+                                let ptr = format!("%v{ids}"); ids += 1;
+                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i32*\n", addr.repr));
+                                
+                                let res_i32 = format!("%v{ids}"); ids += 1;
+                                out.push_str(&format!("  {res_i32} = load volatile i32, i32* {ptr}\n"));
+                                
+                                let reg = format!("%v{ids}"); ids += 1;
+                                out.push_str(&format!("  {reg} = zext i32 {res_i32} to i64\n"));
+                                
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                );
+                                continue;
+                            } else if callee == "std::kernel::memory::write_u32" && args.len() == 2 {
+                                let addr = value_to_llvm(&args[0], &locals, &strings)?;
+                                let val = value_to_llvm(&args[1], &locals, &strings)?;
+                                
+                                let ptr = format!("%v{ids}"); ids += 1;
+                                out.push_str(&format!("  {ptr} = inttoptr i64 {} to i32*\n", addr.repr));
+                                let trunc_val = format!("%v{ids}"); ids += 1;
+                                out.push_str(&format!("  {trunc_val} = trunc i64 {} to i32\n", val.repr));
+                                
+                                out.push_str(&format!("  store volatile i32 {trunc_val}, i32* {ptr}\n"));
+                                
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue { repr: "0".to_string(), ty: LlvmType::I64 },
+                                );
+                                continue;
                             } else if callee == "std::kernel::memory::write_u64" && args.len() == 2 {
                                 let addr = value_to_llvm(&args[0], &locals, &strings)?;
                                 let val = value_to_llvm(&args[1], &locals, &strings)?;
@@ -604,6 +637,26 @@ impl LlvmBackend {
                             } else if callee == "std::kernel::memory::fence" {
                                 out.push_str("  fence seq_cst\n");
                                 continue;
+                            } else if callee == "std::kernel::vm::get_fb_ptr" {
+                                let reg = format!("%v{ids}"); ids += 1;
+                                // Perform GetFbPtr hypercall (Rax=100, Opcode=0xF1) 
+                                out.push_str(&format!("  {reg} = call i64 asm sideeffect \"mov $$100, %rax; .byte 0xf1\", \"={{rax}}\"()\n"));
+                                
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                );
+                                continue;
+                            } else if callee == "std::kernel::vm::get_input_ptr" {
+                                let reg = format!("%v{ids}"); ids += 1;
+                                // Perform GetInputPtr hypercall (Rax=101, Opcode=0xF1) 
+                                out.push_str(&format!("  {reg} = call i64 asm sideeffect \"mov $$101, %rax; .byte 0xf1\", \"={{rax}}\"()\n"));
+                                
+                                locals.insert(
+                                    dst.clone(),
+                                    TypedValue { repr: reg, ty: LlvmType::I64 },
+                                );
+                                continue;
                             } else if callee == "std::kernel::cpu::rdtsc" {
                                 let reg = format!("%v{ids}"); ids += 1;
                                 out.push_str(&format!("  {reg} = call i64 asm sideeffect \"rdtsc; shl $32, %%rdx; or %%rdx, %%rax\", \"={{rax}},~{{rdx}},~{{dirflag}},~{{fpsr}},~{{flags}}\"()\n"));
@@ -707,7 +760,7 @@ impl LlvmBackend {
                         for (name, val) in fields {
                             field_map.insert(name.clone(), val.clone());
                         }
-                        let mut cur = format!("undef");
+                        let mut cur = "undef".to_string();
                         for (idx, field) in def.fields.iter().enumerate() {
                             let val = field_map.get(&field.name).ok_or_else(|| {
                                 format!(
@@ -973,8 +1026,7 @@ impl LlvmBackend {
                         } else {
                             let struct_ty = format!(
                                 "{{ {} }}",
-                                std::iter::repeat("i64")
-                                    .take(outputs.len())
+                                std::iter::repeat_n("i64", outputs.len())
                                     .collect::<Vec<_>>()
                                     .join(", ")
                             );
@@ -1230,9 +1282,9 @@ fn emit_compare(
                 BinaryOp::Ge => "sge",
                 _ => return Err("invalid integer comparison op".into()),
             };
-            write!(
+            writeln!(
                 &mut line,
-                "  {cmp_reg} = icmp {pred} i64 {}, {}\n",
+                "  {cmp_reg} = icmp {pred} i64 {}, {}",
                 lhs.repr, rhs.repr
             )
             .map_err(|e| e.to_string())?;
@@ -1247,9 +1299,9 @@ fn emit_compare(
                 BinaryOp::Ge => "oge",
                 _ => return Err("invalid float comparison op".into()),
             };
-            write!(
+            writeln!(
                 &mut line,
-                "  {cmp_reg} = fcmp {pred} double {}, {}\n",
+                "  {cmp_reg} = fcmp {pred} double {}, {}",
                 lhs.repr, rhs.repr
             )
             .map_err(|e| e.to_string())?;
@@ -1319,7 +1371,7 @@ impl StringTable {
         let id = self.map.len();
         let symbol = format!("@.str.{id}");
         let escaped = escape_llvm_string(s);
-        let len = s.as_bytes().len() + 1;
+        let len = s.len() + 1;
         let def = format!(
             "{symbol} = private unnamed_addr constant [{len} x i8] c\"{escaped}\\00\"\n"
         );

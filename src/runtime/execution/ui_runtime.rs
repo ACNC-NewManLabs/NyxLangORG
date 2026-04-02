@@ -69,7 +69,7 @@ impl AstRuntimeSession {
             }
         }
 
-        let mut vm = NyxVm::new();
+        let mut vm = NyxVm::new(crate::runtime::execution::VmConfig::default());
         let bridge = NativeBridgeConfig {
             asset_root: ui_root.join("fonts"),
             runtime_name: match runtime {
@@ -165,7 +165,7 @@ impl RuntimeSession for AstRuntimeSession {
             globals,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("Failed to build tokio runtime")
                 .as_secs(),
         })
     }
@@ -189,6 +189,65 @@ pub fn execute_bytecode_app(input: &Path) -> Result<Value, EvalError> {
         .package;
     session.load_package(package).map_err(to_eval_error)?;
     session.invoke("main", vec![]).map_err(to_eval_error)
+}
+
+pub fn execute_jit_app(input: &Path) -> Result<Value, EvalError> {
+    use crate::runtime::execution::nyx_vm::{parse_program};
+    use crate::runtime::execution::bytecode_compiler::BytecodeCompiler;
+    use nyx_vm::{VmConfig, runtime::NyxVm};
+    
+    // 1. Parse
+    let program = parse_program(input).map_err(EvalError::new)?;
+    
+    // 2. Compile to Bytecode
+    let compiler = BytecodeCompiler::new();
+    let module = compiler.compile_program(&program).map_err(EvalError::new)?;
+    
+    // 3. Setup High-Performance VM with JIT
+    let mut config = VmConfig::default();
+    config.enable_jit = true;
+    let mut vm = NyxVm::new(config);
+    
+    // Register basic natives for benchmark
+    vm.register("print", 1, |args| {
+        println!("{:?}", args[0]);
+        Ok(nyx_vm::bytecode::Value::Null)
+    });
+    
+    vm.register("__native_time_ms", 0, |_| {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+        Ok(nyx_vm::bytecode::Value::Int(now as i64))
+    });
+    
+    // 4. Load and Run
+    vm.load(module);
+    let result = vm.run("main").map_err(|e| EvalError::new(e.to_string()))?;
+    
+    // 5. Convert back to RuntimeValue
+    Ok(vm_to_rt_value(result))
+}
+
+fn vm_to_rt_value(val: nyx_vm::bytecode::Value) -> Value {
+    use std::collections::HashMap;
+    match val {
+        nyx_vm::bytecode::Value::Null => Value::Null,
+        nyx_vm::bytecode::Value::Bool(b) => Value::Bool(b),
+        nyx_vm::bytecode::Value::Int(i) => Value::Int(i),
+        nyx_vm::bytecode::Value::Float(f) => Value::Float(f),
+        nyx_vm::bytecode::Value::String(s) => Value::Str(s),
+        nyx_vm::bytecode::Value::Array(arr) => {
+            Value::array(arr.into_iter().map(vm_to_rt_value).collect())
+        }
+        nyx_vm::bytecode::Value::Object(obj) => {
+            let mut map = HashMap::new();
+            for (k, v) in obj {
+                map.insert(k, vm_to_rt_value(v));
+            }
+            Value::object(map)
+        }
+        _ => Value::Null,
+    }
 }
 
 pub fn build_session(

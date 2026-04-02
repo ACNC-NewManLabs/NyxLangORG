@@ -154,6 +154,29 @@ impl BytecodeEmitter {
         self.emit_instr(OpCode::NOP, vec![], line);
     }
 
+    /// Get the current instruction index in the current function
+    pub fn current_instr_idx(&self) -> usize {
+        if let Some(idx) = self.current_function {
+            if let Some(func) = self.module.functions.get(idx) {
+                return func.instructions.len();
+            }
+        }
+        0
+    }
+
+    /// Patch an instruction's operand
+    pub fn patch_instr_operand(&mut self, instr_idx: usize, op_idx: usize, value: i32) {
+        if let Some(f_idx) = self.current_function {
+            if let Some(func) = self.module.functions.get_mut(f_idx) {
+                if let Some(instr) = func.instructions.get_mut(instr_idx) {
+                    if let Some(operand) = instr.operands.get_mut(op_idx) {
+                        *operand = value;
+                    }
+                }
+            }
+        }
+    }
+
     /// Get the emitted module
     pub fn get_module(self) -> BytecodeModule {
         self.module

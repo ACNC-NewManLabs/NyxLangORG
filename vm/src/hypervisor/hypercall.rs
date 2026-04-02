@@ -9,35 +9,88 @@ use super::cpu::{CpuEmulator, Register};
 #[derive(Debug, Clone, Copy)]
 pub enum HypercallNumber {
     /// Shutdown the VM
-    Shutdown = 0,
+    Shutdown,
     /// Reboot the VM
-    Reboot = 1,
+    Reboot,
     /// Exit to host
-    Exit = 2,
+    Exit,
     /// Get hypervisor info
-    GetInfo = 3,
+    GetInfo,
     /// Allocate memory
-    AllocMem = 4,
+    AllocMem,
     /// Free memory
-    FreeMem = 5,
+    FreeMem,
     /// Console output
-    ConsoleWrite = 10,
+    ConsoleWrite,
     /// Console input
-    ConsoleRead = 11,
+    ConsoleRead,
     /// Block read
-    BlockRead = 20,
+    BlockRead,
     /// Block write
-    BlockWrite = 21,
+    BlockWrite,
     /// Network send
-    NetSend = 30,
+    NetSend,
     /// Network receive
-    NetReceive = 31,
+    NetReceive,
     /// Set timer
-    SetTimer = 40,
+    /// Set timer
+    SetTimer,
     /// Interrupt inject
-    InjectInterrupt = 50,
+    InjectInterrupt,
+    /// Get framebuffer pointer
+    GetFbPtr,
+    /// Get input buffer pointer
+    GetInputPtr,
     /// Custom hypercall
     Custom(u32),
+}
+
+impl HypercallNumber {
+    pub fn to_u32(&self) -> u32 {
+        match self {
+            Self::Shutdown => 0,
+            Self::Reboot => 1,
+            Self::Exit => 2,
+            Self::GetInfo => 3,
+            Self::AllocMem => 4,
+            Self::FreeMem => 5,
+            Self::ConsoleWrite => 10,
+            Self::ConsoleRead => 11,
+            Self::BlockRead => 20,
+            Self::BlockWrite => 21,
+            Self::NetSend => 30,
+            Self::NetReceive => 31,
+            Self::SetTimer => 40,
+            Self::InjectInterrupt => 50,
+            Self::GetFbPtr => 100,
+            Self::GetInputPtr => 101,
+            Self::Custom(n) => *n,
+        }
+    }
+}
+
+impl HypercallNumber {
+    pub fn to_u64(&self) -> u64 {
+        match self {
+            HypercallNumber::Shutdown => 0,
+            HypercallNumber::Reboot => 1,
+            HypercallNumber::Exit => 2,
+            HypercallNumber::GetInfo => 3,
+            HypercallNumber::AllocMem => 4,
+            HypercallNumber::FreeMem => 5,
+            HypercallNumber::ConsoleWrite => 10,
+            HypercallNumber::ConsoleRead => 11,
+            HypercallNumber::BlockRead => 20,
+            HypercallNumber::BlockWrite => 21,
+            HypercallNumber::NetSend => 30,
+            HypercallNumber::NetReceive => 31,
+            HypercallNumber::SetTimer => 40,
+            HypercallNumber::InjectInterrupt => 50,
+            HypercallNumber::GetFbPtr => 100,
+            HypercallNumber::GetInputPtr => 101,
+            HypercallNumber::Custom(n) => *n as u64,
+        }
+    }
 }
 
 /// Hypercall result
@@ -69,7 +122,7 @@ impl std::error::Error for HypercallError {}
 
 /// Hypercall handler
 pub struct HypercallHandler {
-    console_buffer: String,
+    _console_buffer: String,
     timer_interval: u64,
 }
 
@@ -77,13 +130,13 @@ impl HypercallHandler {
     /// Create a new hypercall handler
     pub fn new() -> Self {
         Self {
-            console_buffer: String::new(),
+            _console_buffer: String::new(),
             timer_interval: 0,
         }
     }
 
     /// Handle a hypercall from a CPU
-    pub fn handle(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    pub fn handle(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // Get hypercall number from standard register
         // For x86_64: typically RAX
         // For ARM64: typically X0
@@ -106,12 +159,12 @@ impl HypercallHandler {
             31 => self.handle_net_receive(cpu),
             40 => self.handle_set_timer(cpu),
             50 => self.handle_inject_interrupt(cpu),
-            n => Err(HypercallError::InvalidHypercall),
+            _ => Err(HypercallError::InvalidHypercall),
         }
     }
 
     /// Handle shutdown hypercall
-    fn handle_shutdown(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_shutdown(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         log::info!("VM shutdown requested");
         // Return success
         cpu.state.write_gpr(Register::Rax, 0);
@@ -119,14 +172,14 @@ impl HypercallHandler {
     }
 
     /// Handle reboot hypercall
-    fn handle_reboot(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_reboot(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         log::info!("VM reboot requested");
         cpu.state.write_gpr(Register::Rax, 0);
         Ok(0)
     }
 
     /// Handle exit hypercall
-    fn handle_exit(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_exit(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // Get exit reason from RBX
         let reason = cpu.state.read_gpr(Register::Rbx);
         log::info!("VM exit requested: reason={}", reason);
@@ -136,7 +189,7 @@ impl HypercallHandler {
     }
 
     /// Handle get info hypercall
-    fn handle_get_info(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_get_info(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // Get info type from RBX
         let info_type = cpu.state.read_gpr(Register::Rbx);
         
@@ -163,7 +216,7 @@ impl HypercallHandler {
     }
 
     /// Handle allocate memory hypercall
-    fn handle_alloc_mem(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_alloc_mem(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: size
         let size = cpu.state.read_gpr(Register::Rbx);
         
@@ -176,7 +229,7 @@ impl HypercallHandler {
     }
 
     /// Handle free memory hypercall
-    fn handle_free_mem(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_free_mem(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: address to free
         let _addr = cpu.state.read_gpr(Register::Rbx);
         
@@ -186,7 +239,7 @@ impl HypercallHandler {
     }
 
     /// Handle console write hypercall
-    fn handle_console_write(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_console_write(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: address of string
         // RCX: length
         let addr = cpu.state.read_gpr(Register::Rbx) as usize;
@@ -202,11 +255,11 @@ impl HypercallHandler {
     }
 
     /// Handle console read hypercall
-    fn handle_console_read(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_console_read(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: address to store string
         // RCX: max length
         let _addr = cpu.state.read_gpr(Register::Rbx) as usize;
-        let max_len = cpu.state.read_gpr(Register::Rcx) as usize;
+        let _max_len = cpu.state.read_gpr(Register::Rcx) as usize;
         
         // In a real implementation, would read from console
         // For now, return 0 (no data)
@@ -215,7 +268,7 @@ impl HypercallHandler {
     }
 
     /// Handle block read hypercall
-    fn handle_block_read(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_block_read(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: device ID
         // RCX: sector number
         // RDX: address to store data
@@ -233,7 +286,7 @@ impl HypercallHandler {
     }
 
     /// Handle block write hypercall
-    fn handle_block_write(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_block_write(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: device ID
         // RCX: sector number
         // RDX: address of data
@@ -250,7 +303,7 @@ impl HypercallHandler {
     }
 
     /// Handle network send hypercall
-    fn handle_net_send(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_net_send(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: address of data
         // RCX: length
         let _addr = cpu.state.read_gpr(Register::Rbx) as usize;
@@ -263,11 +316,11 @@ impl HypercallHandler {
     }
 
     /// Handle network receive hypercall
-    fn handle_net_receive(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_net_receive(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: address to store data
         // RCX: max length
         let _addr = cpu.state.read_gpr(Register::Rbx) as usize;
-        let max_len = cpu.state.read_gpr(Register::Rcx) as usize;
+        let _max_len = cpu.state.read_gpr(Register::Rcx) as usize;
         
         // Return 0 (no data available)
         cpu.state.write_gpr(Register::Rax, 0);
@@ -275,7 +328,7 @@ impl HypercallHandler {
     }
 
     /// Handle set timer hypercall
-    fn handle_set_timer(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_set_timer(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: timer interval in microseconds
         let interval = cpu.state.read_gpr(Register::Rbx);
         
@@ -288,7 +341,7 @@ impl HypercallHandler {
     }
 
     /// Handle inject interrupt hypercall
-    fn handle_inject_interrupt(&self, cpu: &mut CpuEmulator) -> HypercallResult {
+    fn handle_inject_interrupt(&mut self, cpu: &mut CpuEmulator) -> HypercallResult {
         // RBX: interrupt number
         let irq = cpu.state.read_gpr(Register::Rbx) as u8;
         
@@ -310,10 +363,10 @@ pub struct Hypercall;
 
 impl Hypercall {
     /// Create a hypercall request
-    pub fn request(number: HypercallNumber, args: &[u64]) -> u64 {
+    pub fn request(number: HypercallNumber, _args: &[u64]) -> u64 {
         // In a real implementation, this would trigger a hypercall
         // For now, return the hypercall number
-        number as u64
+        number.to_u64()
     }
 
     /// Parse hypercall number from raw value
@@ -333,6 +386,8 @@ impl Hypercall {
             31 => HypercallNumber::NetReceive,
             40 => HypercallNumber::SetTimer,
             50 => HypercallNumber::InjectInterrupt,
+            100 => HypercallNumber::GetFbPtr,
+            101 => HypercallNumber::GetInputPtr,
             n => HypercallNumber::Custom(n),
         }
     }
@@ -350,8 +405,8 @@ mod tests {
 
     #[test]
     fn test_hypercall_numbers() {
-        assert_eq!(HypercallNumber::Shutdown as u32, 0);
-        assert_eq!(HypercallNumber::ConsoleWrite as u32, 10);
+        assert_eq!(HypercallNumber::Shutdown.to_u32(), 0);
+        assert_eq!(HypercallNumber::ConsoleWrite.to_u32(), 10);
     }
 }
 

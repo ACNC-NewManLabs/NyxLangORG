@@ -178,6 +178,12 @@ pub struct NetworkPool {
     pub connections: Arc<Mutex<HashMap<u32, String>>>, // Node ID -> WebSocket URL
 }
 
+impl Default for NetworkPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NetworkPool {
     pub fn new() -> Self {
         Self {

@@ -41,13 +41,13 @@ fn ensure_on_gpu(storage: &mut TensorStorage) -> Result<(), EvalError> {
     }
 
     if let Some(data_rc) = to_upload {
-        let data = data_rc.read().unwrap();
+        let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
         if let Some(buf) = gpu_bridge::upload_to_gpu(&data) {
             let bytes = (data.len() * 4) as u64;
             let current = VRAM_USAGE.fetch_add(bytes, std::sync::atomic::Ordering::SeqCst);
             
             if current + bytes > VRAM_THRESHOLD {
-                println!("[AutoDevice] VRAM Threshold ({:.2}GB) Exceeded. Triggering predictive eviction...", VRAM_THRESHOLD as f64 / 1e9);
+                log::warn!("[AutoDevice] VRAM Threshold ({:.2}GB) Exceeded. Triggering predictive eviction...", VRAM_THRESHOLD as f64 / 1e9);
             }
             
             *storage = TensorStorage::Gpu(buf);
@@ -112,18 +112,18 @@ macro_rules! check_broadcast {
 /// Usage: NYX_SHAPE_ASSERT(tensor_a, tensor_b, "op_name")
 /// Returns Null on success, or propagates a ShapeError.
 fn nyx_shape_assert_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let shape_a = match args.get(0) {
+    let shape_a = match args.first() {
         Some(Value::Tensor(_, s)) => s.clone(),
-        Some(Value::Array(rc)) => vec![rc.read().unwrap().len()],
-        Some(Value::FloatArray(rc)) => vec![rc.read().unwrap().len()],
-        Some(Value::DoubleArray(rc)) => vec![rc.read().unwrap().len()],
+        Some(Value::Array(rc)) => vec![rc.read().unwrap_or_else(|e| e.into_inner()).len()],
+        Some(Value::FloatArray(rc)) => vec![rc.read().unwrap_or_else(|e| e.into_inner()).len()],
+        Some(Value::DoubleArray(rc)) => vec![rc.read().unwrap_or_else(|e| e.into_inner()).len()],
         _ => return Err(EvalError::new("[NYX ShapeError] NYX_SHAPE_ASSERT: first argument must be a Tensor or Array".to_string())),
     };
     let shape_b = match args.get(1) {
         Some(Value::Tensor(_, s)) => s.clone(),
-        Some(Value::Array(rc)) => vec![rc.read().unwrap().len()],
-        Some(Value::FloatArray(rc)) => vec![rc.read().unwrap().len()],
-        Some(Value::DoubleArray(rc)) => vec![rc.read().unwrap().len()],
+        Some(Value::Array(rc)) => vec![rc.read().unwrap_or_else(|e| e.into_inner()).len()],
+        Some(Value::FloatArray(rc)) => vec![rc.read().unwrap_or_else(|e| e.into_inner()).len()],
+        Some(Value::DoubleArray(rc)) => vec![rc.read().unwrap_or_else(|e| e.into_inner()).len()],
         _ => return Err(EvalError::new("[NYX ShapeError] NYX_SHAPE_ASSERT: second argument must be a Tensor or Array".to_string())),
     };
     let op = match args.get(2) {
@@ -141,11 +141,25 @@ fn nyx_shape_assert_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     Ok(Value::Bool(true))
 }
 
+fn sleep_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
+    if let Some(Value::Int(ms)) = args.first() {
+        std::thread::sleep(std::time::Duration::from_millis(*ms as u64));
+    }
+    Ok(Value::Null)
+}
+
 pub fn register_stdlib(vm: &mut NyxVm) {
+    crate::runtime::execution::net_bridge::register_net_stdlib(vm);
+    crate::runtime::execution::agent_bridge::register_agent_stdlib(vm);
+    crate::runtime::execution::concurrent_bridge::register_concurrent_stdlib(vm);
+    crate::runtime::execution::config_bridge::register_config_stdlib(vm);
     vm.register_native("std::io::println", println_native);
     vm.register_native("println", println_native);
     vm.register_native("typeof", typeof_native);
     vm.register_native("std::os::exit", exit_native);
+    vm.register_native("std::os::get_env", get_env_native);
+    vm.register_native("os::get_env", get_env_native);
+    vm.register_native("std::os::sleep", sleep_native);
     vm.register_native("std::web::serve", serve_native);
     
     // Linux OS Kernel Hooks
@@ -466,12 +480,14 @@ pub fn register_stdlib(vm: &mut NyxVm) {
     vm.register_native("time::now", get_time_native);
     vm.register_native("std::time::now", get_time_native);
     vm.register_native("std::time::now_nanos", get_time_nanos_native);
+    vm.register_native("get_timestamp", get_timestamp_native);
     vm.register_native("std::math::full_array", full_array_native);
     vm.register_native("std::math::random_array", random_array_native);
     vm.register_native("std::math::randn_array", randn_array_native);
     vm.register_native("std::math::slice_nd", slice_nd_native);
     vm.register_native("console::log", println_native);
     vm.register_native("std::console::log", println_native);
+    vm.register_native("assert", assert_native);
 
     // Database Phase 42: Transactional Integrity
     vm.register_native("db::begin_transaction", df_kernels::db_begin_transaction_native);
@@ -523,6 +539,7 @@ pub fn register_stdlib(vm: &mut NyxVm) {
     vm.register_native("std::string::len", string_len_native);
     vm.register_native("std::string::split", string_split_native);
     vm.register_native("std::string::substring", string_substring_native);
+    vm.register_native("std::string::repeat", string_repeat_native);
     vm.register_native("std::string::chars", string_chars_native);
     vm.register_native("std::string::contains", string_contains_native);
     vm.register_native("std::string::to_int", string_to_int_native);
@@ -571,6 +588,10 @@ pub fn register_stdlib(vm: &mut NyxVm) {
     vm.register_native("std::vm::set_limits", vm_set_limits_native);
     vm.register_native("std::vm::gas_remaining", vm_gas_remaining_native);
     vm.register_native("std::vm::memory_used", vm_memory_used_native);
+    vm.register_native("std::vm::enable_tracing", vm_enable_tracing_native);
+    vm.register_native("std::vm::dump_trace", vm_dump_trace_native);
+    vm.register_native("vm::enable_tracing", vm_enable_tracing_native);
+    vm.register_native("vm::dump_trace", vm_dump_trace_native);
 
     // Meta / Reflection
     vm.register_native("std::meta::typeof", typeof_native);
@@ -792,15 +813,26 @@ pub fn register_stdlib(vm: &mut NyxVm) {
 }
 
 fn exit_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let code = match args.get(0) {
+    let code = match args.first() {
         Some(Value::Int(i)) => *i as i32,
         _ => 0,
     };
     std::process::exit(code);
 }
 
+fn get_env_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
+    if let Some(Value::Str(name)) = args.first() {
+        match std::env::var(name) {
+            Ok(v) => Ok(Value::Str(v)),
+            Err(_) => Ok(Value::Null),
+        }
+    } else {
+        Ok(Value::Null)
+    }
+}
+
 fn println_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(first) = args.get(0) {
+    if let Some(first) = args.first() {
         match first {
             Value::Str(fmt) if fmt.contains("{}") => {
                 let mut output = fmt.clone();
@@ -814,7 +846,7 @@ fn println_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
                 if args.len() > 1 {
                    let mut output = s.clone();
                    for arg in args.iter().skip(1) {
-                       output.push_str(" ");
+                       output.push(' ');
                        output.push_str(&to_stringish(arg));
                    }
                    println!("{}", output);
@@ -825,7 +857,7 @@ fn println_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
             _ => {
                 let mut output = to_stringish(first);
                 for arg in args.iter().skip(1) {
-                    output.push_str(" ");
+                    output.push(' ');
                     output.push_str(&to_stringish(arg));
                 }
                 println!("{}", output);
@@ -833,6 +865,16 @@ fn println_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
         }
     } else {
         println!();
+    }
+    Ok(Value::Null)
+}
+
+fn assert_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
+    if let Some(cond_val) = args.first() {
+        if !cond_val.is_truthy() {
+            let msg = if args.len() > 1 { to_stringish(&args[1]) } else { "Assertion failed".to_string() };
+            return Err(EvalError::new(format!("[NYX Assertion] {}", msg)));
+        }
     }
     Ok(Value::Null)
 }
@@ -845,25 +887,25 @@ fn to_stringish(val: &Value) -> String {
         Value::Bool(b) => b.to_string(),
         Value::BigInt(s) => s.clone(),
         Value::Str(s) => s.clone(),
-        Value::Array(a) => format!("[{}]", a.read().unwrap().iter().map(to_stringish).collect::<Vec<_>>().join(", ")),
-        Value::Object(o) => format!("{{ {} }}", o.read().unwrap().iter().map(|(k, v)| format!("{}: {}", k, to_stringish(v))).collect::<Vec<_>>().join(", ")),
+        Value::Array(a) => format!("[{}]", a.read().unwrap_or_else(|e| e.into_inner()).iter().map(to_stringish).collect::<Vec<_>>().join(", ")),
+        Value::Object(o) => format!("{{ {} }}", o.read().unwrap_or_else(|e| e.into_inner()).iter().map(|(k, v)| format!("{}: {}", k, to_stringish(v))).collect::<Vec<_>>().join(", ")),
         Value::Closure(_) => "closure".to_string(),
         Value::Node(n) => format!("<{} />", n.tag),
-        Value::Bytes(b) => format!("<bytes len={}>", b.read().unwrap().len()),
+        Value::Bytes(b) => format!("<bytes len={}>", b.read().unwrap_or_else(|e| e.into_inner()).len()),
         Value::Pointer(p) => format!("*0x{:016x}", p),
         Value::Promise(_) => "<promise>".to_string(),
-        Value::FloatArray(rc) => format!("[f32; {}]", rc.read().unwrap().len()),
-        Value::DoubleArray(rc) => format!("[f64; {}]", rc.read().unwrap().len()),
+        Value::FloatArray(rc) => format!("[f32; {}]", rc.read().unwrap_or_else(|e| e.into_inner()).len()),
+        Value::DoubleArray(rc) => format!("[f64; {}]", rc.read().unwrap_or_else(|e| e.into_inner()).len()),
         Value::Tensor(_, shape) => format!("[Tensor; {:?}]", shape),
     }
 }
 
 
 fn hash_md5_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("hash_md5 expected (string|bytes)".to_string())),
         };
         use md5::{Md5, Digest};
@@ -876,10 +918,10 @@ fn hash_md5_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn hash_sha1_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("hash_sha1 expected (string|bytes)".to_string())),
         };
         use sha1::{Sha1, Digest};
@@ -897,13 +939,13 @@ fn fernet_generate_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, Eva
 }
 
 fn fernet_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(key)), Some(v)) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(key)), Some(v)) = (args.first(), args.get(1)) {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("fernet_encrypt expected data (string|bytes)".to_string())),
         };
-        let fernet = fernet::Fernet::new(&key).unwrap();
+        let fernet = match fernet::Fernet::new(key) { Some(f) => f, None => return Ok(Value::Null) };
         let token = fernet.encrypt(&bytes);
         return Ok(Value::Str(token));
     }
@@ -911,9 +953,9 @@ fn fernet_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn fernet_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(key)), Some(Value::Str(token))) = (args.get(0), args.get(1)) {
-        let fernet = fernet::Fernet::new(&key).unwrap();
-        return match fernet.decrypt(&token) {
+    if let (Some(Value::Str(key)), Some(Value::Str(token))) = (args.first(), args.get(1)) {
+        let fernet = match fernet::Fernet::new(key) { Some(f) => f, None => return Ok(Value::Null) };
+        return match fernet.decrypt(token) {
             Ok(bytes) => Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(bytes)))),
             Err(_) => Err(EvalError::new("fernet_decrypt failed (invalid token or key)".to_string())),
         };
@@ -922,7 +964,7 @@ fn fernet_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn rsa_generate_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let bits = match args.get(0) {
+    let bits = match args.first() {
         Some(Value::Int(b)) => *b as usize,
         _ => 2048,
     };
@@ -938,15 +980,15 @@ fn rsa_generate_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn rsa_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(pub_pem)), Some(v)) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(pub_pem)), Some(v)) = (args.first(), args.get(1)) {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("rsa_encrypt expected data (string|bytes)".to_string())),
         };
         use rsa::{RsaPublicKey, pkcs1::DecodeRsaPublicKey, Oaep};
         use sha2::Sha256;
-        let pub_key = RsaPublicKey::from_pkcs1_pem(&pub_pem).map_err(|_| EvalError::new("invalid RSA public key".to_string()))?;
+        let pub_key = RsaPublicKey::from_pkcs1_pem(pub_pem).map_err(|_| EvalError::new("invalid RSA public key".to_string()))?;
         let mut rng = rand::thread_rng();
         let enc_data = pub_key.encrypt(&mut rng, Oaep::new::<Sha256>(), &bytes).map_err(|_| EvalError::new("rsa encryption failed".to_string()))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(enc_data))));
@@ -955,15 +997,15 @@ fn rsa_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn rsa_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(priv_pem)), Some(v)) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(priv_pem)), Some(v)) = (args.first(), args.get(1)) {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("rsa_decrypt expected cipher (string|bytes)".to_string())),
         };
         use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey, Oaep};
         use sha2::Sha256;
-        let priv_key = RsaPrivateKey::from_pkcs1_pem(&priv_pem).map_err(|_| EvalError::new("invalid RSA private key".to_string()))?;
+        let priv_key = RsaPrivateKey::from_pkcs1_pem(priv_pem).map_err(|_| EvalError::new("invalid RSA private key".to_string()))?;
         let dec_data = priv_key.decrypt(Oaep::new::<Sha256>(), &bytes).map_err(|_| EvalError::new("rsa decryption failed".to_string()))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(dec_data))));
     }
@@ -971,16 +1013,16 @@ fn rsa_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn rsa_sign_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(priv_pem)), Some(v)) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(priv_pem)), Some(v)) = (args.first(), args.get(1)) {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("rsa_sign expected data (string|bytes)".to_string())),
         };
         use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey, pss::Pss};
         use sha2::Sha256;
         use rsa::traits::SignatureScheme;
-        let priv_key = RsaPrivateKey::from_pkcs1_pem(&priv_pem).map_err(|_| EvalError::new("invalid RSA private key".to_string()))?;
+        let priv_key = RsaPrivateKey::from_pkcs1_pem(priv_pem).map_err(|_| EvalError::new("invalid RSA private key".to_string()))?;
         use sha2::Digest;
         let mut hasher = sha2::Sha256::new();
         hasher.update(&bytes);
@@ -993,21 +1035,21 @@ fn rsa_sign_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn rsa_verify_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(pub_pem)), Some(v_data), Some(v_sig)) = (args.get(0), args.get(1), args.get(2)) {
+    if let (Some(Value::Str(pub_pem)), Some(v_data), Some(v_sig)) = (args.first(), args.get(1), args.get(2)) {
         let data = match v_data {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("rsa_verify expected data".to_string())),
         };
         let signature = match v_sig {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("rsa_verify expected signature".to_string())),
         };
         use rsa::{RsaPublicKey, pkcs1::DecodeRsaPublicKey, pss::Pss};
         use sha2::Sha256;
         use rsa::traits::SignatureScheme;
-        let pub_key = RsaPublicKey::from_pkcs1_pem(&pub_pem).map_err(|_| EvalError::new("invalid RSA public key".to_string()))?;
+        let pub_key = RsaPublicKey::from_pkcs1_pem(pub_pem).map_err(|_| EvalError::new("invalid RSA public key".to_string()))?;
         use sha2::Digest;
         let mut hasher = sha2::Sha256::new();
         hasher.update(&data);
@@ -1019,21 +1061,21 @@ fn rsa_verify_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn tls_connect_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(host)), Some(Value::Int(port))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(host)), Some(Value::Int(port))) = (args.first(), args.get(1)) {
         use openssl::ssl::{SslMethod, SslConnector};
         use std::net::TcpStream;
         use std::io::{Read, Write};
 
-        let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
+        let mut builder = SslConnector::builder(SslMethod::tls()).expect("Failed to build SSL");
         builder.set_verify(openssl::ssl::SslVerifyMode::NONE);
         let connector = builder.build();
         let stream = TcpStream::connect(format!("{}:{}", host, port)).map_err(|_| EvalError::new("failed to connect tcp".to_string()))?;
         let mut stream = connector.connect(host, stream).map_err(|_| EvalError::new("failed to establish SSL/TLS connection".to_string()))?;
         
         let req = format!("GET / HTTP/1.0\r\nHost: {}\r\n\r\n", host);
-        stream.write_all(req.as_bytes()).unwrap();
+        let _ = stream.write_all(req.as_bytes());
         let mut res = vec![];
-        stream.read_to_end(&mut res).unwrap();
+        let _ = stream.read_to_end(&mut res);
         
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res))));
     }
@@ -1041,7 +1083,7 @@ fn tls_connect_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn serve_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(port)) = args.get(0) {
+    if let Some(Value::Int(port)) = args.first() {
         let server = nyx_std::web::http::HttpServer::new(&format!("0.0.0.0:{}", port));
         let _ = server.run(|req| {
             nyx_std::web::http::Response::ok(req.body)
@@ -1051,10 +1093,10 @@ fn serve_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn hash_sha256_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("hash_sha256 expected (string|bytes)".to_string())),
         };
         let res = nyx_std::crypto::hash::sha256(&bytes);
@@ -1064,8 +1106,8 @@ fn hash_sha256_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn gpu_sha256_batch_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(list_rc)) = args.get(0) {
-        let list = list_rc.read().unwrap();
+    if let Some(Value::Array(list_rc)) = args.first() {
+        let list = list_rc.read().unwrap_or_else(|e| e.into_inner());
         let num_hashes = list.len();
         if num_hashes == 0 {
             return Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(Vec::new()))));
@@ -1076,7 +1118,7 @@ fn gpu_sha256_batch_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
         
         let input_u32: Vec<u32> = list.par_iter().flat_map(|val| {
             let bytes = match val {
-                Value::Bytes(b) => b.read().unwrap().clone(),
+                Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
                 Value::Str(s) => s.as_bytes().to_vec(),
                 _ => vec![0u8; 64],
             };
@@ -1099,7 +1141,7 @@ fn gpu_sha256_batch_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 
         // blocks_per_hash is dependent on the input length after padding
         // For the benchmark (64 bytes), it will be 2 blocks (128 bytes)
-        let blocks_per_hash = if input_u32.len() % (num_hashes * 16) == 0 {
+        let blocks_per_hash = if input_u32.len().is_multiple_of(num_hashes * 16) {
              input_u32.len() / num_hashes / 16
         } else {
              2 // fallback
@@ -1122,11 +1164,11 @@ fn gpu_sha256_batch_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 }
 
 fn gpu_sha256_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let list = Value::Array(std::sync::Arc::new(std::sync::RwLock::new(vec![v.clone()])));
         let res_list = gpu_sha256_batch_native(vm, &[list])?;
         if let Value::Array(rc) = res_list {
-            if let Some(res) = rc.read().unwrap().get(0) {
+            if let Some(res) = rc.read().unwrap_or_else(|e| e.into_inner()).first() {
                 return Ok(res.clone());
             }
         }
@@ -1135,10 +1177,10 @@ fn gpu_sha256_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn hash_sha3_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("hash_sha3 expected (string|bytes)".to_string())),
         };
         let res = nyx_std::crypto::hash::sha3(&bytes);
@@ -1148,10 +1190,10 @@ fn hash_sha3_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn hash_blake3_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let bytes = match v {
             Value::Str(s) => s.as_bytes().to_vec(),
-            Value::Bytes(b) => b.read().unwrap().clone(),
+            Value::Bytes(b) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(EvalError::new("hash_blake3 expected (string|bytes)".to_string())),
         };
         let res = nyx_std::crypto::hash::blake3(&bytes);
@@ -1161,8 +1203,8 @@ fn hash_blake3_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn aes_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::cipher::aes_encrypt(&data.read().unwrap(), &key.read().unwrap())
+    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::cipher::aes_encrypt(&data.read().unwrap_or_else(|e| e.into_inner()), &key.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("AES Encrypt Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1170,8 +1212,8 @@ fn aes_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn aes_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::cipher::aes_decrypt(&data.read().unwrap(), &key.read().unwrap())
+    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::cipher::aes_decrypt(&data.read().unwrap_or_else(|e| e.into_inner()), &key.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("AES Decrypt Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1179,8 +1221,8 @@ fn aes_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn chacha_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::cipher::chacha_encrypt(&data.read().unwrap(), &key.read().unwrap())
+    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::cipher::chacha_encrypt(&data.read().unwrap_or_else(|e| e.into_inner()), &key.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("ChaCha Encrypt Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1188,8 +1230,8 @@ fn chacha_encrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn chacha_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::cipher::chacha_decrypt(&data.read().unwrap(), &key.read().unwrap())
+    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::cipher::chacha_decrypt(&data.read().unwrap_or_else(|e| e.into_inner()), &key.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("ChaCha Decrypt Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1197,7 +1239,7 @@ fn chacha_decrypt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn random_bytes_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(len)) = args.get(0) {
+    if let Some(Value::Int(len)) = args.first() {
         let res = nyx_std::crypto::random::random_bytes(*len as usize);
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1205,8 +1247,8 @@ fn random_bytes_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn sign_ed25519_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::signature::sign(&data.read().unwrap(), &key.read().unwrap())
+    if let (Some(Value::Bytes(data)), Some(Value::Bytes(key))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::signature::sign(&data.read().unwrap_or_else(|e| e.into_inner()), &key.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("Signature Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1214,8 +1256,8 @@ fn sign_ed25519_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn verify_ed25519_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Bytes(sig)), Some(Value::Bytes(key))) = (args.get(0), args.get(1), args.get(2)) {
-        let res = nyx_std::crypto::signature::verify(&data.read().unwrap(), &sig.read().unwrap(), &key.read().unwrap())
+    if let (Some(Value::Bytes(data)), Some(Value::Bytes(sig)), Some(Value::Bytes(key))) = (args.first(), args.get(1), args.get(2)) {
+        let res = nyx_std::crypto::signature::verify(&data.read().unwrap_or_else(|e| e.into_inner()), &sig.read().unwrap_or_else(|e| e.into_inner()), &key.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("Verification Error: {}", e.message)))?;
         return Ok(Value::Bool(res));
     }
@@ -1223,8 +1265,8 @@ fn verify_ed25519_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn argon2_hash_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(password)), Some(Value::Bytes(salt))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::kdf::argon2_hash(&password.read().unwrap(), &salt.read().unwrap())
+    if let (Some(Value::Bytes(password)), Some(Value::Bytes(salt))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::kdf::argon2_hash(&password.read().unwrap_or_else(|e| e.into_inner()), &salt.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("Argon2 Error: {}", e.message)))?;
         return Ok(Value::Str(res));
     }
@@ -1232,22 +1274,22 @@ fn argon2_hash_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn argon2_verify_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(password)), Some(Value::Str(hash))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::kdf::argon2_verify(&password.read().unwrap(), hash);
+    if let (Some(Value::Bytes(password)), Some(Value::Str(hash))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::kdf::argon2_verify(&password.read().unwrap_or_else(|e| e.into_inner()), hash);
         return Ok(Value::Bool(res));
     }
     Err(EvalError::new("argon2_verify expected (bytes, string)".to_string()))
 }
 
 fn hkdf_expand_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(ikm)), salt_val, Some(Value::Bytes(info)), Some(Value::Int(len))) = (args.get(0), args.get(1), args.get(2), args.get(3)) {
+    if let (Some(Value::Bytes(ikm)), salt_val, Some(Value::Bytes(info)), Some(Value::Int(len))) = (args.first(), args.get(1), args.get(2), args.get(3)) {
         let salt = match salt_val {
-            Some(Value::Bytes(b)) => Some(b.read().unwrap()),
+            Some(Value::Bytes(b)) => Some(b.read().unwrap_or_else(|e| e.into_inner())),
             _ => None,
         };
         // We need to keep salt_guard alive if salt is Some
         let salt_guard = salt.as_ref();
-        let res = nyx_std::crypto::kdf::hkdf_expand(&ikm.read().unwrap(), salt_guard.map(|g| g.as_slice()), &info.read().unwrap(), *len as usize)
+        let res = nyx_std::crypto::kdf::hkdf_expand(&ikm.read().unwrap_or_else(|e| e.into_inner()), salt_guard.map(|g| g.as_slice()), &info.read().unwrap_or_else(|e| e.into_inner()), *len as usize)
             .map_err(|e| EvalError::new(format!("HKDF Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1255,8 +1297,8 @@ fn hkdf_expand_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn pbkdf2_hmac_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(password)), Some(Value::Bytes(salt)), Some(Value::Int(rounds)), Some(Value::Int(len))) = (args.get(0), args.get(1), args.get(2), args.get(3)) {
-        let res = nyx_std::crypto::kdf::pbkdf2_hmac(&password.read().unwrap(), &salt.read().unwrap(), *rounds as u32, *len as usize);
+    if let (Some(Value::Bytes(password)), Some(Value::Bytes(salt)), Some(Value::Int(rounds)), Some(Value::Int(len))) = (args.first(), args.get(1), args.get(2), args.get(3)) {
+        let res = nyx_std::crypto::kdf::pbkdf2_hmac(&password.read().unwrap_or_else(|e| e.into_inner()), &salt.read().unwrap_or_else(|e| e.into_inner()), *rounds as u32, *len as usize);
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
     Err(EvalError::new("pbkdf2_hmac expected (bytes, bytes, int, int)".to_string()))
@@ -1271,8 +1313,8 @@ fn x25519_generate_keypair_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Va
 }
 
 fn x25519_diffie_hellman_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(secret)), Some(Value::Bytes(public))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::key_exchange::diffie_hellman(&secret.read().unwrap(), &public.read().unwrap())
+    if let (Some(Value::Bytes(secret)), Some(Value::Bytes(public))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::key_exchange::diffie_hellman(&secret.read().unwrap_or_else(|e| e.into_inner()), &public.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("X25519 Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1280,16 +1322,16 @@ fn x25519_diffie_hellman_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value
 }
 
 fn bytes_len_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Bytes(data)) = args.get(0) {
-        return Ok(Value::Int(data.read().unwrap().len() as i64));
+    if let Some(Value::Bytes(data)) = args.first() {
+        return Ok(Value::Int(data.read().unwrap_or_else(|e| e.into_inner()).len() as i64));
     }
     Ok(Value::Int(0))
 }
 
 fn bytes_concat_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(a)), Some(Value::Bytes(b))) = (args.get(0), args.get(1)) {
-        let a_guard = a.read().unwrap();
-        let b_guard = b.read().unwrap();
+    if let (Some(Value::Bytes(a)), Some(Value::Bytes(b))) = (args.first(), args.get(1)) {
+        let a_guard = a.read().unwrap_or_else(|e| e.into_inner());
+        let b_guard = b.read().unwrap_or_else(|e| e.into_inner());
         let mut res = Vec::with_capacity(a_guard.len() + b_guard.len());
         res.extend_from_slice(&a_guard);
         res.extend_from_slice(&b_guard);
@@ -1299,8 +1341,8 @@ fn bytes_concat_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn hmac_sha256_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(key)), Some(Value::Bytes(data))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::auth::hmac_sha256(&key.read().unwrap(), &data.read().unwrap())
+    if let (Some(Value::Bytes(key)), Some(Value::Bytes(data))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::auth::hmac_sha256(&key.read().unwrap_or_else(|e| e.into_inner()), &data.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("HMAC Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1308,14 +1350,14 @@ fn hmac_sha256_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn to_base64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Bytes(data)) = args.get(0) {
-        return Ok(Value::Str(nyx_std::crypto::encoding::to_base64(&data.read().unwrap())));
+    if let Some(Value::Bytes(data)) = args.first() {
+        return Ok(Value::Str(nyx_std::crypto::encoding::to_base64(&data.read().unwrap_or_else(|e| e.into_inner()))));
     }
     Err(EvalError::new("to_base64 expected (bytes)".to_string()))
 }
 
 fn from_base64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         let res = nyx_std::crypto::encoding::from_base64(s)
             .map_err(|e| EvalError::new(format!("Base64 Decode Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
@@ -1324,22 +1366,22 @@ fn from_base64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn to_hex_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Bytes(data)) = args.get(0) {
-        return Ok(Value::Str(nyx_std::crypto::encoding::to_hex(&data.read().unwrap())));
+    if let Some(Value::Bytes(data)) = args.first() {
+        return Ok(Value::Str(nyx_std::crypto::encoding::to_hex(&data.read().unwrap_or_else(|e| e.into_inner()))));
     }
     Err(EvalError::new("to_hex expected (bytes)".to_string()))
 }
 
 fn zeroize_bytes_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Bytes(data)) = args.get(0) {
+    if let Some(Value::Bytes(data)) = args.first() {
         use zeroize::Zeroize;
-        (*data.write().unwrap()).zeroize();
+        (*data.write().unwrap_or_else(|e| e.into_inner())).zeroize();
         return Ok(Value::Null);
     }
     Err(EvalError::new("zeroize_bytes expected (bytes)".to_string()))
 }
 fn from_hex_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         let res = nyx_std::crypto::encoding::from_hex(s)
             .map_err(|e| EvalError::new(format!("Hex Decode Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
@@ -1348,8 +1390,8 @@ fn from_hex_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn seal_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(msg)), Some(Value::Bytes(pwd))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::seal::seal(&msg.read().unwrap(), &pwd.read().unwrap())
+    if let (Some(Value::Bytes(msg)), Some(Value::Bytes(pwd))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::seal::seal(&msg.read().unwrap_or_else(|e| e.into_inner()), &pwd.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("Seal Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1357,8 +1399,8 @@ fn seal_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn open_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(sealed)), Some(Value::Bytes(pwd))) = (args.get(0), args.get(1)) {
-        match nyx_std::crypto::seal::open(&sealed.read().unwrap(), &pwd.read().unwrap()) {
+    if let (Some(Value::Bytes(sealed)), Some(Value::Bytes(pwd))) = (args.first(), args.get(1)) {
+        match nyx_std::crypto::seal::open(&sealed.read().unwrap_or_else(|e| e.into_inner()), &pwd.read().unwrap_or_else(|e| e.into_inner())) {
             Ok(res) => return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec())))),
             Err(_) => return Ok(Value::Null),
         }
@@ -1367,8 +1409,8 @@ fn open_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn seal_ephemeral_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(msg)), Some(Value::Bytes(peer_pub))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::seal::seal_ephemeral(&msg.read().unwrap(), &peer_pub.read().unwrap())
+    if let (Some(Value::Bytes(msg)), Some(Value::Bytes(peer_pub))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::seal::seal_ephemeral(&msg.read().unwrap_or_else(|e| e.into_inner()), &peer_pub.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("Seal Ephemeral Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1376,8 +1418,8 @@ fn seal_ephemeral_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn open_ephemeral_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(sealed)), Some(Value::Bytes(my_secret))) = (args.get(0), args.get(1)) {
-        let res = nyx_std::crypto::seal::open_ephemeral(&sealed.read().unwrap(), &my_secret.read().unwrap())
+    if let (Some(Value::Bytes(sealed)), Some(Value::Bytes(my_secret))) = (args.first(), args.get(1)) {
+        let res = nyx_std::crypto::seal::open_ephemeral(&sealed.read().unwrap_or_else(|e| e.into_inner()), &my_secret.read().unwrap_or_else(|e| e.into_inner()))
             .map_err(|e| EvalError::new(format!("Open Ephemeral Error: {}", e.message)))?;
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
     }
@@ -1385,7 +1427,7 @@ fn open_ephemeral_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn sha256_init_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> {
-    let mut reg = CRYPTO_REGISTRY.write().unwrap();
+    let mut reg = CRYPTO_REGISTRY.write().unwrap_or_else(|e| e.into_inner());
     let id = reg.next_id;
     reg.hashers.insert(id, Sha256::new());
     reg.next_id += 1;
@@ -1393,10 +1435,10 @@ fn sha256_init_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn sha256_update_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(id)), Some(Value::Bytes(data))) = (args.get(0), args.get(1)) {
-        let mut reg = CRYPTO_REGISTRY.write().unwrap();
+    if let (Some(Value::Int(id)), Some(Value::Bytes(data))) = (args.first(), args.get(1)) {
+        let mut reg = CRYPTO_REGISTRY.write().unwrap_or_else(|e| e.into_inner());
         if let Some(hasher) = reg.hashers.get_mut(&(*id as u64)) {
-            hasher.update(&*data.read().unwrap());
+            hasher.update(&*data.read().unwrap_or_else(|e| e.into_inner()));
             return Ok(Value::Null);
         }
     }
@@ -1404,8 +1446,8 @@ fn sha256_update_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 }
 
 fn sha256_finalize_native_v2(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(id)) = args.get(0) {
-        let mut reg = CRYPTO_REGISTRY.write().unwrap();
+    if let Some(Value::Int(id)) = args.first() {
+        let mut reg = CRYPTO_REGISTRY.write().unwrap_or_else(|e| e.into_inner());
         if let Some(hasher) = reg.hashers.remove(&(*id as u64)) {
             let res = hasher.finalize();
             return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(res.as_slice().to_vec()))));
@@ -1415,9 +1457,9 @@ fn sha256_finalize_native_v2(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, E
 }
 
 fn secure_eq_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(a)), Some(Value::Bytes(b))) = (args.get(0), args.get(1)) {
-        let a_guard = a.read().unwrap();
-        let b_guard = b.read().unwrap();
+    if let (Some(Value::Bytes(a)), Some(Value::Bytes(b))) = (args.first(), args.get(1)) {
+        let a_guard = a.read().unwrap_or_else(|e| e.into_inner());
+        let b_guard = b.read().unwrap_or_else(|e| e.into_inner());
         if a_guard.len() != b_guard.len() {
             return Ok(Value::Bool(false));
         }
@@ -1429,8 +1471,8 @@ fn secure_eq_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn bytes_slice_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Int(start)), Some(Value::Int(end))) = (args.get(0), args.get(1), args.get(2)) {
-        let guard = data.read().unwrap();
+    if let (Some(Value::Bytes(data)), Some(Value::Int(start)), Some(Value::Int(end))) = (args.first(), args.get(1), args.get(2)) {
+        let guard = data.read().unwrap_or_else(|e| e.into_inner());
         let s = *start as usize;
         let e = *end as usize;
         if s > e || e > guard.len() {
@@ -1447,15 +1489,15 @@ fn bytes_new_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError
 }
 
 fn bytes_from_str_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(s.as_bytes().to_vec()))));
     }
     Err(EvalError::new("std::bytes::from_str expected (string)".to_string()))
 }
 
 fn bytes_set_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Int(idx)), Some(Value::Int(val))) = (args.get(0), args.get(1), args.get(2)) {
-        let mut guard = data.write().unwrap();
+    if let (Some(Value::Bytes(data)), Some(Value::Int(idx)), Some(Value::Int(val))) = (args.first(), args.get(1), args.get(2)) {
+        let mut guard = data.write().unwrap_or_else(|e| e.into_inner());
         let i = *idx as usize;
         if i < guard.len() {
             guard[i] = *val as u8;
@@ -1467,8 +1509,8 @@ fn bytes_set_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn bytes_get_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Bytes(data)), Some(Value::Int(idx))) = (args.get(0), args.get(1)) {
-        let guard = data.read().unwrap();
+    if let (Some(Value::Bytes(data)), Some(Value::Int(idx))) = (args.first(), args.get(1)) {
+        let guard = data.read().unwrap_or_else(|e| e.into_inner());
         let i = *idx as usize;
         if i < guard.len() {
             return Ok(Value::Int(guard[i] as i64));
@@ -1485,13 +1527,13 @@ fn list_new_native(vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> 
 
 fn ok_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let mut map = HashMap::new();
-    map.insert("Ok".to_string(), args.get(0).cloned().unwrap_or(Value::Null));
+    map.insert("Ok".to_string(), args.first().cloned().unwrap_or(Value::Null));
     Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(map))))
 }
 
 fn err_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let mut map = HashMap::new();
-    map.insert("Err".to_string(), args.get(0).cloned().unwrap_or(Value::Null));
+    map.insert("Err".to_string(), args.first().cloned().unwrap_or(Value::Null));
     Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(map))))
 }
 
@@ -1500,8 +1542,8 @@ fn map_new_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn map_insert_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Object(obj)), Some(Value::Str(key)), Some(val)) = (args.get(0), args.get(1), args.get(2)) {
-        obj.write().unwrap().insert(key.clone(), val.clone());
+    if let (Some(Value::Object(obj)), Some(Value::Str(key)), Some(val)) = (args.first(), args.get(1), args.get(2)) {
+        obj.write().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), val.clone());
         Ok(Value::Object(obj.clone()))
     } else {
         Err(EvalError { message: "Map::insert(map, key, value) expected".to_string(), stack: vec![] })
@@ -1509,8 +1551,8 @@ fn map_insert_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn map_get_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Object(obj)), Some(Value::Str(key))) = (args.get(0), args.get(1)) {
-        let val = obj.read().unwrap().get(key).cloned().unwrap_or(Value::Null);
+    if let (Some(Value::Object(obj)), Some(Value::Str(key))) = (args.first(), args.get(1)) {
+        let val = obj.read().unwrap_or_else(|e| e.into_inner()).get(key).cloned().unwrap_or(Value::Null);
         Ok(val)
     } else {
         Err(EvalError { message: "Map::get(map, key) expected".to_string(), stack: vec![] })
@@ -1518,15 +1560,15 @@ fn map_get_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn map_len_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Object(obj)) = args.get(0) {
-        Ok(Value::Int(obj.read().unwrap().len() as i64))
+    if let Some(Value::Object(obj)) = args.first() {
+        Ok(Value::Int(obj.read().unwrap_or_else(|e| e.into_inner()).len() as i64))
     } else {
         Ok(Value::Int(0))
     }
 }
 
 fn range_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(start)), Some(Value::Int(end))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Int(start)), Some(Value::Int(end))) = (args.first(), args.get(1)) {
         let mut out = Vec::new();
         for i in *start..*end {
             out.push(Value::Int(i));
@@ -1622,12 +1664,12 @@ fn bits_parity_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 fn bits_xor_bytes_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let get_bytes = |v: &Value| -> Option<Vec<u8>> {
         match v {
-            Value::Bytes(b) => Some(b.read().unwrap().clone()),
+            Value::Bytes(b) => Some(b.read().unwrap_or_else(|e| e.into_inner()).clone()),
             Value::Str(s)   => Some(s.as_bytes().to_vec()),
             _               => None,
         }
     };
-    let a = get_bytes(args.get(0).unwrap_or(&Value::Null))
+    let a = get_bytes(args.first().unwrap_or(&Value::Null))
         .ok_or_else(|| EvalError::new("xor_bytes: expected bytes arg 0".to_string()))?;
     let b = get_bytes(args.get(1).unwrap_or(&Value::Null))
         .ok_or_else(|| EvalError::new("xor_bytes: expected bytes arg 1".to_string()))?;
@@ -1645,16 +1687,16 @@ fn bits_u32_to_bytes_be_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value,
     Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(v.to_be_bytes().to_vec()))))
 }
 fn bits_bytes_to_u32_le_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let b = match args.get(0) {
-        Some(Value::Bytes(b)) => b.read().unwrap().clone(),
+    let b = match args.first() {
+        Some(Value::Bytes(b)) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
         _ => return Err(EvalError::new("bytes_to_u32_le: expected bytes".to_string())),
     };
     if b.len() < 4 { return Err(EvalError::new("bytes_to_u32_le: need at least 4 bytes".to_string())); }
     Ok(Value::Int(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as i64))
 }
 fn bits_bytes_to_u32_be_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let b = match args.get(0) {
-        Some(Value::Bytes(b)) => b.read().unwrap().clone(),
+    let b = match args.first() {
+        Some(Value::Bytes(b)) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
         _ => return Err(EvalError::new("bytes_to_u32_be: expected bytes".to_string())),
     };
     if b.len() < 4 { return Err(EvalError::new("bytes_to_u32_be: need at least 4 bytes".to_string())); }
@@ -1669,16 +1711,16 @@ fn bits_u64_to_bytes_be_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value,
     Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(v.to_be_bytes().to_vec()))))
 }
 fn bits_bytes_to_u64_le_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let b = match args.get(0) {
-        Some(Value::Bytes(b)) => b.read().unwrap().clone(),
+    let b = match args.first() {
+        Some(Value::Bytes(b)) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
         _ => return Err(EvalError::new("bytes_to_u64_le: expected bytes".to_string())),
     };
     if b.len() < 8 { return Err(EvalError::new("bytes_to_u64_le: need at least 8 bytes".to_string())); }
     Ok(Value::Int(u64::from_le_bytes([b[0],b[1],b[2],b[3],b[4],b[5],b[6],b[7]]) as i64))
 }
 fn bits_bytes_to_u64_be_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let b = match args.get(0) {
-        Some(Value::Bytes(b)) => b.read().unwrap().clone(),
+    let b = match args.first() {
+        Some(Value::Bytes(b)) => b.read().unwrap_or_else(|e| e.into_inner()).clone(),
         _ => return Err(EvalError::new("bytes_to_u64_be: expected bytes".to_string())),
     };
     if b.len() < 8 { return Err(EvalError::new("bytes_to_u64_be: need at least 8 bytes".to_string())); }
@@ -1751,9 +1793,9 @@ fn math_is_prime_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     let n = int_arg!(args, 0, "is_prime") as u64;
     if n < 2 { return Ok(Value::Bool(false)); }
     if n == 2 || n == 3 { return Ok(Value::Bool(true)); }
-    if n % 2 == 0 || n % 3 == 0 { return Ok(Value::Bool(false)); }
+    if n.is_multiple_of(2) || n.is_multiple_of(3) { return Ok(Value::Bool(false)); }
     let mut i = 5u64;
-    while i * i <= n { if n % i == 0 || n % (i+2) == 0 { return Ok(Value::Bool(false)); } i += 6; }
+    while i * i <= n { if n.is_multiple_of(i) || n.is_multiple_of(i + 2) { return Ok(Value::Bool(false)); } i += 6; }
     Ok(Value::Bool(true))
 }
 fn math_next_prime_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
@@ -1761,10 +1803,10 @@ fn math_next_prime_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
     loop {
         if n < 2 { n += 1; continue; }
         if n == 2 { return Ok(Value::Int(2)); }
-        if n % 2 == 0 { n += 1; continue; }
+        if n.is_multiple_of(2) { n += 1; continue; }
         let mut is_p = true;
         let mut i = 3u64;
-        while i * i <= n { if n % i == 0 { is_p = false; break; } i += 2; }
+        while i * i <= n { if n.is_multiple_of(i) { is_p = false; break; } i += 2; }
         if is_p { return Ok(Value::Int(n as i64)); }
         n += 1;
     }
@@ -1796,7 +1838,7 @@ fn math_wrapping_mul64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
 
 /// Keyboard: convert PS/2 scan code → char string
 fn kernel_scancode_to_char_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let sc = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => return Err(EvalError::new("scancode_to_char: expected int".to_string())) };
+    let sc = match args.first() { Some(Value::Int(n)) => *n as u8, _ => return Err(EvalError::new("scancode_to_char: expected int".to_string())) };
     let ch = nyx_std::kernel::keyboard::scancode_to_ascii(sc);
     match ch {
         Some(c) => Ok(Value::Str(c.to_string())),
@@ -1806,7 +1848,7 @@ fn kernel_scancode_to_char_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Val
 
 /// Keyboard: convert PS/2 scan code → human-readable key name
 fn kernel_scancode_to_name_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let sc = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => return Err(EvalError::new("scancode_to_name: expected int".to_string())) };
+    let sc = match args.first() { Some(Value::Int(n)) => *n as u8, _ => return Err(EvalError::new("scancode_to_name: expected int".to_string())) };
     let name = match sc {
         0x01 => "Escape",     0x0E => "Backspace",  0x0F => "Tab",
         0x1C => "Enter",      0x1D => "LCtrl",      0x2A => "LShift",
@@ -1827,7 +1869,7 @@ fn kernel_scancode_to_name_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Val
 
 /// Keyboard: build a key-event map {scancode, pressed, char}
 fn kernel_key_event_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let sc      = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => 0 };
+    let sc      = match args.first() { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let pressed = match args.get(1) { Some(Value::Bool(b)) => *b, _ => true };
     let ev = nyx_std::kernel::keyboard::KeyEvent::new(sc, pressed);
     let mut map = HashMap::new();
@@ -1838,15 +1880,15 @@ fn kernel_key_event_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
         None    => Value::Null,
     });
     map.insert("name".to_string(), {
-        let name = kernel_scancode_to_name_native(_vm, args)?;
-        name
+        
+        kernel_scancode_to_name_native(_vm, args)?
     });
     Ok(Value::Object(std::sync::Arc::new(std::sync::RwLock::new(map))))
 }
 
 /// Keyboard: return the raw scan code integer for a key name string  
 fn kernel_read_keycode_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let name = match args.get(0) { Some(Value::Str(s)) => s.to_lowercase(), _ => return Err(EvalError::new("read_keycode: expected string key name".to_string())) };
+    let name = match args.first() { Some(Value::Str(s)) => s.to_lowercase(), _ => return Err(EvalError::new("read_keycode: expected string key name".to_string())) };
     let code: u8 = match name.as_str() {
         "a" => 0x1E, "b" => 0x30, "c" => 0x2E, "d" => 0x20, "e" => 0x12,
         "f" => 0x21, "g" => 0x22, "h" => 0x23, "i" => 0x17, "j" => 0x24,
@@ -1871,13 +1913,13 @@ fn kernel_read_keycode_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
 
 /// Keyboard: is a scan code a printable character?
 fn kernel_is_printable_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let sc = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => 0 };
+    let sc = match args.first() { Some(Value::Int(n)) => *n as u8, _ => 0 };
     Ok(Value::Bool(nyx_std::kernel::keyboard::scancode_to_ascii(sc).is_some()))
 }
 
 /// Mouse: decode a 3-byte PS/2 packet into a mouse state object
 fn kernel_mouse_decode_ps2_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let b0 = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => 0 };
+    let b0 = match args.first() { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let b1 = match args.get(1) { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let b2 = match args.get(2) { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let state = nyx_std::kernel::mouse::MouseState::from_ps2_packet(b0, b1, b2);
@@ -1904,14 +1946,14 @@ fn kernel_mouse_read_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, E
 
 /// VGA: build a color attribute byte from fg/bg color indices
 fn kernel_vga_color_code_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let fg = match args.get(0) { Some(Value::Int(n)) => (*n & 0xF) as u8, _ => 7 };
+    let fg = match args.first() { Some(Value::Int(n)) => (*n & 0xF) as u8, _ => 7 };
     let bg = match args.get(1) { Some(Value::Int(n)) => (*n & 0xF) as u8, _ => 0 };
     Ok(Value::Int((fg | (bg << 4)) as i64))
 }
 
 /// VGA: build a 16-bit text-mode screen cell (char | color<<8)
 fn kernel_vga_make_cell_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let ch = match args.get(0) {
+    let ch = match args.first() {
         Some(Value::Int(n)) => *n as u8,
         Some(Value::Str(s)) => s.bytes().next().unwrap_or(b' '),
         _ => b' ',
@@ -1924,27 +1966,27 @@ fn kernel_vga_make_cell_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value,
 
 /// Memory: align an address UP to boundary
 fn kernel_mem_align_up_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let addr  = match args.get(0) { Some(Value::Int(n)) => *n as usize, _ => 0 };
+    let addr  = match args.first() { Some(Value::Int(n)) => *n as usize, _ => 0 };
     let align = match args.get(1) { Some(Value::Int(n)) => *n as usize, _ => 4096 };
     Ok(Value::Int(nyx_std::kernel::memory::align_up(addr, align) as i64))
 }
 
 /// Memory: align an address DOWN to boundary
 fn kernel_mem_align_down_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let addr  = match args.get(0) { Some(Value::Int(n)) => *n as usize, _ => 0 };
+    let addr  = match args.first() { Some(Value::Int(n)) => *n as usize, _ => 0 };
     let align = match args.get(1) { Some(Value::Int(n)) => *n as usize, _ => 4096 };
     Ok(Value::Int(nyx_std::kernel::memory::align_down(addr, align) as i64))
 }
 
 /// Memory: how many 4K pages are needed for `bytes`?
 fn kernel_mem_pages_needed_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let bytes = match args.get(0) { Some(Value::Int(n)) => *n as usize, _ => 0 };
+    let bytes = match args.first() { Some(Value::Int(n)) => *n as usize, _ => 0 };
     Ok(Value::Int(nyx_std::kernel::memory::pages_needed(bytes) as i64))
 }
 
 /// GDT: build a 64-bit segment descriptor entry
 fn kernel_gdt_build_entry_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let base   = match args.get(0) { Some(Value::Int(n)) => *n as u32, _ => 0 };
+    let base   = match args.first() { Some(Value::Int(n)) => *n as u32, _ => 0 };
     let limit  = match args.get(1) { Some(Value::Int(n)) => *n as u32, _ => 0 };
     let access = match args.get(2) { Some(Value::Int(n)) => *n as u8,  _ => 0 };
     let flags  = match args.get(3) { Some(Value::Int(n)) => *n as u8,  _ => 0 };
@@ -1954,7 +1996,7 @@ fn kernel_gdt_build_entry_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Valu
 
 /// PCI: build a 32-bit configuration space address
 fn kernel_pci_build_address_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let bus    = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => 0 };
+    let bus    = match args.first() { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let slot   = match args.get(1) { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let func   = match args.get(2) { Some(Value::Int(n)) => *n as u8, _ => 0 };
     let offset = match args.get(3) { Some(Value::Int(n)) => *n as u8, _ => 0 };
@@ -1963,7 +2005,7 @@ fn kernel_pci_build_address_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Va
 
 /// Interrupts: describe an IRQ / exception vector number
 fn kernel_interrupt_describe_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let vec = match args.get(0) { Some(Value::Int(n)) => *n as u8, _ => 255 };
+    let vec = match args.first() { Some(Value::Int(n)) => *n as u8, _ => 255 };
     let name = match vec {
         0  => "Exception #0: Divide by Zero",
         1  => "Exception #1: Debug",
@@ -2062,8 +2104,13 @@ fn get_time_nanos_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, Eval
     Ok(Value::Int(since_the_epoch.as_nanos() as i64))
 }
 
+fn get_timestamp_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> {
+    let now = time::OffsetDateTime::now_utc();
+    Ok(Value::Str(format!("{:?}", now)))
+}
+
 fn string_to_upper_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         Ok(Value::Str(s.to_uppercase()))
     } else {
         Ok(Value::Null)
@@ -2071,7 +2118,7 @@ fn string_to_upper_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 fn string_to_lower_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         Ok(Value::Str(s.to_lowercase()))
     } else {
         Ok(Value::Null)
@@ -2079,7 +2126,7 @@ fn string_to_lower_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 fn string_len_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         Ok(Value::Int(s.chars().count() as i64))
     } else {
         Ok(Value::Int(0))
@@ -2087,16 +2134,16 @@ fn string_len_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn list_len_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(a)) = args.get(0) {
-        Ok(Value::Int(a.read().unwrap().len() as i64))
+    if let Some(Value::Array(a)) = args.first() {
+        Ok(Value::Int(a.read().unwrap_or_else(|e| e.into_inner()).len() as i64))
     } else {
         Ok(Value::Int(0))
     }
 }
 
 fn list_get_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(Value::Int(idx))) = (args.get(0), args.get(1)) {
-        let arr = a.read().unwrap();
+    if let (Some(Value::Array(a)), Some(Value::Int(idx))) = (args.first(), args.get(1)) {
+        let arr = a.read().unwrap_or_else(|e| e.into_inner());
         if *idx >= 0 && (*idx as usize) < arr.len() {
             return Ok(arr[*idx as usize].clone());
         }
@@ -2106,8 +2153,8 @@ fn list_get_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn list_push_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(a)), Some(v)) = (args.get(0), args.get(1)) {
-        a.write().unwrap().push(v.clone());
+    if let (Some(Value::Array(a)), Some(v)) = (args.first(), args.get(1)) {
+        a.write().unwrap_or_else(|e| e.into_inner()).push(v.clone());
         Ok(Value::Array(a.clone()))
     } else {
         Ok(Value::Null)
@@ -2115,7 +2162,7 @@ fn list_push_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn string_split_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(s)), Some(Value::Str(delim))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(s)), Some(Value::Str(delim))) = (args.first(), args.get(1)) {
         let parts: Vec<Value> = s.split(delim).map(|p| Value::Str(p.to_string())).collect();
         Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(parts))))
     } else {
@@ -2124,7 +2171,7 @@ fn string_split_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn string_substring_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         let start = args.get(1).and_then(|v| if let Value::Int(i) = v { Some(*i as isize) } else { None }).unwrap_or(0);
         let end = args.get(2).and_then(|v| if let Value::Int(i) = v { Some(*i as isize) } else { None });
         
@@ -2142,8 +2189,16 @@ fn string_substring_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     }
 }
 
+fn string_repeat_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
+    if let (Some(Value::Str(s)), Some(Value::Int(count))) = (args.get(0), args.get(1)) {
+        Ok(Value::Str(s.repeat(*count as usize)))
+    } else {
+        Ok(Value::Str("".to_string()))
+    }
+}
+
 fn string_chars_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         let chars: Vec<Value> = s.chars().map(|c| Value::Str(c.to_string())).collect();
         Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(chars))))
     } else {
@@ -2152,7 +2207,7 @@ fn string_chars_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn string_contains_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(s)), Some(Value::Str(needle))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(s)), Some(Value::Str(needle))) = (args.first(), args.get(1)) {
         Ok(Value::Bool(s.contains(needle)))
     } else {
         Ok(Value::Bool(false))
@@ -2160,22 +2215,22 @@ fn string_contains_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 fn string_as_bytes_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(s)) = args.get(0) {
+    if let Some(Value::Str(s)) = args.first() {
         return Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(s.as_bytes().to_vec()))));
     }
     Ok(Value::Null)
 }
 
 fn bytes_as_string_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Bytes(b)) = args.get(0) {
-        let s = String::from_utf8_lossy(&b.read().unwrap()).to_string();
+    if let Some(Value::Bytes(b)) = args.first() {
+        let s = String::from_utf8_lossy(&b.read().unwrap_or_else(|e| e.into_inner())).to_string();
         return Ok(Value::Str(s));
     }
     Ok(Value::Null)
 }
 
 fn string_to_int_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let s = match v {
             Value::Str(s) => s.clone(),
             _ => to_stringish(v),
@@ -2187,7 +2242,7 @@ fn string_to_int_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 }
 
 fn string_to_float_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let s = match v {
             Value::Str(s) => s.clone(),
             _ => to_stringish(v),
@@ -2199,8 +2254,8 @@ fn string_to_float_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 fn list_shift_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(a)) = args.get(0) {
-        let mut arr = a.write().unwrap();
+    if let Some(Value::Array(a)) = args.first() {
+        let mut arr = a.write().unwrap_or_else(|e| e.into_inner());
         if !arr.is_empty() {
             Ok(arr.remove(0))
         } else {
@@ -2212,7 +2267,7 @@ fn list_shift_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_alloc_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(size)) = args.get(0) {
+    if let Some(Value::Int(size)) = args.first() {
         let buf = vec![0u8; *size as usize];
         Ok(Value::Bytes(std::sync::Arc::new(std::sync::RwLock::new(buf))))
     } else {
@@ -2221,9 +2276,9 @@ fn mem_alloc_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn mem_peek_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    match (args.get(0), args.get(1)) {
+    match (args.first(), args.get(1)) {
         (Some(Value::Bytes(b_rc)), Some(Value::Int(offset))) => {
-            let b = b_rc.read().unwrap();
+            let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
             if *offset >= 0 && (*offset as usize) < b.len() {
                 Ok(Value::Int(b[*offset as usize] as i64))
             } else {
@@ -2241,9 +2296,9 @@ fn mem_peek_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn mem_poke_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    match (args.get(0), args.get(1), args.get(2)) {
+    match (args.first(), args.get(1), args.get(2)) {
         (Some(Value::Bytes(b_rc)), Some(Value::Int(offset)), Some(Value::Int(val))) => {
-            let mut b = b_rc.write().unwrap();
+            let mut b = b_rc.write().unwrap_or_else(|e| e.into_inner());
             if *offset >= 0 && (*offset as usize) < b.len() {
                 b[*offset as usize] = *val as u8;
             }
@@ -2260,10 +2315,10 @@ fn mem_poke_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn mem_addr_of_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(val) = args.get(0) {
+    if let Some(val) = args.first() {
         match val {
             Value::Bytes(b_rc) => {
-                let addr = b_rc.read().unwrap().as_ptr() as u64;
+                let addr = b_rc.read().unwrap_or_else(|e| e.into_inner()).as_ptr() as u64;
                 return Ok(Value::Pointer(addr));
             }
             Value::Pointer(p) => return Ok(Value::Pointer(*p)),
@@ -2277,7 +2332,7 @@ fn mem_addr_of_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn mem_from_addr_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(addr)) = args.get(0) {
+    if let Some(Value::Int(addr)) = args.first() {
         return Ok(Value::Pointer(*addr as u64));
     }
     Ok(Value::Null)
@@ -2291,7 +2346,7 @@ fn arch_nop_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError>
 
 fn arch_pause_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError> {
     #[cfg(target_arch = "x86_64")]
-    unsafe { std::arch::x86_64::_mm_pause(); }
+    std::arch::x86_64::_mm_pause();
     Ok(Value::Null)
 }
 
@@ -2316,7 +2371,7 @@ fn kernel_rdtsc_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalEr
 }
 
 fn kernel_cpuid_reg_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let leaf = match args.get(0) {
+    let leaf = match args.first() {
         Some(Value::Int(i)) => *i as u32,
         _ => 0,
     };
@@ -2325,12 +2380,12 @@ fn kernel_cpuid_reg_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
         _ => 0,
     };
     let reg_idx = match args.get(2) {
-        Some(Value::Int(i)) => *i as i64,
+        Some(Value::Int(i)) => *i,
         _ => 0,
     };
 
     #[cfg(target_arch = "x86_64")]
-    unsafe {
+    {
         let res = std::arch::x86_64::__cpuid_count(leaf, subleaf);
         let val = match reg_idx {
             0 => res.eax,
@@ -2352,7 +2407,7 @@ fn kernel_fence_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalEr
 }
 
 fn arch_inb_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(port)) = args.get(0) {
+    if let Some(Value::Int(port)) = args.first() {
         let p = *port as u16;
         // Optimization: Use hypercall bridge as it's safer on most host environments.
         return hypercall_native(_vm, &[Value::Int(11), Value::Int(p as i64), Value::Int(0), Value::Int(0)]);
@@ -2361,7 +2416,7 @@ fn arch_inb_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn arch_inw_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(port)) = args.get(0) {
+    if let Some(Value::Int(port)) = args.first() {
         let p = *port as u16;
         return hypercall_native(_vm, &[Value::Int(11), Value::Int(p as i64), Value::Int(1), Value::Int(0)]);
     }
@@ -2369,7 +2424,7 @@ fn arch_inw_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn arch_inl_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(port)) = args.get(0) {
+    if let Some(Value::Int(port)) = args.first() {
         let p = *port as u16;
         return hypercall_native(_vm, &[Value::Int(11), Value::Int(p as i64), Value::Int(2), Value::Int(0)]);
     }
@@ -2377,7 +2432,7 @@ fn arch_inl_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn arch_outb_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(port)), Some(Value::Int(val))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Int(port)), Some(Value::Int(val))) = (args.first(), args.get(1)) {
         let p = *port as u16;
         let v = *val as u8;
         let _ = hypercall_native(_vm, &[Value::Int(10), Value::Int(p as i64), Value::Int(v as i64), Value::Int(0)]);
@@ -2386,7 +2441,7 @@ fn arch_outb_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn arch_outw_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(port)), Some(Value::Int(val))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Int(port)), Some(Value::Int(val))) = (args.first(), args.get(1)) {
         let p = *port as u16;
         let v = *val as u16;
         let _ = hypercall_native(_vm, &[Value::Int(10), Value::Int(p as i64), Value::Int(v as i64), Value::Int(1)]);
@@ -2395,7 +2450,7 @@ fn arch_outw_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn arch_outl_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Int(port)), Some(Value::Int(val))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Int(port)), Some(Value::Int(val))) = (args.first(), args.get(1)) {
         let p = *port as u16;
         let v = *val as u32;
         let _ = hypercall_native(_vm, &[Value::Int(10), Value::Int(p as i64), Value::Int(v as i64), Value::Int(2)]);
@@ -2404,7 +2459,7 @@ fn arch_outl_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn typeof_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(val) = args.get(0) {
+    if let Some(val) = args.first() {
         let t = match val {
             Value::Null => "Null",
             Value::Int(_) => "Int",
@@ -2430,8 +2485,8 @@ fn typeof_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn fields_of_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Object(map_rc)) = args.get(0) {
-        let map = map_rc.read().unwrap();
+    if let Some(Value::Object(map_rc)) = args.first() {
+        let map = map_rc.read().unwrap_or_else(|e| e.into_inner());
         let keys: Vec<Value> = map.keys().map(|k| Value::Str(k.clone())).collect();
         Ok(Value::Array(std::sync::Arc::new(std::sync::RwLock::new(keys))))
     } else {
@@ -2440,7 +2495,7 @@ fn fields_of_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn mem_peek16_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Pointer(addr)) = args.get(0) {
+    if let Some(Value::Pointer(addr)) = args.first() {
         if *addr == 0 { return Ok(Value::Null); }
         unsafe {
             let res = (*addr as *const u16).read_unaligned();
@@ -2451,7 +2506,7 @@ fn mem_peek16_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_peek32_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Pointer(addr)) = args.get(0) {
+    if let Some(Value::Pointer(addr)) = args.first() {
         if *addr == 0 { return Ok(Value::Null); }
         unsafe {
             let res = (*addr as *const u32).read_unaligned();
@@ -2462,7 +2517,7 @@ fn mem_peek32_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_peek64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Pointer(addr)) = args.get(0) {
+    if let Some(Value::Pointer(addr)) = args.first() {
         if *addr == 0 { return Ok(Value::Null); }
         unsafe {
             let res = (*addr as *const u64).read_unaligned();
@@ -2473,7 +2528,7 @@ fn mem_peek64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_poke16_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Pointer(addr)), Some(Value::Int(val))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Pointer(addr)), Some(Value::Int(val))) = (args.first(), args.get(1)) {
         if *addr != 0 {
             unsafe {
                 (*addr as *mut u16).write_unaligned(*val as u16);
@@ -2484,7 +2539,7 @@ fn mem_poke16_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_poke32_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Pointer(addr)), Some(Value::Int(val))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Pointer(addr)), Some(Value::Int(val))) = (args.first(), args.get(1)) {
         if *addr != 0 {
             unsafe {
                 (*addr as *mut u32).write_unaligned(*val as u32);
@@ -2495,7 +2550,7 @@ fn mem_poke32_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_poke64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Pointer(addr)), Some(Value::Int(val))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Pointer(addr)), Some(Value::Int(val))) = (args.first(), args.get(1)) {
         if *addr != 0 {
             unsafe {
                 (*addr as *mut u64).write_unaligned(*val as u64);
@@ -2506,7 +2561,7 @@ fn mem_poke64_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mem_size_of_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(ty)) = args.get(0) {
+    if let Some(Value::Str(ty)) = args.first() {
         let size = match ty.as_str() {
             "u8" | "i8" | "bool" => 1,
             "u16" | "i16" => 2,
@@ -2521,9 +2576,9 @@ fn mem_size_of_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 
 fn mem_copy_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if let (Some(Value::Bytes(src_b)), Some(Value::Int(src_off)), Some(Value::Bytes(dst_b)), Some(Value::Int(dst_off)), Some(Value::Int(len))) = 
-           (args.get(0), args.get(1), args.get(2), args.get(3), args.get(4)) {
-        let src = src_b.read().unwrap();
-        let mut dst = dst_b.write().unwrap();
+           (args.first(), args.get(1), args.get(2), args.get(3), args.get(4)) {
+        let src = src_b.read().unwrap_or_else(|e| e.into_inner());
+        let mut dst = dst_b.write().unwrap_or_else(|e| e.into_inner());
         
         let so = *src_off as usize;
         let do_ = *dst_off as usize;
@@ -2537,7 +2592,7 @@ fn mem_copy_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn hypercall_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(num)) = args.get(0) {
+    if let Some(Value::Int(num)) = args.first() {
         let _a1 = args.get(1).map(|v| if let Value::Int(i) = v { *i } else { 0 }).unwrap_or(0);
         let _a2 = args.get(2).map(|v| if let Value::Int(i) = v { *i } else { 0 }).unwrap_or(0);
         let _a3 = args.get(3).map(|v| if let Value::Int(i) = v { *i } else { 0 }).unwrap_or(0);
@@ -2553,9 +2608,9 @@ fn hypercall_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     }
 }
 fn dot_product_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Value::Array(a_rc), Value::Array(b_rc)) = (args.get(0).unwrap_or(&Value::Null), args.get(1).unwrap_or(&Value::Null)) {
-        let a = a_rc.read().unwrap();
-        let b = b_rc.read().unwrap();
+    if let (Value::Array(a_rc), Value::Array(b_rc)) = (args.first().unwrap_or(&Value::Null), args.get(1).unwrap_or(&Value::Null)) {
+        let a = a_rc.read().unwrap_or_else(|e| e.into_inner());
+        let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
         let mut sum = 0.0;
         for i in 0..a.len().min(b.len()) {
             if let (Some(av), Some(bv)) = (as_f64(&a[i]), as_f64(&b[i])) {
@@ -2568,9 +2623,9 @@ fn dot_product_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 }
 
 fn mat_add_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Value::Array(a_rc), Value::Array(b_rc)) = (args.get(0).unwrap_or(&Value::Null), args.get(1).unwrap_or(&Value::Null)) {
-        let a = a_rc.read().unwrap();
-        let b = b_rc.read().unwrap();
+    if let (Value::Array(a_rc), Value::Array(b_rc)) = (args.first().unwrap_or(&Value::Null), args.get(1).unwrap_or(&Value::Null)) {
+        let a = a_rc.read().unwrap_or_else(|e| e.into_inner());
+        let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
         
         check_shapes!(a.len(), b.len(), "mat_add");
         
@@ -2592,9 +2647,9 @@ fn mat_add_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn mat_sub_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Value::Array(a_rc), Value::Array(b_rc)) = (args.get(0).unwrap_or(&Value::Null), args.get(1).unwrap_or(&Value::Null)) {
-        let a = a_rc.read().unwrap();
-        let b = b_rc.read().unwrap();
+    if let (Value::Array(a_rc), Value::Array(b_rc)) = (args.first().unwrap_or(&Value::Null), args.get(1).unwrap_or(&Value::Null)) {
+        let a = a_rc.read().unwrap_or_else(|e| e.into_inner());
+        let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
         
         check_shapes!(a.len(), b.len(), "mat_sub");
         
@@ -2639,7 +2694,7 @@ fn matmul_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
             _ => {
                 _a_f32_h = extract_f32_array_from_val(&args[0]);
-                gpu_bridge::GpuInput::Data(_a_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_a_f32_h.as_deref().unwrap_or(&[]))
             }
         };
         let b_in = match &args[3] {
@@ -2647,7 +2702,7 @@ fn matmul_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
             _ => {
                 _b_f32_h = extract_f32_array_from_val(&args[3]);
-                gpu_bridge::GpuInput::Data(_b_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_b_f32_h.as_deref().unwrap_or(&[]))
             }
         };
 
@@ -2742,7 +2797,7 @@ fn matmul_bias_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
             _ => {
                 _a_f32_h = extract_f32_array_from_val(&args[0]);
-                gpu_bridge::GpuInput::Data(_a_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_a_f32_h.as_deref().unwrap_or(&[]))
             }
         };
         let b_in = match &args[3] {
@@ -2750,7 +2805,7 @@ fn matmul_bias_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
             _ => {
                 _b_f32_h = extract_f32_array_from_val(&args[3]);
-                gpu_bridge::GpuInput::Data(_b_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_b_f32_h.as_deref().unwrap_or(&[]))
             }
         };
         let bias_in = match &args[6] {
@@ -2758,7 +2813,7 @@ fn matmul_bias_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
             _ => {
                 _bias_f32_h = extract_f32_array_from_val(&args[6]);
-                gpu_bridge::GpuInput::Data(_bias_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_bias_f32_h.as_deref().unwrap_or(&[]))
             }
         };
  
@@ -2805,7 +2860,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static GLOBAL_SEED: AtomicU64 = AtomicU64::new(98765);
 
 fn set_seed_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         let s = match v {
             Value::Int(i) => *i as u64,
             Value::Float(f) => *f as u64,
@@ -2821,7 +2876,7 @@ fn get_seed_native(_vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn exp_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         if let Some(f) = as_f64(v) {
             return Ok(Value::Float(f.exp()));
         }
@@ -2830,7 +2885,7 @@ fn exp_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn sqrt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         if let Some(f) = as_f64(v) {
             return Ok(Value::Float(f.sqrt()));
         }
@@ -2839,7 +2894,7 @@ fn sqrt_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn log_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         if let Some(f) = as_f64(v) {
             return Ok(Value::Float(f.ln()));
         }
@@ -2848,7 +2903,7 @@ fn log_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn abs_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         if let Some(f) = as_f64(v) {
             return Ok(Value::Float(f.abs()));
         }
@@ -2857,7 +2912,7 @@ fn abs_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn full_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(size)) = args.get(0) {
+    if let Some(Value::Int(size)) = args.first() {
         let n = *size as usize;
         let val = args.get(1).cloned().unwrap_or(Value::Float(0.0));
         let res = if n > 4096 {
@@ -2873,7 +2928,7 @@ fn full_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn random_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Int(size)) = args.get(0) {
+    if let Some(Value::Int(size)) = args.first() {
         let n = *size as usize;
         let seed = GLOBAL_SEED.load(Ordering::Relaxed);
         let res = if n > 4096 {
@@ -2900,7 +2955,7 @@ fn random_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 /// Standard normal random array using Box-Muller transform
 fn randn_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     use std::f64::consts::PI;
-    let n = match args.get(0) {
+    let n = match args.first() {
         Some(Value::Int(i)) => *i as usize,
         Some(Value::Float(f)) => *f as usize,
         _ => return Ok(Value::Null),
@@ -2940,7 +2995,7 @@ fn slice_nd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
     if args.len() < 4 { return Ok(Value::Null); }
 
     let data = match &args[0] {
-        Value::Array(rc) => rc.read().unwrap().clone(),
+        Value::Array(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).clone(),
         _ => return Ok(Value::Null),
     };
     let shape = extract_shape_from_val(&args[1]);
@@ -3007,8 +3062,8 @@ fn slice_nd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 
 
 fn array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(rc)) = args.get(0) {
-        let data = rc.read().unwrap();
+    if let Some(Value::Array(rc)) = args.first() {
+        let data = rc.read().unwrap_or_else(|e| e.into_inner());
         let mut new_data = Vec::with_capacity(data.len());
         for val in data.iter() {
             new_data.push(val.clone());
@@ -3048,7 +3103,7 @@ fn to_gpu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
  
 fn to_cpu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     // args: [tensor]
-    if let Some(val) = args.get(0) {
+    if let Some(val) = args.first() {
         if let Value::Tensor(storage, shape) = val {
             let n = shape.iter().product::<usize>();
             match storage {
@@ -3070,14 +3125,14 @@ fn to_cpu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
             }
         }
     }
-    Ok(args.get(0).cloned().unwrap_or(Value::Null))
+    Ok(args.first().cloned().unwrap_or(Value::Null))
 }
 
 fn zeros_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(val) = args.get(0) {
+    if let Some(val) = args.first() {
         let size = match val {
             Value::Array(a) => {
-                let arr = a.read().unwrap();
+                let arr = a.read().unwrap_or_else(|e| e.into_inner());
                 let mut s = 1i64;
                 for v in arr.iter() {
                     s *= as_i64(v).unwrap_or(1);
@@ -3100,7 +3155,7 @@ fn as_i64(v: &Value) -> Option<i64> {
         Value::Int(i) => Some(*i),
         Value::Float(f) => Some(*f as i64),
         Value::Array(a) => {
-            let arr = a.read().unwrap();
+            let arr = a.read().unwrap_or_else(|e| e.into_inner());
             if arr.len() == 1 { as_i64(&arr[0]) } else { None }
         }
         _ => None,
@@ -3108,7 +3163,7 @@ fn as_i64(v: &Value) -> Option<i64> {
 }
 
 fn relu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         if let Some(f) = as_f64(v) {
             return Ok(Value::Float(f.max(0.0)));
         }
@@ -3118,7 +3173,7 @@ fn relu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 
 fn relu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     // Handle all numeric collection types: Array, FloatArray, DoubleArray, Tensor(Cpu)
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float(x.max(0.0) as f64)).collect()
         } else {
@@ -3131,7 +3186,7 @@ fn relu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 
 
 fn sigmoid_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(v) = args.get(0) {
+    if let Some(v) = args.first() {
         if let Some(f) = as_f64(v) {
             let sig = 1.0 / (1.0 + (-f).exp());
             return Ok(Value::Float(sig));
@@ -3157,14 +3212,14 @@ fn matmul_swiglu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     let b_rc = match &b_storage { TensorStorage::Cpu(rc) => rc, _ => return Ok(Value::Null) };
     let v_rc = match &v_storage { TensorStorage::Cpu(rc) => rc, _ => return Ok(Value::Null) };
     
-    let a = a_rc.read().unwrap();
-    let b = b_rc.read().unwrap();
-    let v = v_rc.read().unwrap();
+    let a = a_rc.read().unwrap_or_else(|e| e.into_inner());
+    let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
+    let v = v_rc.read().unwrap_or_else(|e| e.into_inner());
     
     let bw_rc = match &args[3] { Value::Tensor(TensorStorage::Cpu(rc), _) => rc, _ => return Ok(Value::Null) };
     let bv_rc = match &args[4] { Value::Tensor(TensorStorage::Cpu(rc), _) => rc, _ => return Ok(Value::Null) };
-    let bw = bw_rc.read().unwrap();
-    let bv = bv_rc.read().unwrap();
+    let bw = bw_rc.read().unwrap_or_else(|e| e.into_inner());
+    let bv = bv_rc.read().unwrap_or_else(|e| e.into_inner());
 
     let m = match as_i64(&args[5]) { Some(v) => v as usize, _ => return Ok(Value::Null) };
     let n = match as_i64(&args[6]) { Some(v) => v as usize, _ => return Ok(Value::Null) };
@@ -3192,7 +3247,7 @@ fn matmul_swiglu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 }
 
 fn sigmoid_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float(1.0 / (1.0 + (-x).exp() as f64))).collect()
         } else {
@@ -3218,10 +3273,10 @@ fn adam_step_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     let eps = as_f64(&args[7]).unwrap_or(1e-8);
     let t = as_f64(&args[8]).unwrap_or(1.0);
 
-    let mut p = p_rc.write().unwrap();
-    let g = g_rc.read().unwrap();
-    let mut m = m_rc.write().unwrap();
-    let mut v = v_rc.write().unwrap();
+    let mut p = p_rc.write().unwrap_or_else(|e| e.into_inner());
+    let g = g_rc.read().unwrap_or_else(|e| e.into_inner());
+    let mut m = m_rc.write().unwrap_or_else(|e| e.into_inner());
+    let mut v = v_rc.write().unwrap_or_else(|e| e.into_inner());
 
     let b1_t = 1.0 - b1.powf(t);
     let b2_t = 1.0 - b2.powf(t);
@@ -3256,8 +3311,8 @@ fn cross_entropy_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     let p_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let t_rc = match &args[1] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
 
-    let p = p_rc.read().unwrap();
-    let t = t_rc.read().unwrap();
+    let p = p_rc.read().unwrap_or_else(|e| e.into_inner());
+    let t = t_rc.read().unwrap_or_else(|e| e.into_inner());
 
     let mut loss = 0.0;
     let eps = 1e-15;
@@ -3289,12 +3344,12 @@ fn transpose_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     if args.len() < 2 { return Ok(Value::Null); }
     let data_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let shape = match &args[1] { Value::Array(rc) => {
-        let s = rc.read().unwrap();
+        let s = rc.read().unwrap_or_else(|e| e.into_inner());
         if s.len() < 2 { return Ok(Value::Null); }
         (as_i64(&s[0]).unwrap_or(0) as usize, as_i64(&s[1]).unwrap_or(0) as usize)
     }, _ => return Ok(Value::Null) };
 
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     let (rows, cols) = shape;
     let mut out = vec![Value::Null; data.len()];
     for r in 0..rows {
@@ -3336,28 +3391,28 @@ fn conv2d_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
         let in_in = match &args[0] {
             Value::Tensor(TensorStorage::Gpu(buf), _) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
-            Value::Tensor(TensorStorage::Tiered { .. }, _) => todo!(),
+            Value::Tensor(TensorStorage::Tiered { buffer, .. }, _) => gpu_bridge::GpuInput::Buffer(buffer.clone()),
             _ => {
                 _in_f32_h = extract_f32_array_from_val(&args[0]);
-                gpu_bridge::GpuInput::Data(_in_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_in_f32_h.as_deref().unwrap_or(&[]))
             }
         };
         let w_in = match &args[2] {
             Value::Tensor(TensorStorage::Gpu(buf), _) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
-            Value::Tensor(TensorStorage::Tiered { .. }, _) => todo!(),
+            Value::Tensor(TensorStorage::Tiered { buffer, .. }, _) => gpu_bridge::GpuInput::Buffer(buffer.clone()),
             _ => {
                 _w_f32_h = extract_f32_array_from_val(&args[2]);
-                gpu_bridge::GpuInput::Data(_w_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_w_f32_h.as_deref().unwrap_or(&[]))
             }
         };
         let b_in = match &args[4] {
             Value::Tensor(TensorStorage::Gpu(buf), _) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
-            Value::Tensor(TensorStorage::Tiered { .. }, _) => todo!(),
+            Value::Tensor(TensorStorage::Tiered { buffer, .. }, _) => gpu_bridge::GpuInput::Buffer(buffer.clone()),
             _ => {
                 _b_f32_h = extract_f32_array_from_val(&args[4]);
-                gpu_bridge::GpuInput::Data(_b_f32_h.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+                gpu_bridge::GpuInput::Data(_b_f32_h.as_deref().unwrap_or(&[]))
             }
         };
  
@@ -3416,7 +3471,7 @@ fn maxpool2d_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     if args.len() < 4 { return Ok(Value::Null); }
     let in_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let i_shape = match &args[1] { Value::Array(rc) => {
-        let s = rc.read().unwrap();
+        let s = rc.read().unwrap_or_else(|e| e.into_inner());
         s.iter().map(|v| as_i64(v).unwrap_or(0) as usize).collect::<Vec<_>>()
     }, _ => return Ok(Value::Null) };
     let k_size = as_i64(&args[2]).unwrap_or(2) as usize;
@@ -3427,7 +3482,7 @@ fn maxpool2d_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     let oh = (ih - k_size) / stride + 1;
     let ow = (iw - k_size) / stride + 1;
 
-    let input = in_rc.read().unwrap();
+    let input = in_rc.read().unwrap_or_else(|e| e.into_inner());
     let mut out = vec![Value::Float(0.0); n * c * oh * ow];
 
     for b in 0..n {
@@ -3520,7 +3575,7 @@ fn softmax_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     // GPU dispatch for Tensor or large input
     if let Value::Tensor(storage, shape) = &args[0] {
         let n = shape.iter().product::<usize>();
-        let rows = args.get(1).and_then(|v| as_i64(v)).map(|v| v as usize).unwrap_or(1);
+        let rows = args.get(1).and_then(as_i64).map(|v| v as usize).unwrap_or(1);
         let cols = if rows > 0 { n / rows } else { n };
         let inp = match storage {
             TensorStorage::Gpu(buf) => gpu_bridge::GpuInput::Buffer(buf.clone()),
@@ -3539,7 +3594,7 @@ fn softmax_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let n = f64_data.len();
     if n == 0 { return Ok(Value::Null); }
  
-    let rows = args.get(1).and_then(|v| as_i64(v)).map(|v| v as usize).unwrap_or(1);
+    let rows = args.get(1).and_then(as_i64).map(|v| v as usize).unwrap_or(1);
     let cols = if rows > 0 { n / rows } else { n };
  
     if rows * cols >= 1024 {
@@ -3569,7 +3624,7 @@ fn softmax_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn leaky_relu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let alpha = args.get(1).and_then(as_f64).unwrap_or(0.01) as f32;
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float(if x > 0.0 { x as f64 } else { (x * alpha) as f64 })).collect()
@@ -3582,7 +3637,7 @@ fn leaky_relu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 }
 
 fn elu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let alpha = args.get(1).and_then(as_f64).unwrap_or(1.0) as f32;
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float(if x > 0.0 { x as f64 } else { (alpha * (x.exp() - 1.0)) as f64 })).collect()
@@ -3595,15 +3650,15 @@ fn elu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 }
 
 fn gelu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| {
-                let inner = 0.7978845608 * (x + 0.044715 * x * x * x);
+                let inner = 0.797_884_6 * (x + 0.044715 * x * x * x);
                 Value::Float((0.5 * x * (1.0 + inner.tanh())) as f64)
             }).collect()
         } else {
             data.iter().map(|&x| {
-                let inner = 0.7978845608 * (x + 0.044715 * x * x * x);
+                let inner = 0.797_884_6 * (x + 0.044715 * x * x * x);
                 Value::Float((0.5 * x * (1.0 + inner.tanh())) as f64)
             }).collect()
         };
@@ -3615,7 +3670,7 @@ fn gelu_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 // Helper function to extract shape from a Value::Array
 fn extract_shape_from_val(val: &Value) -> Vec<usize> {
     if let Value::Array(rc) = val {
-        let s = rc.read().unwrap();
+        let s = rc.read().unwrap_or_else(|e| e.into_inner());
         s.iter().filter_map(|v| as_i64(v).map(|x| x as usize)).collect::<Vec<_>>()
     } else {
         vec![]
@@ -3626,12 +3681,12 @@ fn layer_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
     let get_f64_vec = |val: &Value| -> Option<Vec<f64>> {
         match val {
             Value::Array(rc) => {
-                let buf = rc.read().unwrap();
+                let buf = rc.read().unwrap_or_else(|e| e.into_inner());
                 let mut res = Vec::with_capacity(buf.len());
                 for v in buf.iter() { res.push(as_f64(v).unwrap_or(0.0)); }
                 Some(res)
             },
-            Value::DoubleArray(rc) => Some(rc.read().unwrap().clone()),
+            Value::DoubleArray(rc) => Some(rc.read().unwrap_or_else(|e| e.into_inner()).clone()),
             _ => None
         }
     };
@@ -3644,7 +3699,7 @@ fn layer_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
     let eps = args.get(5).and_then(as_f64).unwrap_or(1e-5);
     
     if shape.is_empty() { return Ok(Value::Null); }
-    let last_dim = *shape.last().unwrap();
+    let last_dim = *shape.last().unwrap_or(&1);
     let num_elements = data.len();
     let num_batches = num_elements / last_dim;
     
@@ -3686,7 +3741,7 @@ fn gpu_layer_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             _h0 = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(_h0.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(_h0.as_deref().unwrap_or(&[]))
         }
     };
     
@@ -3695,7 +3750,7 @@ fn gpu_layer_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             _h1 = extract_f32_array_from_val(&args[3]);
-            gpu_bridge::GpuInput::Data(_h1.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(_h1.as_deref().unwrap_or(&[]))
         }
     };
 
@@ -3704,14 +3759,14 @@ fn gpu_layer_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             _h2 = extract_f32_array_from_val(&args[4]);
-            gpu_bridge::GpuInput::Data(_h2.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(_h2.as_deref().unwrap_or(&[]))
         }
     };
 
     let shape = extract_shape_from_val(&args[1]);
     if shape.is_empty() { return Ok(Value::Null); }
     
-    let hidden_dim = *shape.last().unwrap();
+    let hidden_dim = *shape.last().unwrap_or(&1);
     let num_elements = match &args[0] {
         Value::Tensor(_, s) => s.iter().product(),
         _ => get_data_len_from_val(&args[0])
@@ -3738,7 +3793,7 @@ fn flash_attention_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             _h0 = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(_h0.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(_h0.as_deref().unwrap_or(&[]))
         }
     };
     
@@ -3746,7 +3801,7 @@ fn flash_attention_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         Value::Tensor(TensorStorage::Gpu(buf), _) => gpu_bridge::GpuInput::Buffer(buf.clone()),
         _ => {
             _h1 = extract_f32_array_from_val(&args[1]);
-            gpu_bridge::GpuInput::Data(_h1.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(_h1.as_deref().unwrap_or(&[]))
         }
     };
 
@@ -3754,7 +3809,7 @@ fn flash_attention_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         Value::Tensor(TensorStorage::Gpu(buf), _) => gpu_bridge::GpuInput::Buffer(buf.clone()),
         _ => {
             _h2 = extract_f32_array_from_val(&args[2]);
-            gpu_bridge::GpuInput::Data(_h2.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(_h2.as_deref().unwrap_or(&[]))
         }
     };
 
@@ -3773,12 +3828,12 @@ fn flash_attention_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 
 fn get_data_len_from_val(val: &Value) -> usize {
     match val {
-        Value::Array(rc) => rc.read().unwrap().len(),
-        Value::FloatArray(rc) => rc.read().unwrap().len(),
-        Value::DoubleArray(rc) => rc.read().unwrap().len(),
+        Value::Array(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).len(),
+        Value::FloatArray(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).len(),
+        Value::DoubleArray(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).len(),
         Value::Tensor(_, shape) => shape.iter().product(),
         Value::Object(o_rc) => {
-            let o = o_rc.read().unwrap();
+            let o = o_rc.read().unwrap_or_else(|e| e.into_inner());
             if let Some(data) = o.get("data") {
                 get_data_len_from_val(data)
             } else { 0 }
@@ -3796,17 +3851,17 @@ fn adaptive_avg_pool2d_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
 
     if shape.len() != 4 { return Ok(Value::Null); }
     let (n, c, ih, iw) = (shape[0], shape[1], shape[2], shape[3]);
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     
     let mut res = Vec::with_capacity(n * c * out_h * out_w);
     for b in 0..n {
         for ch in 0..c {
             for oh in 0..out_h {
                 let h_start = (oh * ih) / out_h;
-                let h_end = ((oh + 1) * ih + out_h - 1) / out_h;
+                let h_end = ((oh + 1) * ih).div_ceil(out_h);
                 for ow in 0..out_w {
                     let w_start = (ow * iw) / out_w;
-                    let w_end = ((ow + 1) * iw + out_w - 1) / out_w;
+                    let w_end = ((ow + 1) * iw).div_ceil(out_w);
                     
                     let mut sum = 0.0;
                     let mut count = 0;
@@ -3826,7 +3881,7 @@ fn adaptive_avg_pool2d_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
 }
 
 fn hardswish_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| {
                 let relu6 = (x as f64 + 3.0).max(0.0).min(6.0);
@@ -3844,7 +3899,7 @@ fn hardswish_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 fn hardsigmoid_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float((x as f64 + 3.0).max(0.0).min(6.0) / 6.0)).collect()
         } else {
@@ -3856,7 +3911,7 @@ fn hardsigmoid_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Ev
 }
 
 fn mish_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| {
                 let softplus = (1.0 + (x as f64).exp()).ln();
@@ -3874,7 +3929,7 @@ fn mish_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn exp_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float((x as f64).exp())).collect()
         } else {
@@ -4051,7 +4106,7 @@ fn mul_scalar_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn abs_max_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if args.len() < 1 { return Ok(Value::Null); }
+    if args.is_empty() { return Ok(Value::Null); }
     let data = extract_f32_array_from_val(&args[0]).unwrap_or_default();
     let max = data.par_iter().map(|&x| x.abs()).reduce(|| 0.0f32, |a, b| a.max(b));
     Ok(Value::Float(max as f64))
@@ -4160,7 +4215,7 @@ fn batch_norm_2d_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 
     if shape.len() != 4 { return Ok(Value::Null); }
     let (n, c, h, w) = (shape[0], shape[1], shape[2], shape[3]);
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     let mut out = vec![Value::Float(0.0); data.len()];
 
     for j in 0..c {
@@ -4211,7 +4266,7 @@ fn clip_gradients_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
     let grad_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let max_norm = match &args[1] { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 1.0 };
 
-    let mut grad = grad_rc.write().unwrap();
+    let mut grad = grad_rc.write().unwrap_or_else(|e| e.into_inner());
     let sum_sq: f64 = grad.par_iter().map(|v| { let g = as_f64(v).unwrap_or(0.0); g * g }).sum();
     let norm = sum_sq.sqrt();
     if norm > max_norm {
@@ -4226,7 +4281,7 @@ fn clip_gradients_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 
 fn clip_grad_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.len() < 2 { return Ok(Value::Float(0.0)); }
-    let grads_list = match &args[0] { Value::Array(rc) => rc.read().unwrap(), _ => return Ok(Value::Float(0.0)) };
+    let grads_list = match &args[0] { Value::Array(rc) => rc.read().unwrap_or_else(|e| e.into_inner()), _ => return Ok(Value::Float(0.0)) };
     let max_norm = match &args[1] { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 1.0 };
 
     let mut all_grad_rcs = Vec::new();
@@ -4238,7 +4293,7 @@ fn clip_grad_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 
     // 1. Calculate global norm^2
     let total_sum_sq: f64 = all_grad_rcs.par_iter().map(|rc| {
-        let grad = rc.read().unwrap();
+        let grad = rc.read().unwrap_or_else(|e| e.into_inner());
         grad.iter().map(|v| {
             let g = as_f64(v).unwrap_or(0.0);
             g * g
@@ -4251,7 +4306,7 @@ fn clip_grad_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
     if total_norm > max_norm {
         let scale = max_norm / (total_norm + 1e-6);
         all_grad_rcs.par_iter().for_each(|rc| {
-            let mut grad = rc.write().unwrap();
+            let mut grad = rc.write().unwrap_or_else(|e| e.into_inner());
             for v in grad.iter_mut() {
                 let g = as_f64(v).unwrap_or(0.0);
                 *v = Value::Float(g * scale);
@@ -4263,11 +4318,11 @@ fn clip_grad_norm_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn round_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    match args.get(0) {
+    match args.first() {
         Some(Value::Float(f)) => Ok(Value::Float(f.round())),
         Some(Value::Int(i)) => Ok(Value::Int(*i)),
         Some(Value::Array(rc)) => {
-            let arr = rc.read().unwrap();
+            let arr = rc.read().unwrap_or_else(|e| e.into_inner());
             let res: Vec<Value> = arr.iter().map(|v| {
                 match v {
                     Value::Float(f) => Value::Float(f.round()),
@@ -4281,7 +4336,7 @@ fn round_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn set_grad_enabled_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Bool(b)) = args.get(0) {
+    if let Some(Value::Bool(b)) = args.first() {
         vm.record_grad = *b;
     }
     Ok(Value::Null)
@@ -4318,7 +4373,7 @@ fn matmul_bias_relu_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
         }
         _ => {
             a_tmp = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(a_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(a_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let b_in = match &args[3] {
@@ -4332,7 +4387,7 @@ fn matmul_bias_relu_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
         }
         _ => {
             b_tmp = extract_f32_array_from_val(&args[3]);
-            gpu_bridge::GpuInput::Data(b_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(b_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let bias_in = match &args[5] {
@@ -4346,7 +4401,7 @@ fn matmul_bias_relu_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
         }
         _ => {
             bias_tmp = extract_f32_array_from_val(&args[5]);
-            gpu_bridge::GpuInput::Data(bias_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(bias_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let t_prep = t0.elapsed();
@@ -4364,7 +4419,7 @@ fn matmul_bias_relu_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
             println!("[matmul-bias-relu-gpu] {}x{}x{}  prep={:?} gpu={:?} wrap={:?} total={:?}", m, n, k, t_prep, t_gpu_total, t_wrap, total);
         }
 
-        return Ok(res);
+        Ok(res)
     } else {
         // Fallback to CPU
         println!("[matmul-bias-relu-fallback] GPU failed or OOM. Falling back to CPU...");
@@ -4372,7 +4427,7 @@ fn matmul_bias_relu_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, 
         let b_data = extract_f32_array_from_val(&args[3]).unwrap_or_default();
         let bias_data = extract_f32_array_from_val(&args[5]).unwrap_or_default();
         let out_data = cpu_matmul_bias_relu(&a_data, &b_data, &bias_data, m, n, k);
-        return Ok(Value::Tensor(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(out_data))), vec![m, n]));
+        Ok(Value::Tensor(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(out_data))), vec![m, n]))
     }
 }
 
@@ -4395,7 +4450,7 @@ fn matmul_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             a_tmp = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(a_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(a_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let b_in = match &args[3] {
@@ -4403,7 +4458,7 @@ fn matmul_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             b_tmp = extract_f32_array_from_val(&args[3]);
-            gpu_bridge::GpuInput::Data(b_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(b_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let t_prep = t0.elapsed();
@@ -4418,20 +4473,20 @@ fn matmul_gpu_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
         
         let total = start_total.elapsed();
         if m * k >= 1024 * 1024 {
-            println!("[matmul-gpu-timing] Size: {}x{}x{}", m, n, k);
-            println!("  - Prep (Extract/f32): {:?}", t_prep);
-            println!("  - GPU (Buf/Pipe/Exec): {:?}", t_gpu_total);
-            println!("  - Wrap:                {:?}", t_wrap);
-            println!("  - Total Latency:       {:?}", total);
+            log::debug!("[matmul-gpu-timing] Size: {}x{}x{}", m, n, k);
+            log::debug!("  - Prep (Extract/f32): {:?}", t_prep);
+            log::debug!("  - GPU (Buf/Pipe/Exec): {:?}", t_gpu_total);
+            log::debug!("  - Wrap:                {:?}", t_wrap);
+            log::debug!("  - Total Latency:       {:?}", total);
         }
-        return Ok(res);
+        Ok(res)
     } else {
         // Fallback to CPU
-        println!("[matmul-fallback] GPU failed or OOM. Falling back to CPU...");
+        log::error!("[matmul-fallback] GPU failed or OOM. Falling back to CPU...");
         let a_data = extract_f32_array_from_val(&args[0]).unwrap_or_default();
         let b_data = extract_f32_array_from_val(&args[3]).unwrap_or_default();
         let out_data = cpu_matmul(&a_data, &b_data, m, n, k);
-        return Ok(Value::Tensor(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(out_data))), vec![m, n]));
+        Ok(Value::Tensor(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(out_data))), vec![m, n]))
     }
 }
 
@@ -4463,7 +4518,7 @@ fn gpu_elementwise_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             a_tmp = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(a_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(a_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let b_in = match &args[1] {
@@ -4471,7 +4526,7 @@ fn gpu_elementwise_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             b_tmp = extract_f32_array_from_val(&args[1]);
-            gpu_bridge::GpuInput::Data(b_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(b_tmp.as_deref().unwrap_or(&[]))
         }
     };
 
@@ -4483,7 +4538,7 @@ fn gpu_elementwise_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
     };
 
     if let Some(res_buf) = gpu_bridge::gpu_elementwise(&a_in, &b_in, op, len) {
-        return Ok(Value::Tensor(TensorStorage::Gpu(res_buf), vec![len]));
+        Ok(Value::Tensor(TensorStorage::Gpu(res_buf), vec![len]))
     } else {
         // CPU Fallback
         let a_data = extract_f32_array_from_val(&args[0]).unwrap_or_default();
@@ -4500,7 +4555,7 @@ fn gpu_elementwise_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
                 _ => 0.0,
             };
         }
-        return Ok(Value::Tensor(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(out))), vec![len]));
+        Ok(Value::Tensor(TensorStorage::Cpu(std::sync::Arc::new(std::sync::RwLock::new(out))), vec![len]))
     }
 }
 
@@ -4516,7 +4571,7 @@ fn gpu_fma_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             a_tmp = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(a_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(a_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let b_in = match &args[1] {
@@ -4524,7 +4579,7 @@ fn gpu_fma_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             b_tmp = extract_f32_array_from_val(&args[1]);
-            gpu_bridge::GpuInput::Data(b_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(b_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let c_in = match &args[2] {
@@ -4532,7 +4587,7 @@ fn gpu_fma_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             c_tmp = extract_f32_array_from_val(&args[2]);
-            gpu_bridge::GpuInput::Data(c_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(c_tmp.as_deref().unwrap_or(&[]))
         }
     };
 
@@ -4563,21 +4618,26 @@ fn extract_f64_array_from_val(v: &Value) -> Option<Vec<f64>> {
                     None
                 }
                 TensorStorage::Cpu(data) => {
-                    return Some(data.read().unwrap().par_iter().map(|&x| x as f64).collect());
+                    return Some(data.read().unwrap_or_else(|e| e.into_inner()).par_iter().map(|&x| x as f64).collect());
                 }
-                TensorStorage::Tiered { .. } => todo!(),
+                TensorStorage::Tiered { buffer, .. } => {
+                    if let Some(f32_data) = gpu_bridge::download_from_gpu(buffer, n) {
+                        return Some(f32_data.into_iter().map(|x| x as f64).collect());
+                    }
+                    None
+                }
             }
         }
-        Value::DoubleArray(rc) => Some(rc.read().unwrap().clone()),
-        Value::FloatArray(rc) => Some(rc.read().unwrap().par_iter().map(|&x| x as f64).collect()),
+        Value::DoubleArray(rc) => Some(rc.read().unwrap_or_else(|e| e.into_inner()).clone()),
+        Value::FloatArray(rc) => Some(rc.read().unwrap_or_else(|e| e.into_inner()).par_iter().map(|&x| x as f64).collect()),
         Value::Array(rc) => {
-            let buf = rc.read().unwrap();
+            let buf = rc.read().unwrap_or_else(|e| e.into_inner());
             if buf.len() > 2048 {
-                return Some(buf.par_iter().map(|v| as_f64(v).unwrap_or(0.0)).collect());
+                Some(buf.par_iter().map(|v| as_f64(v).unwrap_or(0.0)).collect())
             } else {
                 let mut res = Vec::with_capacity(buf.len());
                 for v in buf.iter() { res.push(as_f64(v).unwrap_or(0.0)); }
-                return Some(res);
+                Some(res)
             }
         }
         _ => None
@@ -4590,20 +4650,20 @@ fn extract_f32_array_from_val(v: &Value) -> Option<Vec<f32>> {
             let n = shape.iter().product::<usize>();
             match storage {
                 TensorStorage::Gpu(buf) => gpu_bridge::download_from_gpu(buf, n),
-                TensorStorage::Cpu(data) => Some(data.read().unwrap().clone()),
-                TensorStorage::Tiered { .. } => todo!(),
+                TensorStorage::Cpu(data) => Some(data.read().unwrap_or_else(|e| e.into_inner()).clone()),
+                TensorStorage::Tiered { buffer, .. } => gpu_bridge::download_from_gpu(buffer, n),
             }
         }
-        Value::FloatArray(rc) => Some(rc.read().unwrap().clone()),
-        Value::DoubleArray(rc) => Some(rc.read().unwrap().par_iter().map(|&x| x as f32).collect()),
+        Value::FloatArray(rc) => Some(rc.read().unwrap_or_else(|e| e.into_inner()).clone()),
+        Value::DoubleArray(rc) => Some(rc.read().unwrap_or_else(|e| e.into_inner()).par_iter().map(|&x| x as f32).collect()),
         Value::Array(rc) => {
-            let buf = rc.read().unwrap();
+            let buf = rc.read().unwrap_or_else(|e| e.into_inner());
             if buf.len() > 2048 {
-                return Some(buf.par_iter().map(|v| as_f64(v).unwrap_or(0.0) as f32).collect());
+                Some(buf.par_iter().map(|v| as_f64(v).unwrap_or(0.0) as f32).collect())
             } else {
                 let mut res = Vec::with_capacity(buf.len());
                 for v in buf.iter() { res.push(as_f64(v).unwrap_or(0.0) as f32); }
-                return Some(res);
+                Some(res)
             }
         }
         _ => None
@@ -4619,8 +4679,8 @@ fn matmul_bias_relu_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     let b_shape_rc = match &args[3] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let bias_data = extract_f64_array_from_val(&args[4]).unwrap_or_default();
 
-    let a_s = a_shape_rc.read().unwrap();
-    let b_s = b_shape_rc.read().unwrap();
+    let a_s = a_shape_rc.read().unwrap_or_else(|e| e.into_inner());
+    let b_s = b_shape_rc.read().unwrap_or_else(|e| e.into_inner());
     if a_s.len() < 2 || b_s.len() < 2 {
         return Err(EvalError::new(format!("Shape mismatch in matmul_bias_relu: expected 2D tensors, got {}D and {}D", a_s.len(), b_s.len())));
     }
@@ -4668,7 +4728,7 @@ fn dropout_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let p = match &args[1] { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.5 };
     let training = match args.get(2) { Some(Value::Bool(b)) => *b, _ => true };
 
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     if !training || p <= 0.0 {
         let mut res = HashMap::new();
         res.insert("data".to_string(), Value::Array(data_rc.clone()));
@@ -4704,11 +4764,11 @@ fn build_topo(node: &Value, topo: &mut Vec<Value>, visited: &mut std::collection
         let ptr = std::sync::Arc::as_ptr(obj_rc) as usize;
         if !visited.contains(&ptr) {
             visited.insert(ptr);
-            let obj = obj_rc.read().unwrap();
+            let obj = obj_rc.read().unwrap_or_else(|e| e.into_inner());
             if let Some(Value::Object(ctx_rc)) = obj.get("_ctx") {
-                let ctx = ctx_rc.read().unwrap();
+                let ctx = ctx_rc.read().unwrap_or_else(|e| e.into_inner());
                 if let Some(Value::Array(parents_rc)) = ctx.get("parents") {
-                    let parents = parents_rc.read().unwrap();
+                    let parents = parents_rc.read().unwrap_or_else(|e| e.into_inner());
                     for parent in parents.iter() {
                         build_topo(parent, topo, visited);
                     }
@@ -4725,11 +4785,11 @@ fn grad_to_vec(g: Value) -> Option<std::sync::Arc<std::sync::RwLock<Vec<Value>>>
 }
 
 fn assure_grad(obj_rc: &std::sync::Arc<std::sync::RwLock<HashMap<String, Value>>>, size: usize) -> Value {
-    let mut obj = obj_rc.write().unwrap();
+    let mut obj = obj_rc.write().unwrap_or_else(|e| e.into_inner());
     if let Some(g) = obj.get("grad") {
         let current_size = match g {
-            Value::Array(rc) => rc.read().unwrap().len(),
-            Value::DoubleArray(rc) => rc.read().unwrap().len(),
+            Value::Array(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).len(),
+            Value::DoubleArray(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).len(),
             Value::Tensor(_, shape) => shape.iter().product(),
             _ => 0,
         };
@@ -4741,7 +4801,7 @@ fn assure_grad(obj_rc: &std::sync::Arc<std::sync::RwLock<HashMap<String, Value>>
     // If data is on GPU, initialize grad on GPU
     if let Some(Value::Tensor(TensorStorage::Gpu(_), shape)) = obj.get("data") {
         if let Some((device, _)) = gpu_bridge::ensure_gpu() {
-            let buf = gpu_bridge::acquire_storage_buffer(device, (size * 4) as u64, "Grad GPU").unwrap();
+            let buf = gpu_bridge::acquire_storage_buffer(device, (size * 4) as u64, "Grad GPU").unwrap_or_default();
             gpu_bridge::gpu_clear_buffer(&buf, size);
             let g = Value::Tensor(TensorStorage::Gpu(std::sync::Arc::new(buf)), shape.clone());
             obj.insert("grad".to_string(), g.clone());
@@ -4759,7 +4819,7 @@ fn assure_grad(obj_rc: &std::sync::Arc<std::sync::RwLock<HashMap<String, Value>>
 
 fn extract_shape(obj: &HashMap<String, Value>) -> Option<Vec<usize>> {
     if let Some(Value::Array(rc)) = obj.get("shape") {
-        let buf = rc.read().unwrap();
+        let buf = rc.read().unwrap_or_else(|e| e.into_inner());
         let mut res = Vec::with_capacity(buf.len());
         for v in buf.iter() {
             if let Some(i) = as_i64(v) { res.push(i as usize); }
@@ -4771,15 +4831,15 @@ fn extract_shape(obj: &HashMap<String, Value>) -> Option<Vec<usize>> {
 
 fn extract_f64_array(obj: &HashMap<String, Value>, key: &str) -> Option<Vec<f64>> {
     if let Some(Value::Array(rc)) = obj.get(key) {
-        let buf = rc.read().unwrap();
+        let buf = rc.read().unwrap_or_else(|e| e.into_inner());
         let mut res = Vec::with_capacity(buf.len());
         for v in buf.iter() { res.push(as_f64(v).unwrap_or(0.0)); }
         return Some(res);
     } else if let Some(Value::DoubleArray(rc)) = obj.get(key) {
-        return Some(rc.read().unwrap().clone());
+        return Some(rc.read().unwrap_or_else(|e| e.into_inner()).clone());
     } else if let Some(Value::Tensor(storage, _)) = obj.get(key) {
         match storage {
-            TensorStorage::Cpu(data) => return Some(data.read().unwrap().iter().map(|&x| x as f64).collect()),
+            TensorStorage::Cpu(data) => return Some(data.read().unwrap_or_else(|e| e.into_inner()).iter().map(|&x| x as f64).collect()),
             TensorStorage::Gpu(buf) => {
                 // Warning: Synchronous GPU read in autograd! 
                 // In production, we should avoid this by keeping gradients on GPU.
@@ -4788,7 +4848,12 @@ fn extract_f64_array(obj: &HashMap<String, Value>, key: &str) -> Option<Vec<f64>
                      return Some(data.iter().map(|&x| x as f64).collect());
                 }
             }
-            TensorStorage::Tiered { .. } => todo!(),
+            TensorStorage::Tiered { buffer, .. } => {
+                let mut data = vec![0.0f32; get_data_len(obj)];
+                if gpu_bridge::gpu_read_buffer(buffer, &mut data) {
+                     return Some(data.iter().map(|&x| x as f64).collect());
+                }
+            }
         }
     }
     None
@@ -4796,9 +4861,9 @@ fn extract_f64_array(obj: &HashMap<String, Value>, key: &str) -> Option<Vec<f64>
 
 fn get_data_len(obj: &HashMap<String, Value>) -> usize {
     if let Some(Value::Array(d)) = obj.get("data") {
-        return d.read().unwrap().len();
+        return d.read().unwrap_or_else(|e| e.into_inner()).len();
     } else if let Some(Value::DoubleArray(d)) = obj.get("data") {
-        return d.read().unwrap().len();
+        return d.read().unwrap_or_else(|e| e.into_inner()).len();
     } else if let Some(Value::Tensor(_, shape)) = obj.get("data") {
         return shape.iter().product();
     }
@@ -4831,7 +4896,7 @@ fn gpu_native_backward_dispatch(
         // 1. Check if input is on GPU
         let is_gpu = {
             if let Value::Object(rc) = &parents[0] {
-                let p0 = rc.read().unwrap();
+                let p0 = rc.read().unwrap_or_else(|e| e.into_inner());
                 matches!(p0.get("data"), Some(Value::Tensor(TensorStorage::Gpu(_), _)))
             } else { false }
         };
@@ -4842,25 +4907,25 @@ fn gpu_native_backward_dispatch(
         } else { return false; };
 
         // 2. Extract GPU inputs
-        let in_gpu = match in_rc.read().unwrap().get("data") {
+        let in_gpu = match in_rc.read().unwrap_or_else(|e| e.into_inner()).get("data") {
             Some(Value::Tensor(TensorStorage::Gpu(buf), _)) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             _ => return false,
         };
-        let w_gpu = match w_rc.read().unwrap().get("data") {
+        let w_gpu = match w_rc.read().unwrap_or_else(|e| e.into_inner()).get("data") {
             Some(Value::Tensor(TensorStorage::Gpu(buf), _)) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             _ => return false,
         };
-        let _b_gpu = match b_rc.read().unwrap().get("data") {
+        let _b_gpu = match b_rc.read().unwrap_or_else(|e| e.into_inner()).get("data") {
             Some(Value::Tensor(TensorStorage::Gpu(buf), _)) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             _ => return false,
         };
-        let grad_out_gpu = match node_rc.read().unwrap().get("grad") {
+        let grad_out_gpu = match node_rc.read().unwrap_or_else(|e| e.into_inner()).get("grad") {
             Some(Value::Tensor(TensorStorage::Gpu(buf), _)) => gpu_bridge::GpuInput::Buffer(buf.clone()),
             _ => return false,
         };
 
-        let in_len = get_data_len(&in_rc.read().unwrap());
-        let b_len = get_data_len(&b_rc.read().unwrap());
+        let in_len = get_data_len(&in_rc.read().unwrap_or_else(|e| e.into_inner()));
+        let b_len = get_data_len(&b_rc.read().unwrap_or_else(|e| e.into_inner()));
         let num_batches = in_len / b_len;
         let hidden_dim = b_len;
         if let Some((din, dw, db)) = gpu_bridge::gpu_layer_norm_backward(&in_gpu, &w_gpu, &grad_out_gpu, num_batches, hidden_dim, 1e-5) {
@@ -4890,39 +4955,39 @@ fn gpu_native_backward_dispatch(
         let d = as_i64(_ctx_vals.get("d").unwrap_or(&Value::Int(1))).unwrap_or(1) as usize;
         let _scale = as_f64(_ctx_vals.get("scale").unwrap_or(&Value::Float(1.0))).unwrap_or(1.0) as f32;
 
-        let q_gpu = gpu_bridge::GpuInput::Buffer(match q_rc.read().unwrap().get("data") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
-        let k_gpu = gpu_bridge::GpuInput::Buffer(match k_rc.read().unwrap().get("data") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
-        let v_gpu = gpu_bridge::GpuInput::Buffer(match v_rc.read().unwrap().get("data") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
-        let go_gpu = gpu_bridge::GpuInput::Buffer(match node_rc.read().unwrap().get("grad") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
+        let q_gpu = gpu_bridge::GpuInput::Buffer(match q_rc.read().unwrap_or_else(|e| e.into_inner()).get("data") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
+        let k_gpu = gpu_bridge::GpuInput::Buffer(match k_rc.read().unwrap_or_else(|e| e.into_inner()).get("data") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
+        let v_gpu = gpu_bridge::GpuInput::Buffer(match v_rc.read().unwrap_or_else(|e| e.into_inner()).get("data") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
+        let go_gpu = gpu_bridge::GpuInput::Buffer(match node_rc.read().unwrap_or_else(|e| e.into_inner()).get("grad") { Some(Value::Tensor(TensorStorage::Gpu(b), _)) => b.clone(), _ => return false });
 
         // 1. S = Q @ K^T * scale
-        let kt_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&k_gpu, n, d, b * h).unwrap());
-        let s_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_matmul_batch(&q_gpu, &kt_gpu, n, n, d, b * h).unwrap());
+        let kt_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&k_gpu, n, d, b * h).unwrap_or_default());
+        let s_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_matmul_batch(&q_gpu, &kt_gpu, n, n, d, b * h).unwrap_or_default());
         // (Scaling is omitted for brevity or handled in softmax)
         
         // 2. P = Softmax(S)
-        let p_buf = gpu_bridge::gpu_softmax(&s_gpu, b * h * n, n).unwrap();
+        let p_buf = gpu_bridge::gpu_softmax(&s_gpu, b * h * n, n).unwrap_or_default();
         let p_gpu = gpu_bridge::GpuInput::Buffer(p_buf.clone());
 
         // 3. dV = P^T @ dO  [b*h, n, n]^T @ [b*h, n, d] -> [b*h, n, d]
-        let pt_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&p_gpu, n, n, b * h).unwrap());
-        let dv = gpu_bridge::gpu_matmul_batch(&pt_gpu, &go_gpu, n, d, n, b * h).unwrap();
+        let pt_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&p_gpu, n, n, b * h).unwrap_or_default());
+        let dv = gpu_bridge::gpu_matmul_batch(&pt_gpu, &go_gpu, n, d, n, b * h).unwrap_or_default();
 
         // 4. dP = dO @ V^T  [b*h, n, d] @ [b*h, n, d]^T -> [b*h, n, n]
-        let vt_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&v_gpu, n, d, b * h).unwrap());
-        let dp_buf = gpu_bridge::gpu_matmul_batch(&go_gpu, &vt_gpu, n, n, d, b * h).unwrap();
+        let vt_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&v_gpu, n, d, b * h).unwrap_or_default());
+        let dp_buf = gpu_bridge::gpu_matmul_batch(&go_gpu, &vt_gpu, n, n, d, b * h).unwrap_or_default();
         let dp_gpu = gpu_bridge::GpuInput::Buffer(dp_buf);
 
         // 5. dS = SoftmaxGrad(P, dP) * scale
-        let ds_buf = gpu_bridge::gpu_softmax_backward(&p_gpu, &dp_gpu, b * h * n, n).unwrap();
+        let ds_buf = gpu_bridge::gpu_softmax_backward(&p_gpu, &dp_gpu, b * h * n, n).unwrap_or_default();
         let ds_gpu = gpu_bridge::GpuInput::Buffer(ds_buf);
 
         // 6. dQ = dS @ K (scale included)
-        let dq = gpu_bridge::gpu_matmul_batch(&ds_gpu, &k_gpu, n, d, n, b * h).unwrap();
+        let dq = gpu_bridge::gpu_matmul_batch(&ds_gpu, &k_gpu, n, d, n, b * h).unwrap_or_default();
         
         // 7. dK = dS^T @ Q
-        let dst_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&ds_gpu, n, n, b * h).unwrap());
-        let dk = gpu_bridge::gpu_matmul_batch(&dst_gpu, &q_gpu, n, d, n, b * h).unwrap();
+        let dst_gpu = gpu_bridge::GpuInput::Buffer(gpu_bridge::gpu_transpose(&ds_gpu, n, n, b * h).unwrap_or_default());
+        let dk = gpu_bridge::gpu_matmul_batch(&dst_gpu, &q_gpu, n, d, n, b * h).unwrap_or_default();
 
         // 8. Update gradients
         let q_grad = assure_grad(q_rc, b * h * n * d);
@@ -4951,17 +5016,17 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
     // 2. Initialize root.grad inside the root object
     if let Value::Object(root_rc) = root {
         let (data_len, shape, is_gpu) = {
-            let root_obj = root_rc.read().unwrap();
+            let root_obj = root_rc.read().unwrap_or_else(|e| e.into_inner());
             let len = get_data_len(&root_obj).max(1);
             let shp = extract_shape(&root_obj).unwrap_or(vec![len]);
             let on_gpu = matches!(root_obj.get("data"), Some(Value::Tensor(TensorStorage::Gpu(_), _)));
             (len, shp, on_gpu)
         };
         
-        let mut root_obj = root_rc.write().unwrap();
+        let mut root_obj = root_rc.write().unwrap_or_else(|e| e.into_inner());
         if is_gpu {
             if let Some((device, _)) = gpu_bridge::ensure_gpu() {
-                let buf = gpu_bridge::acquire_storage_buffer(device, (data_len * 4) as u64, "Root Grad GPU").unwrap();
+                let buf = gpu_bridge::acquire_storage_buffer(device, (data_len * 4) as u64, "Root Grad GPU").unwrap_or_default();
                 gpu_bridge::gpu_fill_buffer(&buf, data_len, 1.0); // Default root grad is 1.0
                 root_obj.insert("grad".to_string(), Value::Tensor(TensorStorage::Gpu(std::sync::Arc::new(buf)), shape));
             }
@@ -4978,16 +5043,16 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
     for node in topo.into_iter().rev() {
         if let Value::Object(node_rc) = node {
             let (op, parents, ctx_vals) = {
-                let node_obj = node_rc.read().unwrap();
+                let node_obj = node_rc.read().unwrap_or_else(|e| e.into_inner());
                 let ctx = node_obj.get("_ctx").cloned();
                 let mut op = String::new();
                 let mut parents = Vec::new();
                 let mut ctx_vals = std::collections::HashMap::new();
                 if let Some(Value::Object(ctx_obj)) = ctx {
-                    let ctx_map = ctx_obj.read().unwrap();
+                    let ctx_map = ctx_obj.read().unwrap_or_else(|e| e.into_inner());
                     op = ctx_map.get("op").and_then(|v| if let Value::Str(s) = v { Some(s.clone()) } else { None }).unwrap_or_default();
                     if let Some(Value::Array(p_rc)) = ctx_map.get("parents") {
-                        parents = p_rc.read().unwrap().clone();
+                        parents = p_rc.read().unwrap_or_else(|e| e.into_inner()).clone();
                     }
                     for (k, v) in ctx_map.iter() {
                         if k != "op" && k != "parents" { ctx_vals.insert(k.clone(), v.clone()); }
@@ -5003,19 +5068,19 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 
             // Fallback to existing CPU-based backward logic
             let (grad_option, data_out) = {
-                let node_obj = node_rc.read().unwrap();
+                let node_obj = node_rc.read().unwrap_or_else(|e| e.into_inner());
                 (extract_f64_array(&node_obj, "grad"), extract_f64_array(&node_obj, "data").unwrap_or_default())
             };
 
             if let Some(grad) = grad_option {
-                if op == "relu" && parents.len() >= 1 {
+                if op == "relu" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             if data_out[i] > 0.0 {
                                 let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i];
@@ -5023,27 +5088,27 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             }
                         }
                     }
-                } else if op == "tanh" && parents.len() >= 1 {
+                } else if op == "tanh" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i] * (1.0 - data_out[i] * data_out[i]);
                             p_grad[i] = Value::Float(g);
                         }
                     }
-                } else if op == "sigmoid" && parents.len() >= 1 {
+                } else if op == "sigmoid" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i] * data_out[i] * (1.0 - data_out[i]);
                             p_grad[i] = Value::Float(g);
@@ -5053,8 +5118,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     let preds_rc = match &parents[0] { Value::Object(rc) => rc, _ => continue };
                     let targets_rc = match &parents[1] { Value::Object(rc) => rc, _ => continue };
                     let (p_data, t_data) = {
-                        let preds_obj = preds_rc.read().unwrap();
-                        let targets_obj = targets_rc.read().unwrap();
+                        let preds_obj = preds_rc.read().unwrap_or_else(|e| e.into_inner());
+                        let targets_obj = targets_rc.read().unwrap_or_else(|e| e.into_inner());
                         let p = extract_f64_array(&preds_obj, "data").unwrap_or_default();
                         let t = extract_f64_array(&targets_obj, "data").unwrap_or_default();
                         (p, t)
@@ -5062,8 +5127,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if !p_data.is_empty() && !t_data.is_empty() {
                         let n = p_data.len() as f64;
                         let p_grad_val = assure_grad(preds_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
-                        let root_grad = grad.get(0).copied().unwrap_or(1.0);
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                        let root_grad = grad.first().copied().unwrap_or(1.0);
                         for i in 0..p_data.len() {
                             let pi = p_data[i];
                             let ti = t_data[i];
@@ -5071,14 +5136,14 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             p_grad[i] = Value::Float(g);
                         }
                     }
-                } else if op == "softmax" && parents.len() >= 1 {
+                } else if op == "softmax" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         // dL/dx_j = p_j * (dL/dp_j - sum_i(dL/dp_i * p_i))
                         let mut dot_p_grad = 0.0;
                         for i in 0..grad.len() {
@@ -5089,14 +5154,14 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             p_grad[j] = Value::Float(g);
                         }
                     }
-                } else if op == "log_softmax" && parents.len() >= 1 {
+                } else if op == "log_softmax" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         let mut sum_grad = 0.0;
                         for i in 0..grad.len() {
                             sum_grad += grad[i];
@@ -5109,12 +5174,12 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                 } else if op == "layer_norm" && parents.len() >= 3 {
                     if let (Value::Object(in_rc), Value::Object(w_rc), Value::Object(b_rc)) = (&parents[0], &parents[1], &parents[2]) {
                         let in_len = {
-                            let p_obj = in_rc.read().unwrap();
+                            let p_obj = in_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let b_len = {
-                            let b_obj = b_rc.read().unwrap();
-                            if let Some(Value::Array(d)) = b_obj.get("data") { d.read().unwrap().len() } else { 0 }
+                            let b_obj = b_rc.read().unwrap_or_else(|e| e.into_inner());
+                            if let Some(Value::Array(d)) = b_obj.get("data") { d.read().unwrap_or_else(|e| e.into_inner()).len() } else { 0 }
                         };
                         
                         let size = b_len;
@@ -5123,12 +5188,12 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             let w_grad_val = assure_grad(w_rc, size);
                             let b_grad_val = assure_grad(b_rc, size);
                             
-                            let mut in_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut in_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             
-                            let w_data = extract_f64_array(&w_rc.read().unwrap(), "data").unwrap_or_default();
-                            let b_data = extract_f64_array(&b_rc.read().unwrap(), "data").unwrap_or_default();
+                            let w_data = extract_f64_array(&w_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
+                            let b_data = extract_f64_array(&b_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
                             
                             for j in 0..size {
                                 let mut d_b = 0.0;
@@ -5150,27 +5215,27 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             }
                         }
                     }
-                } else if op == "exp" && parents.len() >= 1 {
+                } else if op == "exp" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i] * data_out.get(i).copied().unwrap_or(0.0);
                             p_grad[i] = Value::Float(g);
                         }
                     }
-                } else if op == "log" && parents.len() >= 1 {
+                } else if op == "log" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let (in_data_len, in_data) = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             (get_data_len(&p_obj), extract_f64_array(&p_obj, "data").unwrap_or_default())
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             if i < in_data.len() {
                                 let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i] / in_data[i].max(1e-10);
@@ -5178,10 +5243,10 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             }
                         }
                     }
-                } else if op == "slice" && parents.len() >= 1 {
+                } else if op == "slice" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let (in_data_len, in_shape) = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             (get_data_len(&p_obj), extract_shape(&p_obj).unwrap_or(vec![get_data_len(&p_obj)]))
                         };
                         
@@ -5190,7 +5255,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                         let end = as_i64(ctx_vals.get("end").unwrap_or(&Value::Int(0))).unwrap_or(0) as usize;
                         
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         
                         let ndim = in_shape.len();
                         let mut strides = vec![1usize; ndim];
@@ -5217,27 +5282,27 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             }
                         }
                     }
-                } else if op == "sum" && parents.len() >= 1 {
+                } else if op == "sum" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..in_data_len {
                             let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[0];
                             p_grad[i] = Value::Float(g);
                         }
                     }
-                } else if op == "mean" && parents.len() >= 1 {
+                } else if op == "mean" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let in_data_len = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             get_data_len(&p_obj)
                         };
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         let n = in_data_len as f64;
                         for i in 0..in_data_len {
                             let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[0] / n;
@@ -5249,8 +5314,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     // parents[0]=X, [1]=W, [2]=B
                     if let (Value::Object(x_rc), Value::Object(w_rc), Value::Object(b_rc)) = (&parents[0], &parents[1], &parents[2]) {
                         let (x_data, w_data, x_shape, w_shape) = {
-                            let x_obj = x_rc.read().unwrap();
-                            let w_obj = w_rc.read().unwrap();
+                            let x_obj = x_rc.read().unwrap_or_else(|e| e.into_inner());
+                            let w_obj = w_rc.read().unwrap_or_else(|e| e.into_inner());
                             (
                                 extract_f64_array(&x_obj, "data").unwrap_or_default(),
                                 extract_f64_array(&w_obj, "data").unwrap_or_default(),
@@ -5273,7 +5338,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 
                             // 1. dL/dX = dL/dY @ W^T  [m,n] @ [n,k] = [m,k]
                             let x_grad_val = assure_grad(x_rc, x_data.len());
-                            let mut x_grad = if let Value::Array(rc) = &x_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut x_grad = if let Value::Array(rc) = &x_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for i in 0..m {
                                 for l in 0..k {
                                     let mut sum = 0.0;
@@ -5287,7 +5352,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             
                             // 2. dL/dW = X^T @ dL/dY  [k,m] @ [m,n] = [k,n]
                             let w_grad_val = assure_grad(w_rc, w_data.len());
-                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for l in 0..k {
                                 for j in 0..n {
                                     let mut sum = 0.0;
@@ -5301,7 +5366,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             
                             // 3. dL/dB = sum(dL/dY, axis=0) [n]
                             let b_grad_val = assure_grad(b_rc, n);
-                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for j in 0..n {
                                 let mut sum = 0.0;
                                 for i in 0..m {
@@ -5315,16 +5380,16 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if let (Value::Object(in_rc), Value::Object(w_rc), Value::Object(b_rc)) = (&parents[0], &parents[1], &parents[2]) {
                         // Simplified BatchNorm backward for this phase
                         // dA = dL/dY * weight, dW = sum(dL/dY * normalized), dB = sum(dL/dY)
-                        let shape = ctx_vals.get("shape").map(|v| extract_shape_from_val(v)).unwrap_or_default();
+                        let shape = ctx_vals.get("shape").map(extract_shape_from_val).unwrap_or_default();
                         if shape.len() == 4 {
                             let (n, c, h, w) = (shape[0], shape[1], shape[2], shape[3]);
                             let in_grad_val = assure_grad(in_rc, n*c*h*w);
                             let w_grad_val = assure_grad(w_rc, c);
                             let b_grad_val = assure_grad(b_rc, c);
                             
-                            let mut in_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut in_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             
                             let weights = extract_f64_array_from_val(&Value::Object(w_rc.clone())).unwrap_or_default();
                             
@@ -5345,8 +5410,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     }
                 } else if (op == "add" || op == "sub" || op == "mul" || op == "div") && parents.len() >= 2 {
                     if let (Value::Object(a_rc), Value::Object(b_rc)) = (&parents[0], &parents[1]) {
-                        let a_shape = extract_shape(&a_rc.read().unwrap()).unwrap_or_default();
-                        let b_shape = extract_shape(&b_rc.read().unwrap()).unwrap_or_default();
+                        let a_shape = extract_shape(&a_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_default();
+                        let b_shape = extract_shape(&b_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_default();
                         let out_shape = get_broadcast_shape(&a_shape, &b_shape).unwrap_or_default();
                         
                         if !out_shape.is_empty() {
@@ -5354,15 +5419,15 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             let b_grad_val = assure_grad(b_rc, b_shape.iter().product());
                             
                             let (a_data, b_data) = {
-                                let a_obj = a_rc.read().unwrap();
-                                let b_obj = b_rc.read().unwrap();
+                                let a_obj = a_rc.read().unwrap_or_else(|e| e.into_inner());
+                                let b_obj = b_rc.read().unwrap_or_else(|e| e.into_inner());
                                 (extract_f64_array(&a_obj, "data").unwrap_or_default(), 
                                  extract_f64_array(&b_obj, "data").unwrap_or_default())
                             };
 
                             if let (Value::Array(rc_a), Value::Array(rc_b)) = (&a_grad_val, &b_grad_val) {
                                 if std::sync::Arc::ptr_eq(rc_a, rc_b) {
-                                    let mut g = rc_a.write().unwrap();
+                                    let mut g = rc_a.write().unwrap_or_else(|e| e.into_inner());
                                     for i in 0..grad.len() {
                                         let idx_a = get_broadcast_index(i, &a_shape, &out_shape);
                                         let idx_b = get_broadcast_index(i, &b_shape, &out_shape);
@@ -5390,8 +5455,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                                         }
                                     }
                                 } else {
-                                    let mut a_grad = rc_a.write().unwrap();
-                                    let mut b_grad = rc_b.write().unwrap();
+                                    let mut a_grad = rc_a.write().unwrap_or_else(|e| e.into_inner());
+                                    let mut b_grad = rc_b.write().unwrap_or_else(|e| e.into_inner());
                                     for i in 0..grad.len() {
                                         let idx_a = get_broadcast_index(i, &a_shape, &out_shape);
                                         let idx_b = get_broadcast_index(i, &b_shape, &out_shape);
@@ -5415,10 +5480,10 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                 } else if (op == "matmul" || op == "matmul_bias" || op == "matmul_bias_relu") && parents.len() >= 2 {
                     let a_rc = match &parents[0] { Value::Object(rc) => rc, _ => continue };
                     let b_rc = match &parents[1] { Value::Object(rc) => rc, _ => continue };
-                    let a_data = extract_f64_array(&a_rc.read().unwrap(), "data").unwrap_or_default();
-                    let b_data = extract_f64_array(&b_rc.read().unwrap(), "data").unwrap_or_default();
-                    let a_shape = extract_shape(&a_rc.read().unwrap()).unwrap_or(vec![1, a_data.len()]);
-                    let b_shape = extract_shape(&b_rc.read().unwrap()).unwrap_or(vec![b_data.len(), 1]);
+                    let a_data = extract_f64_array(&a_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
+                    let b_data = extract_f64_array(&b_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
+                    let a_shape = extract_shape(&a_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or(vec![1, a_data.len()]);
+                    let b_shape = extract_shape(&b_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or(vec![b_data.len(), 1]);
                     let m = a_shape[0];
                     let k = a_shape[1];
                     let n = b_shape[1];
@@ -5434,7 +5499,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 
                     if let (Value::Array(rc_a), Value::Array(rc_b)) = (&a_grad_val, &b_grad_val) {
                         if std::sync::Arc::ptr_eq(rc_a, rc_b) {
-                            let mut g = rc_a.write().unwrap();
+                            let mut g = rc_a.write().unwrap_or_else(|e| e.into_inner());
                             for i in 0..m {
                                 for j in 0..k {
                                     let mut sum = 0.0;
@@ -5454,8 +5519,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                                 }
                             }
                         } else {
-                            let mut a_grad = rc_a.write().unwrap();
-                            let mut b_grad = rc_b.write().unwrap();
+                            let mut a_grad = rc_a.write().unwrap_or_else(|e| e.into_inner());
+                            let mut b_grad = rc_b.write().unwrap_or_else(|e| e.into_inner());
                             for i in 0..m {
                                 for j in 0..k {
                                     let mut sum = 0.0;
@@ -5479,11 +5544,11 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if (op == "matmul_bias" || op == "matmul_bias_relu") && parents.len() >= 3 {
                         if let Value::Object(bias_rc) = &parents[2] {
                             let b_data_len = {
-                                let b_obj = bias_rc.read().unwrap();
-                                if let Some(Value::Array(d)) = b_obj.get("data") { d.read().unwrap().len() } else { 0 }
+                                let b_obj = bias_rc.read().unwrap_or_else(|e| e.into_inner());
+                                if let Some(Value::Array(d)) = b_obj.get("data") { d.read().unwrap_or_else(|e| e.into_inner()).len() } else { 0 }
                             };
                             let bias_grad_val = assure_grad(bias_rc, b_data_len);
-                            let mut bias_grad = if let Value::Array(rc) = &bias_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut bias_grad = if let Value::Array(rc) = &bias_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for j in 0..n {
                                 let mut sum = 0.0;
                                 for i in 0..m {
@@ -5498,8 +5563,8 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     let p_rc = match &parents[0] { Value::Object(rc) => rc, _ => continue };
                     let t_rc = match &parents[1] { Value::Object(rc) => rc, _ => continue };
                     let (p_data, t_data) = {
-                        let p_obj = p_rc.read().unwrap();
-                        let t_obj = t_rc.read().unwrap();
+                        let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
+                        let t_obj = t_rc.read().unwrap_or_else(|e| e.into_inner());
                         let p = extract_f64_array(&p_obj, "data").unwrap_or_default();
                         let t = extract_f64_array(&t_obj, "data").unwrap_or_default();
                         (p, t)
@@ -5507,9 +5572,9 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if !p_data.is_empty() {
                         let in_data_len = p_data.len();
                         let p_grad_val = assure_grad(p_rc, in_data_len);
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         let n_f = in_data_len as f64;
-                        let root_grad = grad.get(0).copied().unwrap_or(1.0);
+                        let root_grad = grad.first().copied().unwrap_or(1.0);
                         for i in 0..in_data_len {
                             let p = p_data[i].clamp(1e-15, 1.0 - 1e-15);
                             let y = if i < t_data.len() { t_data[i] } else { 0.0 };
@@ -5520,9 +5585,9 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     }
                 } else if op == "transpose" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
-                        let p_shape = extract_shape(&p_rc.read().unwrap()).unwrap_or_default();
+                        let p_shape = extract_shape(&p_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_default();
                         let p_grad_val = assure_grad(p_rc, grad.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         if p_shape.len() == 2 {
                             let (rows, cols) = (p_shape[0], p_shape[1]);
                             for r in 0..rows {
@@ -5537,10 +5602,10 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if let (Value::Object(in_rc), Value::Object(w_rc), Value::Object(b_rc)) = (&parents[0], &parents[1], &parents[2]) {
                         let stride = ctx_vals.get("stride").and_then(as_i64).unwrap_or(1) as usize;
                         let padding = ctx_vals.get("padding").and_then(as_i64).unwrap_or(0) as usize;
-                        let i_shape = extract_shape(&in_rc.read().unwrap()).unwrap_or_default();
-                        let w_shape = extract_shape(&w_rc.read().unwrap()).unwrap_or_default();
-                        let i_data = extract_f64_array(&in_rc.read().unwrap(), "data").unwrap_or_default();
-                        let w_data = extract_f64_array(&w_rc.read().unwrap(), "data").unwrap_or_default();
+                        let i_shape = extract_shape(&in_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_default();
+                        let w_shape = extract_shape(&w_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_default();
+                        let i_data = extract_f64_array(&in_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
+                        let w_data = extract_f64_array(&w_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
                         if i_shape.len() == 4 && w_shape.len() == 4 {
                             let (n, ic, ih, iw) = (i_shape[0], i_shape[1], i_shape[2], i_shape[3]);
                             let (oc, _, kh, kw) = (w_shape[0], w_shape[1], w_shape[2], w_shape[3]);
@@ -5549,9 +5614,9 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             let w_grad_val = assure_grad(w_rc, w_data.len());
                             let b_grad_val = assure_grad(b_rc, oc);
                             
-                            let mut in_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut in_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut w_grad = if let Value::Array(rc) = &w_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut b_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for b_idx in 0..n {
                                 for co in 0..oc {
                                     for i in 0..oh {
@@ -5582,13 +5647,13 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if let Value::Object(p_rc) = &parents[0] {
                         let k_size = ctx_vals.get("k_size").and_then(as_i64).unwrap_or(2) as usize;
                         let stride = ctx_vals.get("stride").and_then(as_i64).unwrap_or(2) as usize;
-                        let i_shape = extract_shape(&p_rc.read().unwrap()).unwrap_or_default();
-                        let i_data = extract_f64_array(&p_rc.read().unwrap(), "data").unwrap_or_default();
+                        let i_shape = extract_shape(&p_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_default();
+                        let i_data = extract_f64_array(&p_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
                         if i_shape.len() == 4 {
                             let (n, c, ih, iw) = (i_shape[0], i_shape[1], i_shape[2], i_shape[3]);
                             let (oh, ow) = ((ih - k_size) / stride + 1, (iw - k_size) / stride + 1);
                             let p_grad_val = assure_grad(p_rc, i_data.len());
-                            let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for b_idx in 0..n {
                                 for ch in 0..c {
                                     for i in 0..oh {
@@ -5611,7 +5676,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                 } else if (op == "reshape" || op == "flatten") && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let p_grad_val = assure_grad(p_rc, grad.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let g = as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i];
                             p_grad[i] = Value::Float(g);
@@ -5621,10 +5686,10 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     if let Value::Object(p_rc) = &parents[0] {
                         let mask_opt = ctx_vals.get("mask").cloned();
                         let p_grad_val = assure_grad(p_rc, grad.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         
                         if let Some(Value::Array(mask_rc)) = mask_opt {
-                            let mask = mask_rc.read().unwrap();
+                            let mask = mask_rc.read().unwrap_or_else(|e| e.into_inner());
                             let grad_ref = &grad;
                             p_grad.par_iter_mut().enumerate().for_each(|(i, pg)| {
                                 let m = as_f64(&mask[i]).unwrap_or(0.0);
@@ -5639,42 +5704,42 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             });
                         }
                     }
-                } else if op == "leaky_relu" && parents.len() >= 1 {
+                } else if op == "leaky_relu" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let alpha = ctx_vals.get("alpha").and_then(as_f64).unwrap_or(0.01);
                         let p_data = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             extract_f64_array(&p_obj, "data").unwrap_or_default()
                         };
                         let p_grad_val = assure_grad(p_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let g = if p_data[i] > 0.0 { grad[i] } else { grad[i] * alpha };
                             p_grad[i] = Value::Float(as_f64(&p_grad[i]).unwrap_or(0.0) + g);
                         }
                     }
-                } else if op == "elu" && parents.len() >= 1 {
+                } else if op == "elu" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let alpha = ctx_vals.get("alpha").and_then(as_f64).unwrap_or(1.0);
                         let p_data = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             extract_f64_array(&p_obj, "data").unwrap_or_default()
                         };
                         let p_grad_val = assure_grad(p_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let g = if p_data[i] > 0.0 { grad[i] } else { grad[i] * alpha * p_data[i].exp() };
                             p_grad[i] = Value::Float(as_f64(&p_grad[i]).unwrap_or(0.0) + g);
                         }
                     }
-                } else if op == "gelu" && parents.len() >= 1 {
+                } else if op == "gelu" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let p_data = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             extract_f64_array(&p_obj, "data").unwrap_or_default()
                         };
                         let p_grad_val = assure_grad(p_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let x = p_data[i];
                             // Simplified GELU derivative: 0.5 * (1 + tanh(...)) + 0.5 * x * sech^2(...) * ...
@@ -5686,19 +5751,19 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                     }
                 } else if op == "layer_norm" && parents.len() >= 3 {
                     if let (Value::Object(in_rc), Value::Object(g_rc), Value::Object(b_rc)) = (&parents[0], &parents[1], &parents[2]) {
-                        let i_data = extract_f64_array(&in_rc.read().unwrap(), "data").unwrap_or_default();
-                        let g_data = extract_f64_array(&g_rc.read().unwrap(), "data").unwrap_or_default();
+                        let i_data = extract_f64_array(&in_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
+                        let g_data = extract_f64_array(&g_rc.read().unwrap_or_else(|e| e.into_inner()), "data").unwrap_or_default();
                         let shape = ctx_vals.get("shape").map(extract_shape_from_val).unwrap_or_default();
                         let eps = ctx_vals.get("eps").and_then(as_f64).unwrap_or(1e-5);
                         if !shape.is_empty() {
-                            let d = *shape.last().unwrap();
+                            let d = *shape.last().unwrap_or(&1);
                             let n = i_data.len() / d;
                             let in_grad_val = assure_grad(in_rc, i_data.len());
                             let g_grad_val = assure_grad(g_rc, g_data.len());
                             let b_grad_val = assure_grad(b_rc, g_data.len());
-                            let mut i_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut gg_grad = if let Value::Array(rc) = &g_grad_val { rc.write().unwrap() } else { continue; };
-                            let mut bb_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut i_grad = if let Value::Array(rc) = &in_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut gg_grad = if let Value::Array(rc) = &g_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
+                            let mut bb_grad = if let Value::Array(rc) = &b_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for b_idx in 0..n {
                                 let mut sum = 0.0;
                                 let mut sum_sq = 0.0;
@@ -5741,15 +5806,15 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                         if i_shape.len() == 4 {
                             let (n, c, ih, iw) = (i_shape[0], i_shape[1], i_shape[2], i_shape[3]);
                             let p_grad_val = assure_grad(p_rc, n * c * ih * iw);
-                            let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                            let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                             for b in 0..n {
                                 for ch in 0..c {
                                     for oh in 0..out_h {
                                         let h_start = (oh * ih) / out_h;
-                                        let h_end = ((oh + 1) * ih + out_h - 1) / out_h;
+                                        let h_end = ((oh + 1) * ih).div_ceil(out_h);
                                         for ow in 0..out_w {
                                             let w_start = (ow * iw) / out_w;
-                                            let w_end = ((ow + 1) * iw + out_w - 1) / out_w;
+                                            let w_end = ((ow + 1) * iw).div_ceil(out_w);
                                             let g = grad[b * c * out_h * out_w + ch * out_h * out_w + oh * out_w + ow];
                                             let count = (h_end - h_start) * (w_end - w_start);
                                             for h in h_start..h_end {
@@ -5764,42 +5829,42 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             }
                         }
                     }
-                } else if op == "hardswish" && parents.len() >= 1 {
+                } else if op == "hardswish" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let p_data = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             extract_f64_array(&p_obj, "data").unwrap_or_default()
                         };
                         let p_grad_val = assure_grad(p_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let x = p_data[i];
                             let g = if x < -3.0 { 0.0 } else if x > 3.0 { 1.0 } else { (2.0 * x + 3.0) / 6.0 };
                             p_grad[i] = Value::Float(as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i] * g);
                         }
                     }
-                } else if op == "hardsigmoid" && parents.len() >= 1 {
+                } else if op == "hardsigmoid" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let p_data = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             extract_f64_array(&p_obj, "data").unwrap_or_default()
                         };
                         let p_grad_val = assure_grad(p_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let x = p_data[i];
-                            let g = if x < -3.0 || x > 3.0 { 0.0 } else { 1.0 / 6.0 };
+                            let g = if !(-3.0..=3.0).contains(&x) { 0.0 } else { 1.0 / 6.0 };
                             p_grad[i] = Value::Float(as_f64(&p_grad[i]).unwrap_or(0.0) + grad[i] * g);
                         }
                     }
-                } else if op == "mish" && parents.len() >= 1 {
+                } else if op == "mish" && !parents.is_empty() {
                     if let Value::Object(p_rc) = &parents[0] {
                         let p_data = {
-                            let p_obj = p_rc.read().unwrap();
+                            let p_obj = p_rc.read().unwrap_or_else(|e| e.into_inner());
                             extract_f64_array(&p_obj, "data").unwrap_or_default()
                         };
                         let p_grad_val = assure_grad(p_rc, p_data.len());
-                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap() } else { continue; };
+                        let mut p_grad = if let Value::Array(rc) = &p_grad_val { rc.write().unwrap_or_else(|e| e.into_inner()) } else { continue; };
                         for i in 0..grad.len() {
                             let x = p_data[i];
                             let e_x = x.exp();
@@ -5814,7 +5879,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                            (ctx_vals.get("df"), ctx_vals.get("col_name"), ctx_vals.get("n")) {
                         let n = as_f64(n_val).unwrap_or(1.0);
                         let grad_val = grad[0] / n;
-                        let mut df_obj = df_rc.write().unwrap();
+                        let mut df_obj = df_rc.write().unwrap_or_else(|e| e.into_inner());
                         let grads_rc = if let Some(Value::Object(g_rc)) = df_obj.get("_grads") {
                             g_rc.clone()
                         } else {
@@ -5823,29 +5888,28 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                             g
                         };
                         drop(df_obj);
-                        let mut grads_map = grads_rc.write().unwrap();
+                        let mut grads_map = grads_rc.write().unwrap_or_else(|e| e.into_inner());
                         
                         let mask_opt = ctx_vals.get("mask");
                         
                         let col_grad_rc = if let Some(Value::Array(cg_rc)) = grads_map.get(col_name.as_str()) {
                             cg_rc.clone()
                         } else {
-                            let len = if let Some(Value::Array(m_rc)) = mask_opt { m_rc.read().unwrap().len() } else { n as usize };
+                            let len = if let Some(Value::Array(m_rc)) = mask_opt { m_rc.read().unwrap_or_else(|e| e.into_inner()).len() } else { n as usize };
                             let cg = std::sync::Arc::new(std::sync::RwLock::new(vec![Value::Float(0.0); len]));
                             grads_map.insert(col_name.clone(), Value::Array(cg.clone()));
                             cg
                         };
-                        let mut col_grad = col_grad_rc.write().unwrap();
+                        let mut col_grad = col_grad_rc.write().unwrap_or_else(|e| e.into_inner());
                         
                         if let Some(Value::Array(mask_rc)) = mask_opt {
-                            let mask = mask_rc.read().unwrap();
+                            let mask = mask_rc.read().unwrap_or_else(|e| e.into_inner());
                             for i in 0..mask.len() {
-                                if as_f64(&mask[i]).unwrap_or(0.0) > 0.5 {
-                                    if i < col_grad.len() {
+                                if as_f64(&mask[i]).unwrap_or(0.0) > 0.5
+                                    && i < col_grad.len() {
                                         let g = as_f64(&col_grad[i]).unwrap_or(0.0) + grad_val;
                                         col_grad[i] = Value::Float(g);
                                     }
-                                }
                             }
                         } else {
                             for i in 0..col_grad.len() {
@@ -5857,14 +5921,14 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                 } else if op == "df_to_tensor" {
                     if let (Some(Value::Object(df_rc)), Some(Value::Array(cols_rc))) = 
                            (ctx_vals.get("df"), ctx_vals.get("col_names")) {
-                        let col_names = cols_rc.read().unwrap();
+                        let col_names = cols_rc.read().unwrap_or_else(|e| e.into_inner());
                         let nc = col_names.len();
                         
                         let mask_opt = ctx_vals.get("mask");
                         
                         if nc > 0 {
-                            let nr = if let Some(Value::Array(m_rc)) = mask_opt { m_rc.read().unwrap().len() } else { grad.len() / nc };
-                            let mut df_obj = df_rc.write().unwrap();
+                            let nr = if let Some(Value::Array(m_rc)) = mask_opt { m_rc.read().unwrap_or_else(|e| e.into_inner()).len() } else { grad.len() / nc };
+                            let mut df_obj = df_rc.write().unwrap_or_else(|e| e.into_inner());
                             let grads_rc = if let Some(Value::Object(g_rc)) = df_obj.get("_grads") {
                                 g_rc.clone()
                             } else {
@@ -5873,7 +5937,7 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                                 g
                             };
                             drop(df_obj);
-                            let mut grads_map = grads_rc.write().unwrap();
+                            let mut grads_map = grads_rc.write().unwrap_or_else(|e| e.into_inner());
                             
                             for (c_idx, col_name_val) in col_names.iter().enumerate() {
                                 if let Value::Str(col_name) = col_name_val {
@@ -5884,10 +5948,10 @@ fn backward_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
                                         grads_map.insert(col_name.clone(), Value::Array(cg.clone()));
                                         cg
                                     };
-                                    let mut col_grad = col_grad_rc.write().unwrap();
+                                    let mut col_grad = col_grad_rc.write().unwrap_or_else(|e| e.into_inner());
                                     
                                     if let Some(Value::Array(m_rc)) = mask_opt {
-                                        let mask = m_rc.read().unwrap();
+                                        let mask = m_rc.read().unwrap_or_else(|e| e.into_inner());
                                         let mut filtered_idx = 0;
                                         for r in 0..mask.len() {
                                             if as_f64(&mask[r]).unwrap_or(0.0) > 0.5 {
@@ -5920,7 +5984,7 @@ fn as_f64(v: &Value) -> Option<f64> {
         Value::Float(f) => Some(*f),
         Value::Int(i) => Some(*i as f64),
         Value::Array(a) => {
-            let arr = a.read().unwrap();
+            let arr = a.read().unwrap_or_else(|e| e.into_inner());
             if arr.len() == 1 { as_f64(&arr[0]) } else { None }
         }
         _ => None,
@@ -5928,7 +5992,7 @@ fn as_f64(v: &Value) -> Option<f64> {
 }
 
 fn io_read_file_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(path)) = args.get(0) {
+    if let Some(Value::Str(path)) = args.first() {
         if let Ok(content) = std::fs::read_to_string(path) {
             return Ok(Value::Str(content));
         }
@@ -5937,7 +6001,7 @@ fn io_read_file_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 }
 
 fn io_write_file_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(path)), Some(Value::Str(content))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(path)), Some(Value::Str(content))) = (args.first(), args.get(1)) {
         if std::fs::write(path, content).is_ok() {
             return Ok(Value::Bool(true));
         }
@@ -5946,7 +6010,7 @@ fn io_write_file_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 }
 
 fn json_serialize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(val) = args.get(0) {
+    if let Some(val) = args.first() {
         if let Ok(json) = serde_json::to_string_pretty(val) {
             return Ok(Value::Str(json));
         }
@@ -5955,7 +6019,7 @@ fn json_serialize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 }
 
 fn json_deserialize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(json)) = args.get(0) {
+    if let Some(Value::Str(json)) = args.first() {
         if let Ok(val) = serde_json::from_str::<Value>(json) {
             return Ok(val);
         }
@@ -5964,8 +6028,8 @@ fn json_deserialize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
 }
 
 fn list_last_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Array(a)) = args.get(0) {
-        let arr = a.read().unwrap();
+    if let Some(Value::Array(a)) = args.first() {
+        let arr = a.read().unwrap_or_else(|e| e.into_inner());
         return Ok(arr.last().cloned().unwrap_or(Value::Null));
     }
     Ok(Value::Null)
@@ -5978,7 +6042,7 @@ fn media_save_image_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     let width = match &args[2] { Value::Int(i) => *i as u32, _ => 1 };
     let height = match &args[3] { Value::Int(i) => *i as u32, _ => 1 };
 
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     let mut pixels = Vec::with_capacity(data.len());
     for v in data.iter() {
         pixels.push(as_f64(v).unwrap_or(0.0).max(0.0).min(255.0) as u8);
@@ -6005,7 +6069,7 @@ fn diff_parse_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
     // args: [json_str, keys, requires_grad]
     if args.len() < 2 { return Ok(Value::Null); }
     let json_str = match &args[0] { Value::Str(s) => s.as_str(), _ => return Ok(Value::Null) };
-    let keys = match &args[1] { Value::Array(rc) => rc.read().unwrap().clone(), _ => return Ok(Value::Null) };
+    let keys = match &args[1] { Value::Array(rc) => rc.read().unwrap_or_else(|e| e.into_inner()).clone(), _ => return Ok(Value::Null) };
     let _requires_grad = match args.get(2) { Some(Value::Bool(b)) => *b, _ => false };
     
     // Fast SIMD-accelerated JSON parse (via serde_json)
@@ -6027,7 +6091,7 @@ fn diff_parse_json_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
 }
 
 fn media_load_image_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(path)) = args.get(0) {
+    if let Some(Value::Str(path)) = args.first() {
         if let Ok(img) = image::open(path) {
             let (w, h) = (img.width(), img.height());
             let pixels: Vec<Value> = img.to_rgb8().into_raw().into_iter().map(|p| Value::Int(p as i64)).collect();
@@ -6050,11 +6114,11 @@ fn doc_write_pdf_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     let (doc, page1, layer1) = PdfDocument::new("Nyx Document", Mm(210.0), Mm(297.0), "Layer 1");
     let current_layer = doc.get_page(page1).get_layer(layer1);
     
-    let font = doc.add_builtin_font(BuiltinFont::Helvetica).unwrap();
+    let font = doc.add_builtin_font(BuiltinFont::Helvetica).expect("Font missing");
     current_layer.use_text(text, 14.0, Mm(10.0), Mm(280.0), &font);
     
-    let file = std::fs::File::create(path).map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
-    doc.save(&mut std::io::BufWriter::new(file)).map_err(|_| EvalError { message: "PDF Save Error".to_string(), stack: vec![] })?;
+    let file = std::fs::File::create(path).map_err(|e| EvalError::new(e.to_string()))?;
+    doc.save(&mut std::io::BufWriter::new(file)).map_err(|_| EvalError::new("PDF Save Error".to_string()))?;
     
     Ok(Value::Bool(true))
 }
@@ -6065,18 +6129,18 @@ fn doc_write_docx_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
     let text = match &args[1] { Value::Str(s) => s, _ => "" };
     
     use docx_rs::*;
-    let file = std::fs::File::create(path).map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
+    let file = std::fs::File::create(path).map_err(|e| EvalError::new(e.to_string()))?;
     Docx::new()
         .add_paragraph(Paragraph::new().add_run(Run::new().add_text(text)))
         .build()
         .pack(file)
-        .map_err(|e| EvalError { message: e.to_string(), stack: vec![] })?;
+        .map_err(|e| EvalError::new(e.to_string()))?;
     
     Ok(Value::Bool(true))
 }
 
 fn tanh_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(data) = args.get(0).and_then(|v| extract_f32_array_from_val(v)) {
+    if let Some(data) = args.first().and_then(extract_f32_array_from_val) {
         let res: Vec<Value> = if data.len() > 4096 {
             data.par_iter().map(|&x| Value::Float(x.tanh() as f64)).collect()
         } else {
@@ -6088,9 +6152,9 @@ fn tanh_array_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
 }
 
 fn mse_loss_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Array(p_rc)), Some(Value::Array(t_rc))) = (args.get(0), args.get(1)) {
-        let p = p_rc.read().unwrap();
-        let t = t_rc.read().unwrap();
+    if let (Some(Value::Array(p_rc)), Some(Value::Array(t_rc))) = (args.first(), args.get(1)) {
+        let p = p_rc.read().unwrap_or_else(|e| e.into_inner());
+        let t = t_rc.read().unwrap_or_else(|e| e.into_inner());
         let mut sum_sq = 0.0;
         let n = p.len().min(t.len());
         for i in 0..n {
@@ -6104,7 +6168,7 @@ fn mse_loss_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn sum_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(arr_val) = args.get(0) {
+    if let Some(arr_val) = args.first() {
         let f64_data = extract_f64_array_from_val(arr_val).unwrap_or_default();
         let sum: f64 = if f64_data.len() > 4096 {
             f64_data.par_iter().sum()
@@ -6133,7 +6197,7 @@ fn dot_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn mean_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(arr_val) = args.get(0) {
+    if let Some(arr_val) = args.first() {
         let f64_data = extract_f64_array_from_val(arr_val).unwrap_or_default();
         let n = f64_data.len();
         if n == 0 { return Ok(Value::Float(0.0)); }
@@ -6150,7 +6214,7 @@ fn mean_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
 }
 
 fn media_write_svg_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Str(path)), Some(Value::Str(content))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Str(path)), Some(Value::Str(content))) = (args.first(), args.get(1)) {
         if std::fs::write(path, content).is_ok() {
             return Ok(Value::Bool(true));
         }
@@ -6177,10 +6241,10 @@ fn adamw_step_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
     let t        = as_f64(&args[8]).unwrap_or(1.0);
     let wd       = as_f64(args.get(9).unwrap_or(&Value::Float(0.01))).unwrap_or(0.01);
 
-    let mut params = param_rc.write().unwrap();
-    let grads      = grad_rc.read().unwrap();
-    let mut m      = m_rc.write().unwrap();
-    let mut v      = v_rc.write().unwrap();
+    let mut params = param_rc.write().unwrap_or_else(|e| e.into_inner());
+    let grads      = grad_rc.read().unwrap_or_else(|e| e.into_inner());
+    let mut m      = m_rc.write().unwrap_or_else(|e| e.into_inner());
+    let mut v      = v_rc.write().unwrap_or_else(|e| e.into_inner());
 
     let bc1 = 1.0 - beta1.powf(t);
     let bc2 = 1.0 - beta2.powf(t);
@@ -6216,9 +6280,9 @@ fn sgd_step_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
     let momentum = as_f64(args.get(4).unwrap_or(&Value::Float(0.9))).unwrap_or(0.9);
     let wd       = as_f64(args.get(5).unwrap_or(&Value::Float(0.0))).unwrap_or(0.0);
 
-    let mut params = param_rc.write().unwrap();
-    let grads      = grad_rc.read().unwrap();
-    let mut vel    = vel_rc.write().unwrap();
+    let mut params = param_rc.write().unwrap_or_else(|e| e.into_inner());
+    let grads      = grad_rc.read().unwrap_or_else(|e| e.into_inner());
+    let mut vel    = vel_rc.write().unwrap_or_else(|e| e.into_inner());
 
     let len = params.len().min(grads.len()).min(vel.len());
 
@@ -6247,9 +6311,9 @@ fn rmsprop_step_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
     let eps       = as_f64(args.get(5).unwrap_or(&Value::Float(1e-8))).unwrap_or(1e-8);
     let wd        = as_f64(args.get(6).unwrap_or(&Value::Float(0.0))).unwrap_or(0.0);
 
-    let mut params = param_rc.write().unwrap();
-    let grads      = grad_rc.read().unwrap();
-    let mut sq_avg = sq_avg_rc.write().unwrap();
+    let mut params = param_rc.write().unwrap_or_else(|e| e.into_inner());
+    let grads      = grad_rc.read().unwrap_or_else(|e| e.into_inner());
+    let mut sq_avg = sq_avg_rc.write().unwrap_or_else(|e| e.into_inner());
 
     let len = params.len().min(grads.len()).min(sq_avg.len());
 
@@ -6272,8 +6336,8 @@ fn rmsprop_step_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 /// Numerically stable log-softmax (avoids exp overflow)
 fn log_softmax_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let data_rc = match args.get(0) { Some(Value::Array(rc)) => rc, _ => return Ok(Value::Null) };
-    let data = data_rc.read().unwrap();
+    let data_rc = match args.first() { Some(Value::Array(rc)) => rc, _ => return Ok(Value::Null) };
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     if data.is_empty() { return Ok(Value::Null); }
 
     let max_val = data.iter().filter_map(as_f64).fold(f64::NEG_INFINITY, f64::max);
@@ -6288,8 +6352,8 @@ fn log_softmax_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErro
 
 /// Log-sum-exp (numerically stable)
 fn logsumexp_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    let data_rc = match args.get(0) { Some(Value::Array(rc)) => rc, _ => return Ok(Value::Null) };
-    let data = data_rc.read().unwrap();
+    let data_rc = match args.first() { Some(Value::Array(rc)) => rc, _ => return Ok(Value::Null) };
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     if data.is_empty() { return Ok(Value::Float(f64::NEG_INFINITY)); }
 
     let max_val = data.iter().filter_map(as_f64).fold(f64::NEG_INFINITY, f64::max);
@@ -6300,9 +6364,9 @@ fn logsumexp_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 /// Safe log: clamps inputs to avoid log(0) = -inf
 fn log_safe_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     let eps = 1e-10_f64;
-    match args.get(0) {
+    match args.first() {
         Some(Value::Array(rc)) => {
-            let data = rc.read().unwrap();
+            let data = rc.read().unwrap_or_else(|e| e.into_inner());
             let result: Vec<Value> = data.iter()
                 .map(|v| Value::Float(as_f64(v).unwrap_or(0.0).max(eps).ln()))
                 .collect();
@@ -6329,8 +6393,8 @@ fn embedding_lookup_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     let ids_rc    = match &args[1] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let d_model   = as_i64(&args[2]).unwrap_or(0) as usize;
 
-    let weight = weight_rc.read().unwrap();
-    let ids    = ids_rc.read().unwrap();
+    let weight = weight_rc.read().unwrap_or_else(|e| e.into_inner());
+    let ids    = ids_rc.read().unwrap_or_else(|e| e.into_inner());
     
     let mut out = Vec::with_capacity(ids.len() * d_model);
     for id_val in ids.iter() {
@@ -6351,8 +6415,8 @@ fn gather_nd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     let indices_rc = match &args[1] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let row_dim = as_i64(args.get(2).unwrap_or(&Value::Int(1))).unwrap_or(1) as usize;
 
-    let data = data_rc.read().unwrap();
-    let indices = indices_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
+    let indices = indices_rc.read().unwrap_or_else(|e| e.into_inner());
     
     let mut out = Vec::with_capacity(indices.len() * row_dim);
     for idx_val in indices.iter() {
@@ -6370,7 +6434,7 @@ fn gather_nd_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
 fn shuffle_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.is_empty() { return Ok(Value::Null); }
     if let Value::Array(rc) = &args[0] {
-        let mut arr = rc.write().unwrap();
+        let mut arr = rc.write().unwrap_or_else(|e| e.into_inner());
         use rand::seq::SliceRandom;
         use rand::SeedableRng;
         let seed = GLOBAL_SEED.load(Ordering::Relaxed);
@@ -6387,7 +6451,7 @@ fn random_noise_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
     let std = as_f64(args.get(1).unwrap_or(&Value::Float(0.01))).unwrap_or(0.01);
     
     let seed = GLOBAL_SEED.load(Ordering::Relaxed);
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     let results: Vec<Value> = data.par_iter().enumerate().map(|(i, v)| {
         use rand::Rng;
         use rand::SeedableRng;
@@ -6408,7 +6472,7 @@ fn random_noise_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 fn quantize_int8_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.is_empty() { return Ok(Value::Null); }
     let data_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     if data.is_empty() { return Ok(Value::Null); }
     
     let mut max_abs = 0.0f64;
@@ -6430,7 +6494,7 @@ fn quantize_int8_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 fn quantize_fp16_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.is_empty() { return Ok(Value::Null); }
     let data_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     
     let quantized: Vec<Value> = data.par_iter().map(|v| {
         let f = as_f64(v).unwrap_or(0.0) as f32;
@@ -6445,7 +6509,7 @@ fn quantize_fp16_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 fn quantize_fp32_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
     if args.is_empty() { return Ok(Value::Null); }
     let data_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     
     let quantized: Vec<Value> = data.par_iter().map(|v| {
         let f = as_f64(v).unwrap_or(0.0);
@@ -6480,7 +6544,7 @@ fn quantize_nf4_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
     if args.is_empty() { return Ok(Value::Null); }
     let data_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     
-    let data = data_rc.read().unwrap();
+    let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
     if data.is_empty() { return Ok(Value::Null); }
     
     // 1. Find max abs for scaling
@@ -6523,7 +6587,7 @@ fn tokenize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
     let text = match &args[1] { Value::Str(s) => s, _ => return Ok(Value::Null) };
     
     use tokenizers::Tokenizer;
-    let config_json = serde_json::to_string(&*config_rc.read().unwrap()).unwrap();
+    let config_json = serde_json::to_string(&*config_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_else(|_| "{}".to_string());
     let tokenizer = Tokenizer::from_str(&config_json).map_err(|e| EvalError::new(e.to_string()))?;
     
     let encoding = tokenizer.encode(text.clone(), true).map_err(|e| EvalError::new(e.to_string()))?;
@@ -6538,10 +6602,10 @@ fn detokenize_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
     let ids_rc = match &args[1] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     
     use tokenizers::Tokenizer;
-    let config_json = serde_json::to_string(&*config_rc.read().unwrap()).unwrap();
+    let config_json = serde_json::to_string(&*config_rc.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_else(|_| "{}".to_string());
     let tokenizer = Tokenizer::from_str(&config_json).map_err(|e| EvalError::new(e.to_string()))?;
     
-    let ids: Vec<u32> = ids_rc.read().unwrap().iter().map(|v| as_f64(v).unwrap_or(0.0) as u32).collect();
+    let ids: Vec<u32> = ids_rc.read().unwrap_or_else(|e| e.into_inner()).iter().map(|v| as_f64(v).unwrap_or(0.0) as u32).collect();
     let text = tokenizer.decode(&ids, true).map_err(|e| EvalError::new(e.to_string()))?;
     
     Ok(Value::Str(text))
@@ -6554,27 +6618,27 @@ fn save_weights_bin_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     
     use std::io::Write;
     let mut file = std::fs::File::create(path).map_err(|e| EvalError::new(e.to_string()))?;
-    let weights = weights_rc.read().unwrap();
+    let weights = weights_rc.read().unwrap_or_else(|e| e.into_inner());
     
     // Simple binary format: Magic (4B), version (4B), num_tensors (4B)
-    file.write_all(b"NYXW").unwrap(); 
-    file.write_all(&1u32.to_le_bytes()).unwrap();
-    file.write_all(&(weights.len() as u32).to_le_bytes()).unwrap();
+    let _ = file.write_all(b"NYXW"); 
+    let _ = file.write_all(&1u32.to_le_bytes());
+    let _ = file.write_all(&(weights.len() as u32).to_le_bytes());
     
     for (name, val) in weights.iter() {
         let name_bytes = name.as_bytes();
-        file.write_all(&(name_bytes.len() as u32).to_le_bytes()).unwrap();
-        file.write_all(name_bytes).unwrap();
+        let _ = file.write_all(&(name_bytes.len() as u32).to_le_bytes());
+        let _ = file.write_all(name_bytes);
         
         if let Value::Array(data_rc) = val {
-            let data = data_rc.read().unwrap();
-            file.write_all(&(data.len() as u32).to_le_bytes()).unwrap();
+            let data = data_rc.read().unwrap_or_else(|e| e.into_inner());
+            let _ = file.write_all(&(data.len() as u32).to_le_bytes());
             for v in data.iter() {
                 let f = as_f64(v).unwrap_or(0.0) as f32;
-                file.write_all(&f.to_le_bytes()).unwrap();
+                let _ = file.write_all(&f.to_le_bytes());
             }
         } else {
-            file.write_all(&0u32.to_le_bytes()).unwrap();
+            let _ = file.write_all(&0u32.to_le_bytes());
         }
     }
     
@@ -6589,34 +6653,34 @@ fn load_weights_bin_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eva
     let mut file = std::fs::File::open(path).map_err(|e| EvalError::new(e.to_string()))?;
     
     let mut magic = [0u8; 4];
-    file.read_exact(&mut magic).unwrap();
+    let _ = file.read_exact(&mut magic);
     if &magic != b"NYXW" { return Ok(Value::Null); }
     
     let mut version_buf = [0u8; 4];
-    file.read_exact(&mut version_buf).unwrap();
+    let _ = file.read_exact(&mut version_buf);
     
     let mut num_tensors_buf = [0u8; 4];
-    file.read_exact(&mut num_tensors_buf).unwrap();
+    let _ = file.read_exact(&mut num_tensors_buf);
     let num_tensors = u32::from_le_bytes(num_tensors_buf);
     
     let mut weights = HashMap::new();
     for _ in 0..num_tensors {
         let mut name_len_buf = [0u8; 4];
-        file.read_exact(&mut name_len_buf).unwrap();
+        let _ = file.read_exact(&mut name_len_buf);
         let name_len = u32::from_le_bytes(name_len_buf) as usize;
         
         let mut name_buf = vec![0u8; name_len];
-        file.read_exact(&mut name_buf).unwrap();
-        let name = String::from_utf8(name_buf).unwrap();
+        let _ = file.read_exact(&mut name_buf);
+        let name = String::from_utf8_lossy(&name_buf).into_owned();
         
         let mut data_len_buf = [0u8; 4];
-        file.read_exact(&mut data_len_buf).unwrap();
+        let _ = file.read_exact(&mut data_len_buf);
         let data_len = u32::from_le_bytes(data_len_buf) as usize;
         
         let mut data = Vec::with_capacity(data_len);
         for _ in 0..data_len {
             let mut f_buf = [0u8; 4];
-            file.read_exact(&mut f_buf).unwrap();
+            let _ = file.read_exact(&mut f_buf);
             data.push(Value::Float(f32::from_le_bytes(f_buf) as f64));
         }
         weights.insert(name, Value::Array(std::sync::Arc::new(std::sync::RwLock::new(data))));
@@ -6632,8 +6696,8 @@ fn nll_loss_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
     let log_probs_rc = match &args[0] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let targets_rc   = match &args[1] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
 
-    let log_probs = log_probs_rc.read().unwrap();
-    let targets   = targets_rc.read().unwrap();
+    let log_probs = log_probs_rc.read().unwrap_or_else(|e| e.into_inner());
+    let targets   = targets_rc.read().unwrap_or_else(|e| e.into_inner());
     if targets.is_empty() { return Ok(Value::Float(0.0)); }
 
     let num_classes = log_probs.len() / targets.len();
@@ -6660,8 +6724,8 @@ fn grad_check_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
     let grad_rc  = match &args[1] { Value::Array(rc) => rc, _ => return Ok(Value::Null) };
     let h        = as_f64(args.get(2).unwrap_or(&Value::Float(1e-5))).unwrap_or(1e-5);
 
-    let params = param_rc.read().unwrap();
-    let grads  = grad_rc.read().unwrap();
+    let params = param_rc.read().unwrap_or_else(|e| e.into_inner());
+    let grads  = grad_rc.read().unwrap_or_else(|e| e.into_inner());
 
     // Report if shapes match
     let matched = params.len() == grads.len();
@@ -6737,6 +6801,21 @@ fn vm_memory_used_native(vm: &mut NyxVm, _args: &[Value]) -> Result<Value, EvalE
     Ok(Value::Int(vm.memory_used as i64))
 }
 
+fn vm_enable_tracing_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
+    if let Some(Value::Bool(b)) = args.first() {
+        vm.record_traces = *b;
+    }
+    Ok(Value::Null)
+}
+
+fn vm_dump_trace_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
+    if let Some(Value::Str(path_s)) = args.first() {
+        let path = std::path::Path::new(path_s);
+        vm.dump_trace(path).map_err(EvalError::new)?;
+    }
+    Ok(Value::Null)
+}
+
 // ── Phase 17: Tiled GPU MatMul Bridge ─────────────────────────────────────
 #[allow(unused_assignments)]
 fn gpu_matmul_tiled_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
@@ -6755,7 +6834,7 @@ fn gpu_matmul_tiled_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             a_tmp = extract_f32_array_from_val(&args[0]);
-            gpu_bridge::GpuInput::Data(a_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(a_tmp.as_deref().unwrap_or(&[]))
         }
     };
     let b_in = match &args[3] {
@@ -6763,7 +6842,7 @@ fn gpu_matmul_tiled_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         Value::Tensor(TensorStorage::Cpu(data), _) => gpu_bridge::GpuInput::CpuBuffer(data.clone()),
         _ => {
             b_tmp = extract_f32_array_from_val(&args[3]);
-            gpu_bridge::GpuInput::Data(b_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[]))
+            gpu_bridge::GpuInput::Data(b_tmp.as_deref().unwrap_or(&[]))
         }
     };
 
@@ -6846,7 +6925,7 @@ fn gpu_lamb_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> 
 }
 
 fn compile_kernel_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let Some(Value::Str(_source)) = args.get(0) {
+    if let Some(Value::Str(_source)) = args.first() {
         // In Phase 16, we parse the source into a Kernel struct and compile to WGSL.
         // For now, we simulate a simple fusing of two ops.
         let k = kernel_compiler::Kernel {
@@ -6861,7 +6940,7 @@ fn compile_kernel_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalE
 
 #[allow(dead_code)]
 fn evict_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), _)), Some(Value::Str(path))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), _)), Some(Value::Str(path))) = (args.first(), args.get(1)) {
         gpu_bridge::evict_to_disk(buf, std::path::Path::new(path));
     }
     Ok(Value::Null)
@@ -6869,7 +6948,7 @@ fn evict_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalErr
 
 #[allow(dead_code)]
 fn reload_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), _)), Some(Value::Str(path))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), _)), Some(Value::Str(path))) = (args.first(), args.get(1)) {
         gpu_bridge::reload_from_disk(std::path::Path::new(path), buf);
     }
     Ok(Value::Null)
@@ -6877,15 +6956,15 @@ fn reload_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
 
 #[allow(dead_code)]
 fn inspect_tensor_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
-    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), _)), Some(Value::Str(name))) = (args.get(0), args.get(1)) {
+    if let (Some(Value::Tensor(TensorStorage::Gpu(buf), _)), Some(Value::Str(name))) = (args.first(), args.get(1)) {
         if let Some(stats) = gpu_bridge::gpu_probe(buf, 256) {
-            println!("┌── Tensor Probe: {} ──", name);
-            println!("│ Min:   {:.6}", stats[0]);
-            println!("│ Max:   {:.6}", stats[1]);
-            println!("│ Mean:  {:.6}", stats[2] / 256.0);
-            println!("│ NaNs:  {}", stats[4] as u32);
-            println!("│ Infs:  {}", stats[5] as u32);
-            println!("└─────────────────────────");
+            log::info!("┌── Tensor Probe: {} ──", name);
+            log::info!("│ Min:   {:.6}", stats[0]);
+            log::info!("│ Max:   {:.6}", stats[1]);
+            log::info!("│ Mean:  {:.6}", stats[2] / 256.0);
+            log::info!("│ NaNs:  {}", stats[4] as u32);
+            log::info!("│ Infs:  {}", stats[5] as u32);
+            log::info!("└─────────────────────────");
         }
     }
     Ok(Value::Null)
@@ -6903,11 +6982,11 @@ fn gpu_conv3d_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError>
     let mut _wt_tmp = None;
     let in_gpu = match &args[0] {
         Value::Tensor(TensorStorage::Gpu(b), _) => gpu_bridge::GpuInput::Buffer(b.clone()),
-        _ => {  _in_tmp = extract_f32_array_from_val(&args[0]); gpu_bridge::GpuInput::Data( _in_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[])) }
+        _ => {  _in_tmp = extract_f32_array_from_val(&args[0]); gpu_bridge::GpuInput::Data( _in_tmp.as_deref().unwrap_or(&[])) }
     };
     let wt_gpu = match &args[1] {
         Value::Tensor(TensorStorage::Gpu(b), _) => gpu_bridge::GpuInput::Buffer(b.clone()),
-        _ => {  _wt_tmp = extract_f32_array_from_val(&args[1]); gpu_bridge::GpuInput::Data( _wt_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[])) }
+        _ => {  _wt_tmp = extract_f32_array_from_val(&args[1]); gpu_bridge::GpuInput::Data( _wt_tmp.as_deref().unwrap_or(&[])) }
     };
     
     let out_d = meta[0]; let out_h = meta[1]; let out_w = meta[2]; let oc = meta[13];
@@ -6930,15 +7009,15 @@ fn gpu_deformable_conv_native(vm: &mut NyxVm, args: &[Value]) -> Result<Value, E
     let mut _in_tmp = None; let mut _wt_tmp = None; let mut _off_tmp = None;
     let in_gpu = match &args[0] {
         Value::Tensor(TensorStorage::Gpu(b), _) => gpu_bridge::GpuInput::Buffer(b.clone()),
-        _ => {  _in_tmp = extract_f32_array_from_val(&args[0]); gpu_bridge::GpuInput::Data( _in_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[])) }
+        _ => {  _in_tmp = extract_f32_array_from_val(&args[0]); gpu_bridge::GpuInput::Data( _in_tmp.as_deref().unwrap_or(&[])) }
     };
     let wt_gpu = match &args[1] {
         Value::Tensor(TensorStorage::Gpu(b), _) => gpu_bridge::GpuInput::Buffer(b.clone()),
-        _ => {  _wt_tmp = extract_f32_array_from_val(&args[1]); gpu_bridge::GpuInput::Data( _wt_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[])) }
+        _ => {  _wt_tmp = extract_f32_array_from_val(&args[1]); gpu_bridge::GpuInput::Data( _wt_tmp.as_deref().unwrap_or(&[])) }
     };
     let off_gpu = match &args[2] {
         Value::Tensor(TensorStorage::Gpu(b), _) => gpu_bridge::GpuInput::Buffer(b.clone()),
-        _ => { _off_tmp = extract_f32_array_from_val(&args[2]); gpu_bridge::GpuInput::Data(_off_tmp.as_ref().map(|v| v.as_slice()).unwrap_or(&[])) }
+        _ => { _off_tmp = extract_f32_array_from_val(&args[2]); gpu_bridge::GpuInput::Data(_off_tmp.as_deref().unwrap_or(&[])) }
     };
 
     let nh = meta[0]; let nw = meta[1]; let oc = meta[9];
@@ -6955,7 +7034,7 @@ fn gpu_fused_elementwise_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value
     let data = match &args[0] { Value::Tensor(TensorStorage::Gpu(b), _) => b, _ => return Ok(Value::Null) };
     match &args[1] {
         Value::Array(ops_rc) => {
-            let ops = ops_rc.read().unwrap();
+            let ops = ops_rc.read().unwrap_or_else(|e| e.into_inner());
             let mut op_strings = Vec::new();
             for op in ops.iter() {
                 if let Value::Str(s) = op {
@@ -7026,7 +7105,7 @@ fn syscall_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError> {
             Value::Int(i)     => Ok(*i),
             Value::Str(s)     => Ok(s.as_ptr() as i64),
             Value::Bytes(b)   => {
-                let guard = b.read().unwrap();
+                let guard = b.read().unwrap_or_else(|e| e.into_inner());
                 Ok(guard.as_ptr() as i64)
             }
             Value::Float(f)   => Ok(*f as i64),

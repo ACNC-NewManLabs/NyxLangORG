@@ -81,7 +81,7 @@ impl WalEngine {
             checksum: 0, // Simplified
         };
         
-        let buf = serde_json::to_vec(&entry).unwrap();
+        let buf = serde_json::to_vec(&entry).unwrap_or_default();
         self.file.write_all(&(buf.len() as u64).to_le_bytes())?;
         self.file.write_all(&buf)?;
         self.file.sync_all()?; // Force flush to disk

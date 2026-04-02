@@ -275,23 +275,28 @@ pub mod codes {
     pub const PLUGIN_NOT_FOUND: &str = "E106";
 }
 
-#[derive(Debug)]
-pub struct NyxError {
-    pub code: String,
-    pub message: String,
-    pub module: String,
+#[derive(Debug, Default)]
+pub struct ErrorDetails {
     pub file: Option<String>,
     pub line: Option<u32>,
     pub column: Option<u32>,
     pub end_line: Option<u32>,
     pub end_column: Option<u32>,
     pub stack_trace: Option<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    pub category: ErrorCategory,
-    pub severity: Severity,
     pub notes: Vec<String>,
     pub suggestions: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct NyxError {
+    pub code: String,
+    pub message: String,
+    pub module: String,
+    pub category: ErrorCategory,
+    pub severity: Severity,
     pub recoverable: bool,
+    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub details: Box<ErrorDetails>,
 }
 
 impl NyxError {
@@ -300,18 +305,11 @@ impl NyxError {
             code: code.into(),
             message: message.into(),
             module: String::new(),
-            file: None,
-            line: None,
-            column: None,
-            end_line: None,
-            end_column: None,
-            stack_trace: None,
-            source: None,
             category,
             severity: Severity::Error,
-            notes: Vec::new(),
-            suggestions: Vec::new(),
             recoverable: false,
+            source: None,
+            details: Box::new(ErrorDetails::default()),
         }
     }
 
@@ -326,44 +324,44 @@ impl NyxError {
     }
 
     pub fn with_file(mut self, file: impl Into<String>) -> Self {
-        self.file = Some(file.into());
+        self.details.file = Some(file.into());
         self
     }
 
     pub fn with_line(mut self, line: u32) -> Self {
-        self.line = Some(line);
+        self.details.line = Some(line);
         self
     }
 
     pub fn with_column(mut self, column: u32) -> Self {
-        self.column = Some(column);
+        self.details.column = Some(column);
         self
     }
 
     pub fn with_location(mut self, line: u32, column: u32) -> Self {
-        self.line = Some(line);
-        self.column = Some(column);
+        self.details.line = Some(line);
+        self.details.column = Some(column);
         self
     }
 
     pub fn with_span(mut self, start: (u32, u32), end: (u32, u32)) -> Self {
-        self.line = Some(start.0);
-        self.column = Some(start.1);
-        self.end_line = Some(end.0);
-        self.end_column = Some(end.1);
+        self.details.line = Some(start.0);
+        self.details.column = Some(start.1);
+        self.details.end_line = Some(end.0);
+        self.details.end_column = Some(end.1);
         self
     }
 
     pub fn with_span_obj(mut self, span: &Span) -> Self {
-        self.line = Some(span.start.line as u32);
-        self.column = Some(span.start.column as u32);
-        self.end_line = Some(span.end.line as u32);
-        self.end_column = Some(span.end.column as u32);
+        self.details.line = Some(span.start.line as u32);
+        self.details.column = Some(span.start.column as u32);
+        self.details.end_line = Some(span.end.line as u32);
+        self.details.end_column = Some(span.end.column as u32);
         self
     }
 
     pub fn with_stack_trace(mut self) -> Self {
-        self.stack_trace = Some(Backtrace::capture().to_string());
+        self.details.stack_trace = Some(Backtrace::capture().to_string());
         self
     }
 
@@ -373,22 +371,22 @@ impl NyxError {
     }
 
     pub fn with_note(mut self, note: impl Into<String>) -> Self {
-        self.notes.push(note.into());
+        self.details.notes.push(note.into());
         self
     }
 
     pub fn with_notes(mut self, notes: impl IntoIterator<Item = String>) -> Self {
-        self.notes.extend(notes);
+        self.details.notes.extend(notes);
         self
     }
 
     pub fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
-        self.suggestions.push(suggestion.into());
+        self.details.suggestions.push(suggestion.into());
         self
     }
 
     pub fn with_suggestions(mut self, suggestions: impl IntoIterator<Item = String>) -> Self {
-        self.suggestions.extend(suggestions);
+        self.details.suggestions.extend(suggestions);
         self
     }
 
@@ -439,10 +437,10 @@ impl fmt::Display for NyxError {
             write!(f, " (module: {})", self.module)?;
         }
 
-        if let Some(file) = &self.file {
-            if let (Some(line), Some(column)) = (self.line, self.column) {
+        if let Some(file) = &self.details.file {
+            if let (Some(line), Some(column)) = (self.details.line, self.details.column) {
                 write!(f, "\n  --> {}:{}:{}", file, line, column)?;
-                if let (Some(end_line), Some(end_column)) = (self.end_line, self.end_column) {
+                if let (Some(end_line), Some(end_column)) = (self.details.end_line, self.details.end_column) {
                     if end_line != line || end_column != column {
                         write!(f, " to {}:{}", end_line, end_column)?;
                     }
@@ -452,10 +450,10 @@ impl fmt::Display for NyxError {
             }
         }
 
-        for note in &self.notes {
+        for note in &self.details.notes {
             write!(f, "\n  note: {}", note)?;
         }
-        for suggestion in &self.suggestions {
+        for suggestion in &self.details.suggestions {
             write!(f, "\n  help: {}", suggestion)?;
         }
 

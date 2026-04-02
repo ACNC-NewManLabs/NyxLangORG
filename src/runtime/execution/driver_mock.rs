@@ -35,7 +35,7 @@ impl NyxDriverMock {
         if parts.len() < 2 { return; }
         let table_name = parts[1];
 
-        let catalog = global_catalog().lock().unwrap();
+        let catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         if let Some(chunks) = catalog.get(table_name) {
             if !chunks.is_empty() {
                 // In a real implementation, we would use arrow::ipc::writer::StreamWriter
@@ -50,7 +50,7 @@ impl NyxDriverMock {
     }
 
     fn handle_list_tables(stream: &mut TcpStream) {
-        let catalog = global_catalog().lock().unwrap();
+        let catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         let tables: Vec<String> = catalog.keys().cloned().collect();
         let _ = stream.write_all(format!("TABLES: {}\n", tables.join(", ")).as_bytes());
     }

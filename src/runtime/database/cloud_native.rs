@@ -13,6 +13,12 @@ pub struct CloudNativeScale {
     pub last_scale_timestamp: u64,
 }
 
+impl Default for CloudNativeScale {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CloudNativeScale {
     pub fn new() -> Self {
         Self {

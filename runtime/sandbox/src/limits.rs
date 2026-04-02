@@ -46,7 +46,7 @@ impl MemoryLimit {
 
     /// Get number of pages for size
     pub fn pages_for(&self, size: usize) -> usize {
-        (size + self.page_size - 1) / self.page_size
+        size.div_ceil(self.page_size)
     }
 }
 

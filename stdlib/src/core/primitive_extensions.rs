@@ -375,7 +375,7 @@ impl UIntExt for usize {
         if self > usize::MAX / 2 + 1 {
             return crate::core::option::Option::None;
         }
-        crate::core::option::Option::Some(1 << (usize::BITS - self.leading_zeros() as u32))
+        crate::core::option::Option::Some(1 << (usize::BITS - self.leading_zeros()))
     }
 
     #[inline]
@@ -1141,7 +1141,7 @@ pub trait SliceExt<T> {
 impl<T> SliceExt<T> for [T] {
     #[inline]
     fn first(&self) -> Option<&T> {
-        self.get(0)
+        self.first()
     }
 
     #[inline]

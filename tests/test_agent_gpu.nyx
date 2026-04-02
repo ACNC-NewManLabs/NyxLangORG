@@ -1,0 +1,41 @@
+fn main() {
+    println("--- Testing Nyx-Agent GPU Acceleration ---");
+
+    let collection = "gpu_test_bench";
+    std::agent::vector_create(collection);
+
+    let dim = 384;
+    println("Inserting 2000 vectors to trigger GPU auto-dispatch (> 512)...");
+    
+    for i in range(0, 2000) {
+        let text = "Sample text for vector " + i;
+        let v = std::agent::embed(text);
+        std::agent::vector_insert(collection, v);
+        
+        if (i % 500 == 0) {
+            println("  -> Progress: " + i + "/2000");
+        }
+    }
+
+    println("Performing search (should trigger GPU)...");
+    let query_text = "Finding Sample text for vector 1500";
+    let query = std::agent::embed(query_text);
+    
+    let start = std::time::now();
+    let results = std::agent::vector_search(collection, query, 5);
+    let end = std::time::now();
+
+    println("Search completed.");
+    println("Top 5 Results:");
+    for r in results {
+        println("  -> Hit: index=" + r[1] + " score=" + r[0]);
+    }
+
+    if (results.len() > 0) {
+        println("[PASS] GPU Search returned valid results.");
+    } else {
+        println("[FAIL] GPU Search returned empty results.");
+    }
+    
+    println("--- Nyx-Agent GPU Acceleration Test Complete ---");
+}

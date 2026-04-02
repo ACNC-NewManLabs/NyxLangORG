@@ -11,6 +11,7 @@ pub mod emitter;
 pub mod runtime;
 pub mod loader;
 pub mod jit;
+pub mod hypervisor;
 
 pub use bytecode::{BytecodeModule, Function, BytecodeInstr as Instruction, OpCode, Value};
 pub use emitter::BytecodeEmitter;

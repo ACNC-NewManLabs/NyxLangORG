@@ -223,7 +223,7 @@ pub fn align_to_mut<T, U>(ptr: *mut T, align: usize) -> *mut U {
 #[inline]
 pub fn is_aligned_to<T>(ptr: *const T, align: usize) -> bool {
     let addr = ptr as usize;
-    addr % align == 0
+    addr.is_multiple_of(align)
 }
 
 // =============================================================================
@@ -316,14 +316,14 @@ impl<T: Copy> MaybeUninit<T> {
     #[inline]
     pub fn as_ptr(&self) -> *const T {
         // SAFETY: `value` and `uninit` occupy the same memory.
-        unsafe { core::ptr::addr_of!(self.value).cast::<T>() }
+        core::ptr::addr_of!(self.value).cast::<T>()
     }
 
     /// Returns a mutable raw pointer to the contained value.
     #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut T {
         // SAFETY: `value` and `uninit` occupy the same memory.
-        unsafe { core::ptr::addr_of_mut!(self.value).cast::<T>() }
+        core::ptr::addr_of_mut!(self.value).cast::<T>()
     }
 
     /// Extracts the value.

@@ -1,0 +1,17 @@
+fn main() {
+    let n = 10000000;
+    let total = 0;
+    let i = 0;
+
+    let start = __native_time_ms();
+    while i < n {
+        total = total + i;
+        // Breaking O(1) pattern matcher with a simple identity op
+        if true { total = total + 0; } 
+        i = i + 1;
+    }
+    let end = __native_time_ms();
+
+    println("Nyx Standard (Loop) Result: " + total);
+    println("Nyx Standard (Loop) 10M iterations: " + (end - start) + "ms");
+}

@@ -6,10 +6,12 @@ use crate::core::{Iterator, IntoIterator};
 
 /// Option type - represents an optional value
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub enum Option<T> {
     /// Some value
     Some(T),
     /// No value
+    #[default]
     None,
 }
 
@@ -236,11 +238,6 @@ impl<T> crate::core::traits::Extend<T> for Option<T> {
     }
 }
 
-impl<T> Default for Option<T> {
-    fn default() -> Self {
-        Option::None
-    }
-}
 
 /// Trait for types that can be converted to Option
 pub trait IntoOption {

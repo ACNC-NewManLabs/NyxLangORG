@@ -288,7 +288,7 @@ pub static GLOBAL_DEPRECATION_TRACKER: std::sync::OnceLock<DeprecationTracker> =
 /// Initialize the global deprecation tracker with known deprecations
 pub fn init_global_tracker() -> &'static DeprecationTracker {
     GLOBAL_DEPRECATION_TRACKER.get_or_init(|| {
-        let tracker = DeprecationTracker::new();
+        
         
         // Register known deprecations here
         // Example:
@@ -300,7 +300,7 @@ pub fn init_global_tracker() -> &'static DeprecationTracker {
         //     Some("nyx::core::parser::neuro_parser".to_string())
         // );
         
-        tracker
+        DeprecationTracker::new()
     })
 }
 

@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use crate::runtime::compiler_bridge::package::package_entry;
 use crate::runtime::execution::module_loader::{ModuleHandle, ModuleLoader, NyxPackage};
 use crate::runtime::execution::native_bridge::{register_host_natives, NativeBridgeConfig};
-use crate::runtime::execution::nyx_vm::{EvalError, NyxVm, Value};
+use crate::runtime::execution::nyx_vm::{EvalError, NyxVm, Value, VmConfig};
 use crate::runtime::execution::reload::{ModulePatch, PatchReport, ReloadSnapshot, RuntimeStateSnapshot};
 
 /// Runtime session configuration
@@ -82,7 +82,7 @@ impl RuntimeSession {
             .vm
             .lock()
             .map_err(|_| SessionError::new("VM lock poisoned"))?;
-        *vm = NyxVm::new();
+        *vm = NyxVm::new(VmConfig::default());
         let bridge = self.native_bridge_config();
         register_host_natives(&mut vm, &bridge);
         crate::runtime::execution::stdlib_bridge::register_stdlib(&mut vm);
@@ -124,7 +124,7 @@ impl RuntimeSession {
 
     /// Create a new runtime session
     pub fn new(config: SessionConfig) -> Result<Self, SessionError> {
-        let vm = NyxVm::new();
+        let vm = NyxVm::new(VmConfig::default());
         
         Ok(Self {
             vm: Arc::new(Mutex::new(vm)),
@@ -216,7 +216,7 @@ impl RuntimeSession {
         // Try to call as function first
         if vm.has_function(entry_symbol) {
             return vm.call_function(entry_symbol, args)
-                .map_err(|e| SessionError::from(e));
+                .map_err(SessionError::from);
         }
         
         // Try as component render
@@ -269,7 +269,7 @@ impl RuntimeSession {
             globals,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("Tokio runtime built failed")
                 .as_secs(),
         })
     }
@@ -302,14 +302,14 @@ impl RuntimeSession {
     pub fn render_route(&mut self, path: &str) -> Result<Value, SessionError> {
         let mut vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
         vm.render_http_via_routes_or_app(path)
-            .map_err(|e| SessionError::from(e))
+            .map_err(SessionError::from)
     }
 
     /// Render app fragment for hot reload
     pub fn render_fragment(&mut self) -> Result<String, SessionError> {
         let mut vm = self.vm.lock().map_err(|_| SessionError::new("VM lock poisoned"))?;
         vm.render_app_fragment()
-            .map_err(|e| SessionError::from(e))
+            .map_err(SessionError::from)
     }
 }
 

@@ -7,6 +7,12 @@ pub struct GovernanceSecurity {
     pub audit_log: Vec<String>,
 }
 
+impl Default for GovernanceSecurity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GovernanceSecurity {
     pub fn new() -> Self {
         let mut tenants = HashSet::new();

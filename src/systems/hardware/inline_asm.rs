@@ -158,7 +158,7 @@ pub mod routines {
         {
             let rip: usize;
             arch::asm!("lea {0}, [rip + 0]", out(reg) rip, options(nomem, nostack, preserves_flags));
-            return rip;
+            rip
         }
         #[cfg(target_arch = "x86")]
         {
@@ -183,7 +183,7 @@ pub mod routines {
         {
             let sp: usize;
             unsafe { arch::asm!("mov {0}, rsp", out(reg) sp, options(nomem, preserves_flags)); }
-            return sp;
+            sp
         }
         #[cfg(target_arch = "x86")]
         {
@@ -204,7 +204,7 @@ pub mod routines {
         {
             let fp: usize;
             unsafe { arch::asm!("mov {0}, rbp", out(reg) fp, options(nomem, preserves_flags)); }
-            return fp;
+            fp
         }
         #[cfg(target_arch = "x86")]
         {
@@ -260,7 +260,7 @@ pub mod routines {
         #[cfg(target_arch = "x86_64")]
         {
             use std::arch::x86_64::__cpuid;
-            let r = unsafe { __cpuid(0) };
+            let r = __cpuid(0);
             let bytes = [
                 r.ebx.to_le_bytes(),
                 r.edx.to_le_bytes(),
@@ -268,7 +268,7 @@ pub mod routines {
             ]
             .concat();
             let vendor = String::from_utf8_lossy(&bytes).trim_matches('\0').to_string();
-            return if vendor.is_empty() { "unknown".to_string() } else { vendor };
+            if vendor.is_empty() { "unknown".to_string() } else { vendor }
         }
 
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -330,7 +330,7 @@ pub mod io {
                 in("dx") port,
                 options(nomem, nostack, preserves_flags)
             );
-            return value;
+            value
         }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
         {
@@ -371,7 +371,7 @@ pub mod io {
                 in("dx") port,
                 options(nomem, nostack, preserves_flags)
             );
-            return value;
+            value
         }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
         {
@@ -412,7 +412,7 @@ pub mod io {
                 in("dx") port,
                 options(nomem, nostack, preserves_flags)
             );
-            return value;
+            value
         }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
         {

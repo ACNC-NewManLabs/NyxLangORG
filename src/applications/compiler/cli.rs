@@ -7,7 +7,8 @@ use crate::applications::compiler::compiler_main::{CompileOptions, Compiler};
 use crate::runtime::execution::nyx_vm::{format_eval_error as vm_format_eval_error, to_stringish as vm_to_stringish, Value as VmValue};
 use crate::runtime::execution::ui_runtime::{execute_app as execute_vm_app, execute_bytecode_app};
 use crate::systems::backend::llvm_backend::Target;
-// use nyx_hypervisor::cli::Cli as HypervisorCli;
+#[cfg(feature = "hypervisor")]
+use nyx_hypervisor::cli::Cli as HypervisorCli;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -48,6 +49,9 @@ enum Command {
         /// Execution target (ast or vm).
         #[arg(long, default_value = "ast")]
         target: String,
+        /// Enable JIT acceleration for high-performance loops.
+        #[arg(long, default_value_t = false)]
+        jit: bool,
     },
     Compile {
         #[arg(default_value = "examples/hello_world.nyx")]
@@ -108,8 +112,9 @@ enum Command {
         #[command(subcommand)]
         cmd: WebCommand,
     },
-    // /// Run the Nyx Hypervisor (VMM)
-    // Hypervisor(HypervisorCli),
+    /// Run the Nyx Hypervisor (VMM)
+    #[cfg(feature = "hypervisor")]
+    Hypervisor(HypervisorCli),
     Export {
         #[arg(default_value = "main.nyx")]
         input: PathBuf,
@@ -288,9 +293,10 @@ pub async fn run() -> Result<(), String> {
             no_open,
             no_watch,
             target,
+            jit,
         }) => {
             let source = std::fs::read_to_string(&input).map_err(|e| e.to_string())?;
-            if is_probably_http_server_app(&source) {
+            if !jit && is_probably_http_server_app(&source) {
                 let port = detect_port(&source).unwrap_or(8000);
                 return crate::applications::compiler::web_preview::dev(
                     crate::applications::compiler::web_preview::WebDevOptions {
@@ -303,8 +309,10 @@ pub async fn run() -> Result<(), String> {
                 );
             }
 
-            let target = parse_target(&target)?;
-            let value = if matches!(target, Target::Bytecode) {
+            let target_type = parse_target(&target)?;
+            let value = if jit {
+                crate::runtime::execution::ui_runtime::execute_jit_app(&input).map_err(|e| vm_format_eval_error(&e))?
+            } else if matches!(target_type, Target::Bytecode) {
                 execute_bytecode_app(&input).map_err(|e| vm_format_eval_error(&e))?
             } else {
                 execute_vm_app(&input).map_err(|e| vm_format_eval_error(&e))?
@@ -520,6 +528,10 @@ pub async fn run() -> Result<(), String> {
             println!("Starting Nyx-Server on port {}...", port);
             crate::runtime::execution::nyx_server::NyxServer::start(port).await
                 .map_err(|e| e.to_string())?;
+        }
+        #[cfg(feature = "hypervisor")]
+        Some(Command::Hypervisor(cli)) => {
+            cli.execute().map_err(|e| e.to_string())?;
         }
         Some(Command::Shell { host, port }) => {
             crate::runtime::execution::nyx_shell_client::run_shell(&host, port).await

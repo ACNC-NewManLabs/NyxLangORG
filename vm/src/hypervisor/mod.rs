@@ -8,10 +8,18 @@ pub mod memory;
 pub mod devices;
 pub mod vm;
 pub mod hypercall;
+pub mod kvm;
+pub mod jit;
+pub mod virtio;
+pub mod pci;
+pub mod magic_ring;
+pub mod apic;
+pub mod virtio_block;
+pub mod cmos;
 
-pub use cpu::{CpuEmulator, CpuState, Register, CpuMode};
+pub use cpu::{CpuEmulator, CpuState, Register, CpuMode, Architecture};
 pub use memory::{VirtualMemory, PageTable, GuestPhysicalAddr, HostVirtualAddr};
-pub use devices::{DeviceManager, VirtioDevice, ConsoleDevice, BlockDevice, NetworkDevice};
+pub use devices::{DeviceManager, VirtualDevice, ConsoleDevice, BlockDevice, NetworkDevice};
 pub use vm::{VirtualMachine, VmConfig, VmState};
 pub use hypercall::{Hypercall, HypercallResult};
 

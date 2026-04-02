@@ -4,31 +4,31 @@
    ============================================================= */
 
 :root {
-  --bg:          #060608;
-  --surface:     rgba(255,255,255,0.03);
-  --surface-h:   rgba(255,255,255,0.06);
-  --border:      rgba(255,255,255,0.07);
+  --bg:          #000000;
+  --surface:     rgba(255,255,255,0.02);
+  --surface-h:   rgba(255,255,255,0.05);
+  --border:      rgba(255,255,255,0.08);
   --border-h:    rgba(255,255,255,0.15);
 
-  --accent:      #8b5cf6;
-  --accent2:     #d946ef;
-  --accent-glow: rgba(139,92,246,0.4);
+  --accent:      #00f2ff;
+  --accent2:     #7000ff;
+  --accent-glow: rgba(0,242,255,0.3);
 
   --green:       #10b981;
-  --yellow:      #f59e0b;
-  --red:         #ef4444;
-  --blue:        #3b82f6;
+  --yellow:      #fbbf24;
+  --red:         #f43f5e;
+  --blue:        #2563eb;
 
-  --text:        #f1f5f9;
-  --text-2:      #94a3b8;
-  --text-3:      #475569;
+  --text:        #ffffff;
+  --text-2:      #a1a1aa;
+  --text-3:      #52525b;
 
   --sidebar-w:   260px;
-  --topbar-h:    64px;
+  --topbar-h:    60px;
 
-  --radius:      20px;
-  --radius-sm:   12px;
-  --transition:  0.35s cubic-bezier(0.16,1,0.3,1);
+  --radius:      4px;
+  --radius-sm:   2px;
+  --transition:  0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,32 +72,48 @@ html, body {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 8px 28px;
-  border-bottom: 1px solid var(--border);
+  gap: 14px;
+  padding: 0 8px 24px;
+  border-bottom: 2px solid var(--border);
 }
 
-.glyph { font-size: 2rem; filter: drop-shadow(0 0 12px var(--accent-glow)); }
+.nyx-logo {
+  width: 38px;
+  height: 38px;
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
 
 .brand-name {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 800;
   letter-spacing: -0.5px;
+  text-transform: uppercase;
 }
 
 .accent-text {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent);
 }
 
 .brand-ver {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--text-3);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  margin-top: 2px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  margin-top: 1px;
+}
+
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 8px;
+}
+
+.nav-label {
+  padding: 0 14px 8px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-3);
+  letter-spacing: 0.2em;
 }
 
 .sidebar-nav {
@@ -190,7 +206,42 @@ html, body {
   display: flex; align-items: center; justify-content: center;
 }
 
-.refresh-btn:hover { background: var(--accent); border-color: var(--accent); transform: rotate(180deg); }
+.refresh-btn:hover { background: var(--accent); border-color: var(--accent); color: var(--bg); transform: rotate(180deg); }
+
+.window-controls {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+.win-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: var(--transition);
+}
+
+.win-btn:hover {
+  background: var(--surface-h);
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
+.win-btn.close:hover {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
 
 /* ── PANELS ──────────────────────────────────────────────────── */
 

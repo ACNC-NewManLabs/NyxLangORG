@@ -137,7 +137,7 @@ pub struct VmRuntime {
     /// Optimized function cache (tier-0 JIT)
     optimized_cache: HashMap<(String, usize), Function>,
     /// Cranelift JIT engine
-    jit_engine: Option<jit::Engine>,
+    pub jit_engine: Option<jit::Engine>,
     /// Configuration
     config: VmConfig,
     /// Heap storage
@@ -348,11 +348,10 @@ impl VmRuntime {
 
     fn heap_alloc(&mut self, value: Value, size_hint: usize) -> VmResult<usize> {
         let size_bytes = if size_hint == 0 { size_of::<Value>() } else { size_hint };
-        if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes {
-            if self.config.enable_gc {
+        if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes
+            && self.config.enable_gc {
                 self.collect_garbage();
             }
-        }
         if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes {
             return Err(VmError::OutOfMemory);
         }
@@ -382,11 +381,10 @@ impl VmRuntime {
 
     fn heap_alloc_upvalue(&mut self, value: Value) -> VmResult<usize> {
         let size_bytes = size_of::<Value>();
-        if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes {
-            if self.config.enable_gc {
+        if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes
+            && self.config.enable_gc {
                 self.collect_garbage();
             }
-        }
         if self.heap.used_bytes.saturating_add(size_bytes) > self.heap.capacity_bytes {
             return Err(VmError::OutOfMemory);
         }
@@ -419,16 +417,13 @@ impl VmRuntime {
         if pos >= self.stack.len() {
             return Err(VmError::InvalidOperand(format!("local index {}", local_idx)));
         }
-        match &self.stack[pos] {
-            Value::Pointer(ptr) => {
-                let slot = self.heap.slots.get(*ptr).and_then(|s| s.as_ref());
-                if let Some(slot) = slot {
-                    if slot.is_upvalue {
-                        return Ok(*ptr);
-                    }
+        if let Value::Pointer(ptr) = &self.stack[pos] {
+            let slot = self.heap.slots.get(*ptr).and_then(|s| s.as_ref());
+            if let Some(slot) = slot {
+                if slot.is_upvalue {
+                    return Ok(*ptr);
                 }
             }
-            _ => {}
         }
         let value = self.stack[pos].clone();
         let ptr = self.heap_alloc_upvalue(value)?;
@@ -468,6 +463,7 @@ impl VmRuntime {
             .ok_or_else(|| VmError::InvalidOperand(format!("invalid pointer {}", ptr)))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn heap_get_field(&self, ptr: usize, field: &str) -> VmResult<Value> {
         match self.heap_get(ptr)? {
             Value::Object(obj) => obj.get(field).cloned().ok_or_else(|| {
@@ -477,6 +473,7 @@ impl VmRuntime {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn heap_set_field(&mut self, ptr: usize, field: &str, value: Value) -> VmResult<()> {
         match self.heap_get_mut(ptr)? {
             Value::Object(obj) => {
@@ -592,7 +589,7 @@ impl VmRuntime {
     }
 
     fn update_callsite_cache(&mut self, callsite: (String, usize, usize), entry: CallCacheEntry) {
-        let entries = self.callsite_cache.entry(callsite).or_insert_with(Vec::new);
+        let entries = self.callsite_cache.entry(callsite).or_default();
         if entries.iter().any(|e| match (e, &entry) {
             (CallCacheEntry::Function(a), CallCacheEntry::Function(b)) => a == b,
             (CallCacheEntry::Native(a), CallCacheEntry::Native(b)) => a == b,
@@ -764,15 +761,15 @@ impl VmRuntime {
         roots.extend(self.globals.values().cloned());
         
         // Scan field and index caches
-        for (_, (_, _, val)) in &self.field_cache {
+        for (_, _, val) in self.field_cache.values() {
             roots.push(val.clone());
         }
-        for (_, (_, _, val)) in &self.index_cache {
+        for (_, _, val) in self.index_cache.values() {
             roots.push(val.clone());
         }
 
         // Scan global cache
-        for (_, (_, val)) in &self.global_cache {
+        for (_, val) in self.global_cache.values() {
             roots.push(val.clone());
         }
 
@@ -1022,9 +1019,7 @@ impl VmRuntime {
                 
                 let res = hook(vm_ref, &instr, instr_idx);
                 self.config.on_step = Some(hook);
-                if let Err(e) = res {
-                    return Err(e);
-                }
+                res?
             }
 
             // Execute instruction
@@ -1055,7 +1050,7 @@ impl VmRuntime {
     fn execute_instruction(&mut self, instr: BytecodeInstr, instr_idx: usize) -> VmResult<ControlFlow> {
         match instr.opcode {
             OpCode::HALT => {
-                return Ok(ControlFlow::Return(Value::Unit));
+                Ok(ControlFlow::Return(Value::Unit))
             }
             
             OpCode::NOP => {
@@ -1144,8 +1139,16 @@ impl VmRuntime {
             OpCode::ADD => {
                 let b = self.pop_value()?;
                 let a = self.pop_value()?;
-                let result = self.binary_op(&a, &b, |a, b| a + b)?;
-                self.push_value(result)?;
+                match (&a, &b) {
+                    (Value::String(s1), Value::String(s2)) => {
+                        let result = Value::String(format!("{}{}", s1, s2));
+                        self.push_value(result)?;
+                    }
+                    _ => {
+                        let result = self.binary_op(&a, &b, |a, b| a + b)?;
+                        self.push_value(result)?;
+                    }
+                }
                 Ok(ControlFlow::Continue)
             }
             
@@ -1520,7 +1523,7 @@ impl VmRuntime {
                 } else {
                     Value::Unit
                 };
-                return Ok(ControlFlow::Return(value));
+                Ok(ControlFlow::Return(value))
             }
             
             OpCode::CALL => {
@@ -1575,7 +1578,7 @@ impl VmRuntime {
                 }
                 args.reverse();
                 let result = (native.func)(&args)
-                    .map_err(|e| VmError::RuntimeError(e))?;
+                    .map_err(VmError::RuntimeError)?;
                 self.push_value(result)?;
                 Ok(ControlFlow::Continue)
             }
@@ -2148,7 +2151,7 @@ impl VmRuntime {
                     Value::Object(obj) => obj.len() as i64,
                     _ => 0,
                 };
-                self.push_value(Value::Int(len as i64))?;
+                self.push_value(Value::Int(len))?;
                 Ok(ControlFlow::Continue)
             }
 
@@ -2501,6 +2504,10 @@ pub(crate) unsafe extern "C" fn nyx_jit_tick(rt: *mut VmRuntime, ip: i32) -> i64
             frame.ip = ip as usize;
         }
         rt.instruction_count = rt.instruction_count.saturating_add(1);
+        if rt.instruction_count % 1 == 0 {
+             println!("JIT TICK: ip={}, i_count={}, stack_len={}", ip, rt.instruction_count, rt.stack.len());
+        }
+
         match rt.check_limits() {
             Ok(()) => 0,
             Err(e) => jit_err(rt, e),
@@ -2611,6 +2618,9 @@ pub(crate) unsafe extern "C" fn nyx_jit_load(rt: *mut VmRuntime, local_idx: i32)
             Some(v) => v,
             None => return jit_err(rt, VmError::InvalidOperand(format!("local index {}", local_idx))),
         };
+        
+        // eprintln!("JIT_LOAD: idx={}, val={:?}", local_idx, value);
+
         // Mirror `LOAD` behavior (upvalue pointer deref).
         match value {
             Value::Pointer(ptr) => {
@@ -2653,19 +2663,16 @@ pub(crate) unsafe extern "C" fn nyx_jit_store(rt: *mut VmRuntime, local_idx: i32
         if pos >= rt.stack.len() {
             return jit_err(rt, VmError::InvalidOperand(format!("local index {}", local_idx)));
         }
+        
         match &rt.stack[pos] {
             Value::Pointer(ptr) => {
                 let slot = rt.heap.slots.get_mut(*ptr).and_then(|s| s.as_mut());
                 if let Some(slot) = slot {
-                    if slot.is_upvalue {
-                        slot.value = value;
-                        return 0;
-                    }
+                    slot.value = value.clone();
                 }
-                rt.stack[pos] = Value::Pointer(*ptr);
             }
             _ => {
-                rt.stack[pos] = value;
+                rt.stack[pos] = value.clone();
             }
         }
         0
@@ -2683,7 +2690,11 @@ pub(crate) unsafe extern "C" fn nyx_jit_add(rt: *mut VmRuntime) -> i64 {
             Ok(v) => v,
             Err(e) => return jit_err(rt, e),
         };
-        match rt.binary_op(&a, &b, |x, y| x + y).and_then(|v| rt.push_value(v)) {
+        let result = match (&a, &b) {
+            (Value::String(s1), Value::String(s2)) => Ok(Value::String(format!("{}{}", s1, s2))),
+            _ => rt.binary_op(&a, &b, |x, y| x + y),
+        };
+        match result.and_then(|v| rt.push_value(v)) {
             Ok(()) => 0,
             Err(e) => jit_err(rt, e),
         }
@@ -3676,8 +3687,8 @@ mod tests {
             arity: 0,
             num_locals: 0,
             instructions: vec![
-                BytecodeInstr::with_operand(OpCode::PUSH, c0 as i32, 0),
-                BytecodeInstr::with_operand(OpCode::PUSH, c1 as i32, 0),
+                BytecodeInstr::with_operand(OpCode::PUSH, c0, 0),
+                BytecodeInstr::with_operand(OpCode::PUSH, c1, 0),
                 BytecodeInstr::new(OpCode::CALL, vec![add_idx as i32, 2], 0),
                 BytecodeInstr::new(OpCode::RET, vec![], 0),
             ],
@@ -3709,8 +3720,10 @@ mod tests {
         };
         module.add_function(main_fn);
 
-        let mut config = VmConfig::default();
-        config.max_instructions = 16;
+        let config = VmConfig {
+            max_instructions: 16,
+            ..Default::default()
+        };
         let mut vm = NyxVm::new(config);
         vm.load(module);
         let result = vm.run("main");
@@ -3778,9 +3791,11 @@ mod tests {
         };
         module.add_function(main_fn);
 
-        let mut config = VmConfig::default();
-        config.heap_size = std::mem::size_of::<Value>();
-        config.enable_gc = true;
+        let config = VmConfig {
+            heap_size: std::mem::size_of::<Value>(),
+            enable_gc: true,
+            ..Default::default()
+        };
         let mut vm = NyxVm::new(config);
         vm.load(module);
         let result = vm.run("main");

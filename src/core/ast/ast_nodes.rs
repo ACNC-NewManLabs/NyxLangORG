@@ -89,6 +89,7 @@ pub enum ItemKind {
     Use(UseDecl),
     Export(ExportDecl),
     Protocol(ProtocolDecl),
+    Stmt(Stmt),
 }
 
 // ─── Function ─────────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ pub struct Param {
     pub mutable: bool,
     pub param_type: Type,
     pub default_value: Option<Expr>,
+    pub is_variadic: bool,
 }
 
 // ─── Struct ────────────────────────────────────────────────────────────────────
@@ -457,6 +459,32 @@ pub enum Stmt {
     },
     /// `print(…)` — special built-in kept for backward compat
     Print { expr: Expr },
+    /// `yield expr`
+    Yield { expr: Option<Expr>, span: Span },
+}
+
+impl Stmt {
+    pub fn span(&self) -> &Span {
+        match self {
+            Stmt::Let { span, .. } => span,
+            Stmt::Assign { span, .. } => span,
+            Stmt::CompoundAssign { span, .. } => span,
+            Stmt::Expr(expr) => expr.span(),
+            Stmt::If { span, .. } => span,
+            Stmt::While { span, .. } => span,
+            Stmt::ForIn { span, .. } => span,
+            Stmt::Loop { span, .. } => span,
+            Stmt::Match { span, .. } => span,
+            Stmt::Return { span, .. } => span,
+            Stmt::Break { span, .. } => span,
+            Stmt::Continue { span, .. } => span,
+            Stmt::Unsafe { span, .. } => span,
+            Stmt::InlineAsm { span, .. } => span,
+            Stmt::Yield { span, .. } => span,
+            Stmt::Defer { span, .. } => span,
+            Stmt::Print { .. } => &Span { start: crate::core::lexer::token::Position { line: 0, column: 0, offset: 0 }, end: crate::core::lexer::token::Position { line: 0, column: 0, offset: 0 } },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -476,157 +504,219 @@ pub struct IfBranch {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Expr {
     // Literals
-    IntLiteral(i64),
-    FloatLiteral(f64),
-    StringLiteral(String),
-    CharLiteral(char),
-    BoolLiteral(bool),
-    NullLiteral,
+    IntLiteral { value: i64, span: Span },
+    FloatLiteral { value: f64, span: Span },
+    StringLiteral { value: String, span: Span },
+    CharLiteral { value: char, span: Span },
+    BoolLiteral { value: bool, span: Span },
+    NullLiteral { span: Span },
 
     // Composite literals
-    ArrayLiteral(Vec<Expr>),
+    ArrayLiteral { elements: Vec<Expr>, span: Span },
     ArrayRepeat {
         value: Box<Expr>,
         len: Box<Expr>,
+        span: Span,
     },
-    TupleLiteral(Vec<Expr>),
-    BigIntLiteral(String),
+    TupleLiteral { elements: Vec<Expr>, span: Span },
+    BigIntLiteral { value: String, span: Span },
 
     // Named reference
-    Identifier(String),
-    Path(Vec<String>), // a::b::c
+    Identifier { name: String, span: Span },
+    Path { segments: Vec<String>, span: Span },
 
     // Operators
     Binary {
         left: Box<Expr>,
         op: String,
         right: Box<Expr>,
+        span: Span,
     },
     Unary {
         op: String,
         right: Box<Expr>,
+        span: Span,
     },
 
     // Postfix
     FieldAccess {
         object: Box<Expr>,
         field: String,
+        span: Span,
     },
     MethodCall {
         receiver: Box<Expr>,
         method: String,
         args: Vec<Expr>,
+        span: Span,
     },
     Index {
         object: Box<Expr>,
         index: Box<Expr>,
+        span: Span,
     },
     Slice {
         object: Box<Expr>,
         start: Option<Box<Expr>>,
         end: Option<Box<Expr>>,
+        span: Span,
     },
-    TryOp(Box<Expr>), // `expr?`
+    TryOp { expr: Box<Expr>, span: Span },
 
     // Calls
     Call {
         callee: Box<Expr>,
         args: Vec<Expr>,
+        span: Span,
     },
 
-    // Struct literal  `Name { field: val, … }`
+    // Struct literal
     StructLiteral {
         name: String,
         fields: Vec<FieldInit>,
+        span: Span,
     },
 
-    // Block struct literal  `{ field: val, … }` (anonymous)
-    BlockLiteral(Vec<BlockItem>),
+    // Block struct literal
+    BlockLiteral { items: Vec<BlockItem>, span: Span },
 
-    // Type cast  `expr as Type`
+    // Type cast
     Cast {
         expr: Box<Expr>,
         ty: Type,
+        span: Span,
     },
 
-    // Async  `expr.await`
-    Await(Box<Expr>),
+    // Async
+    Await { expr: Box<Expr>, span: Span },
 
-    // Range  `a..b` / `a..=b`
+    // Range
     Range {
         start: Option<Box<Expr>>,
         end: Option<Box<Expr>>,
         inclusive: bool,
+        span: Span,
     },
 
-    // Closure  `|params| [-> T] body`
+    // Closure
     Closure {
         params: Vec<ClosureParam>,
         return_ty: Option<Type>,
         body: Box<Expr>,
+        span: Span,
     },
 
-    // Reference  `&expr` / `&mut expr`
+    // Reference
     Reference {
         mutable: bool,
         expr: Box<Expr>,
+        span: Span,
     },
 
-    // Dereference  `*expr`
-    Deref(Box<Expr>),
+    // Dereference
+    Deref { expr: Box<Expr>, span: Span },
 
-    // Move  `move expr`
-    Move(Box<Expr>),
+    // Move
+    Move { expr: Box<Expr>, span: Span },
 
-    // Block expression  `{ stmts… [tail_expr] }`
-    Block(Vec<Stmt>, Option<Box<Expr>>),
+    // Block expression
+    Block {
+        stmts: Vec<Stmt>,
+        tail_expr: Option<Box<Expr>>,
+        span: Span,
+    },
 
-    // If-else as expression
+    // If-else
     IfExpr {
         branches: Vec<IfBranch>,
         else_body: Option<Box<Expr>>,
+        span: Span,
     },
-    // Ternary  `cond ? then_expr : else_expr`
+
+    // Ternary
     Ternary {
         condition: Box<Expr>,
         then_expr: Box<Expr>,
         else_expr: Box<Expr>,
+        span: Span,
     },
 
     // Match expression
     Match {
         expr: Box<Expr>,
         arms: Vec<MatchArm>,
+        span: Span,
     },
 
-    // Async block  `async { … }`
-    AsyncBlock(Vec<Stmt>),
+    // Async block
+    AsyncBlock { body: Vec<Stmt>, span: Span },
 
-    /// `css\`...\`` template literal. The payload is the raw CSS text
-    /// (with any ${...} interpolation segments kept verbatim).
-    /// Evaluates to `Map<string, string>` at runtime.
-    CssLiteral(String),
+    // Css template literal
+    CssLiteral { value: String, span: Span },
 
     /// `loop expr` as expression
-    Loop(Box<Expr>),
+    Loop { expr: Box<Expr>, span: Span },
+}
+
+impl Expr {
+    pub fn span(&self) -> &Span {
+        match self {
+            Expr::IntLiteral { span, .. } => span,
+            Expr::FloatLiteral { span, .. } => span,
+            Expr::StringLiteral { span, .. } => span,
+            Expr::CharLiteral { span, .. } => span,
+            Expr::BoolLiteral { span, .. } => span,
+            Expr::NullLiteral { span } => span,
+            Expr::ArrayLiteral { span, .. } => span,
+            Expr::ArrayRepeat { span, .. } => span,
+            Expr::TupleLiteral { span, .. } => span,
+            Expr::BigIntLiteral { span, .. } => span,
+            Expr::Identifier { span, .. } => span,
+            Expr::Path { span, .. } => span,
+            Expr::Binary { span, .. } => span,
+            Expr::Unary { span, .. } => span,
+            Expr::FieldAccess { span, .. } => span,
+            Expr::MethodCall { span, .. } => span,
+            Expr::Index { span, .. } => span,
+            Expr::Slice { span, .. } => span,
+            Expr::TryOp { span, .. } => span,
+            Expr::Call { span, .. } => span,
+            Expr::StructLiteral { span, .. } => span,
+            Expr::BlockLiteral { span, .. } => span,
+            Expr::Cast { span, .. } => span,
+            Expr::Await { span, .. } => span,
+            Expr::Range { span, .. } => span,
+            Expr::Closure { span, .. } => span,
+            Expr::Reference { span, .. } => span,
+            Expr::Deref { span, .. } => span,
+            Expr::Move { span, .. } => span,
+            Expr::Block { span, .. } => span,
+            Expr::IfExpr { span, .. } => span,
+            Expr::Ternary { span, .. } => span,
+            Expr::Match { span, .. } => span,
+            Expr::AsyncBlock { span, .. } => span,
+            Expr::CssLiteral { span, .. } => span,
+            Expr::Loop { span, .. } => span,
+        }
+    }
 }
 
 // Keep old names for backward compat with IR builder / tests
 impl Expr {
     pub fn int(n: i64) -> Self {
-        Expr::IntLiteral(n)
+        Expr::IntLiteral { value: n, span: Span::default() }
     }
     pub fn float(f: f64) -> Self {
-        Expr::FloatLiteral(f)
+        Expr::FloatLiteral { value: f, span: Span::default() }
     }
     pub fn string(s: impl Into<String>) -> Self {
-        Expr::StringLiteral(s.into())
+        Expr::StringLiteral { value: s.into(), span: Span::default() }
     }
     pub fn bool(b: bool) -> Self {
-        Expr::BoolLiteral(b)
+        Expr::BoolLiteral { value: b, span: Span::default() }
     }
     pub fn ident(s: impl Into<String>) -> Self {
-        Expr::Identifier(s.into())
+        Expr::Identifier { name: s.into(), span: Span::default() }
     }
 }
 

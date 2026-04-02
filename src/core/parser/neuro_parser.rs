@@ -120,6 +120,14 @@ impl NeuroParser {
 
     // ── Token helpers ────────────────────────────────────────────────────────
 
+    fn prev(&self) -> &Token {
+        if self.pos > 0 {
+            &self.tokens[self.pos - 1]
+        } else {
+            &self.tokens[0]
+        }
+    }
+
     fn cur(&self) -> &Token {
         &self.tokens[self.pos.min(self.tokens.len() - 1)]
     }
@@ -165,7 +173,7 @@ impl NeuroParser {
         if self.cur().kind == k {
             Ok(self.advance().lexeme.clone())
         } else {
-            Err(self.missing_token(&k.display()))
+            Err(self.missing_token(k.display()))
         }
     }
 
@@ -432,16 +440,8 @@ impl NeuroParser {
             TokenKind::KwExport => ItemKind::Export(self.parse_export()?),
             TokenKind::KwSecure => ItemKind::Protocol(self.parse_protocol_decl()?),
             _ => {
-                return Err(
-                    self.error_here(
-                        codes::PARSER_UNEXPECTED_TOKEN,
-                        format!(
-                            "unexpected token '{}' at top level",
-                            self.cur().lexeme
-                        ),
-                    )
-                    .with_suggestion("remove this token or start a valid item"),
-                )
+                let s = self.parse_stmt()?;
+                ItemKind::Stmt(s)
             }
         };
 
@@ -557,11 +557,17 @@ impl NeuroParser {
                 params.push(Param {
                     name: "self".into(),
                     mutable,
+                    is_variadic: false,
                     param_type: Type::simple("Self"),
                     default_value: None,
                 });
             } else {
-                let mutable = self.eat_kw("mut");
+                let mut is_variadic = false;
+                if self.at(&TokenKind::DotDotDot) {
+                    self.advance();
+                    is_variadic = true;
+                }
+                let mut_token = self.eat_kw("mut");
                 let name = self.expect_ident()?;
                 let mut is_optional = false;
                 if self.at(&TokenKind::Question) {
@@ -580,11 +586,12 @@ impl NeuroParser {
                     default_value = Some(self.parse_expr()?);
                 }
                 if is_optional && default_value.is_none() {
-                    default_value = Some(Expr::NullLiteral);
+                    default_value = Some(Expr::NullLiteral { span: self.span_at() });
                 }
                 params.push(Param {
                     name,
-                    mutable,
+                    mutable: mut_token,
+                    is_variadic,
                     param_type,
                     default_value,
                 });
@@ -1405,7 +1412,7 @@ impl NeuroParser {
         Ok(AsmOperand { expr, reg })
     }
 
-    fn parse_stmt(&mut self) -> Result<Stmt, Diagnostic> {
+    pub fn parse_stmt(&mut self) -> Result<Stmt, Diagnostic> {
         let span = self.span_at();
         // let / mut let
         let is_mut_let = self.at_kw("mut") && {
@@ -1442,7 +1449,7 @@ impl NeuroParser {
                 self.advance();
                 self.parse_expr()?
             } else {
-                Expr::NullLiteral
+                Expr::NullLiteral { span: self.span_at() }
             };
             self.eat_semi();
             return Ok(Stmt::Let {
@@ -1548,6 +1555,13 @@ impl NeuroParser {
                 span: Span::new(span.start, self.cur().span.start),
             });
         }
+        // yield
+        if self.at(&TokenKind::KwYield) {
+            self.advance();
+            let expr = self.parse_expr()?;
+            self.eat_semi();
+            return Ok(Stmt::Yield { expr: Some(expr), span: Span::new(span.start, self.cur().span.start) });
+        }
         // unsafe
         if self.at(&TokenKind::KwUnsafe) {
             self.advance();
@@ -1626,9 +1640,10 @@ impl NeuroParser {
         if let Expr::Call {
             ref callee,
             ref args,
+            span: _,
         } = expr
         {
-            if let Expr::Identifier(ref name) = callee.as_ref() {
+            if let Expr::Identifier { ref name, .. } = callee.as_ref() {
                 if name == "print" && args.len() == 1 {
                     self.eat_semi();
                     return Ok(Stmt::Print {
@@ -1796,11 +1811,14 @@ impl NeuroParser {
             return Ok(MatchPattern::Literal(e));
         }
         if self.at(&TokenKind::Minus) {
+            let op_span = self.span_at();
             self.advance();
             let e = self.parse_primary()?;
+            let combined_span = Span::new(op_span.start, e.span().end);
             return Ok(MatchPattern::Literal(Expr::Unary {
                 op: "-".into(),
                 right: Box::new(e),
+                span: combined_span,
             }));
         }
         let mut name = self.expect_ident()?;
@@ -1855,7 +1873,7 @@ impl NeuroParser {
 
     // ── Expressions (Pratt precedence climbing) ───────────────────────────────
 
-    fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
+    pub fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
         self.parse_expr_with_stop(false)
     }
 
@@ -1875,15 +1893,18 @@ impl NeuroParser {
                 let then_expr = self.parse_expr_prec_with_stop(0, true, stop_on_lbrace)?;
                 self.expect(TokenKind::Colon)?;
                 let else_expr = self.parse_expr()?;
+                let combined_span = Span::new(expr.span().start, else_expr.span().end);
                 expr = Expr::Ternary {
                     condition: Box::new(expr),
                     then_expr: Box::new(then_expr),
                     else_expr: Box::new(else_expr),
+                    span: combined_span,
                 };
                 break;
             } else {
                 self.advance();
-                expr = Expr::TryOp(Box::new(expr));
+                let try_span = Span::new(expr.span().start, self.prev().span.end);
+                expr = Expr::TryOp { expr: Box::new(expr), span: try_span };
                 continue;
             }
         }
@@ -1920,10 +1941,12 @@ impl NeuroParser {
                 } else {
                     None
                 };
+                let range_span = Span::new(left.span().start, end.as_ref().map(|e| e.span().end).unwrap_or(self.prev().span.end));
                 left = Expr::Range {
                     start: Some(Box::new(left)),
                     end,
                     inclusive,
+                    span: range_span,
                 };
                 continue;
             }
@@ -1936,10 +1959,12 @@ impl NeuroParser {
             self.advance();
             let next_prec = if right_assoc { prec } else { prec + 1 };
             let right = self.parse_expr_prec_with_stop(next_prec, stop_on_colon, stop_on_lbrace)?;
+            let combined_span = Span::new(left.span().start, right.span().end);
             left = Expr::Binary {
                 left: Box::new(left),
                 op,
                 right: Box::new(right),
+                span: combined_span,
             };
         }
         Ok(left)
@@ -1975,46 +2000,62 @@ impl NeuroParser {
     fn parse_unary(&mut self) -> Result<Expr, Diagnostic> {
         if self.at(&TokenKind::Bang) || self.at(&TokenKind::KwNot) {
             self.advance();
+            let op_span = self.prev().span;
             let r = self.parse_unary()?;
+            let combined_span = Span::new(op_span.start, r.span().end);
             return Ok(Expr::Unary {
                 op: "!".into(),
                 right: Box::new(r),
+                span: combined_span,
             });
         }
         if self.at(&TokenKind::Minus) {
+            let op_span = self.span_at();
             self.advance();
             let r = self.parse_unary()?;
+            let combined_span = Span::new(op_span.start, r.span().end);
             return Ok(Expr::Unary {
                 op: "-".into(),
                 right: Box::new(r),
+                span: combined_span,
             });
         }
         if self.at(&TokenKind::Tilde) {
+            let op_span = self.span_at();
             self.advance();
             let r = self.parse_unary()?;
+            let combined_span = Span::new(op_span.start, r.span().end);
             return Ok(Expr::Unary {
                 op: "~".into(),
                 right: Box::new(r),
+                span: combined_span,
             });
         }
         if self.at(&TokenKind::Star) {
+            let op_span = self.span_at();
             self.advance();
             let r = self.parse_unary()?;
-            return Ok(Expr::Deref(Box::new(r)));
+            let combined_span = Span::new(op_span.start, r.span().end);
+            return Ok(Expr::Deref { expr: Box::new(r), span: combined_span });
         }
         if self.at(&TokenKind::Ampersand) {
+            let op_span = self.span_at();
             self.advance();
             let mutable = self.eat_kw("mut");
             let r = self.parse_unary()?;
+            let combined_span = Span::new(op_span.start, r.span().end);
             return Ok(Expr::Reference {
                 mutable,
                 expr: Box::new(r),
+                span: combined_span,
             });
         }
         if self.at_kw("move") {
+            let op_span = self.span_at();
             self.advance();
             let r = self.parse_unary()?;
-            return Ok(Expr::Move(Box::new(r)));
+            let combined_span = Span::new(op_span.start, r.span().end);
+            return Ok(Expr::Move { expr: Box::new(r), span: combined_span });
         }
         self.parse_postfix()
     }
@@ -2022,6 +2063,7 @@ impl NeuroParser {
     fn parse_postfix(&mut self) -> Result<Expr, Diagnostic> {
         let mut e = self.parse_primary()?;
         loop {
+            let start_pos = e.span().start;
             // `.await`
             if self.at(&TokenKind::Dot)
                 && self
@@ -2032,7 +2074,8 @@ impl NeuroParser {
             {
                 self.advance();
                 self.advance();
-                e = Expr::Await(Box::new(e));
+                let await_span = Span::new(start_pos, self.prev().span.end);
+                e = Expr::Await { expr: Box::new(e), span: await_span };
                 continue;
             }
             // field/method access
@@ -2073,11 +2116,13 @@ impl NeuroParser {
                         receiver: Box::new(e),
                         method: field,
                         args,
+                        span: Span::new(start_pos, self.prev().span.end),
                     };
                 } else {
                     e = Expr::FieldAccess {
                         object: Box::new(e),
                         field,
+                        span: Span::new(start_pos, self.prev().span.end),
                     };
                 }
                 continue;
@@ -2097,6 +2142,7 @@ impl NeuroParser {
                         object: Box::new(e),
                         start: None,
                         end,
+                        span: Span::new(start_pos, self.prev().span.end),
                     };
                 } else {
                     let start_expr = self.parse_expr()?;
@@ -2112,12 +2158,14 @@ impl NeuroParser {
                             object: Box::new(e),
                             start: Some(Box::new(start_expr)),
                             end,
+                            span: Span::new(start_pos, self.prev().span.end),
                         };
                     } else {
                         self.expect(TokenKind::RBracket)?;
                         e = Expr::Index {
                             object: Box::new(e),
                             index: Box::new(start_expr),
+                            span: Span::new(start_pos, self.prev().span.end),
                         };
                     }
                 }
@@ -2150,6 +2198,7 @@ impl NeuroParser {
                 e = Expr::Call {
                     callee: Box::new(e),
                     args,
+                    span: Span::new(start_pos, self.prev().span.end),
                 };
                 continue;
             }
@@ -2160,6 +2209,7 @@ impl NeuroParser {
                 e = Expr::Cast {
                     expr: Box::new(e),
                     ty,
+                    span: Span::new(start_pos, self.prev().span.end),
                 };
                 continue;
             }
@@ -2185,6 +2235,7 @@ impl NeuroParser {
             TokenKind::Integer => {
                 let _span = self.cur().span;
                 let v = self.cur().lexeme.clone();
+                let span = self.cur().span;
                 self.advance();
                 let parsed = if v.starts_with("0x") || v.starts_with("0X") {
                     i64::from_str_radix(&v[2..], 16)
@@ -2196,8 +2247,8 @@ impl NeuroParser {
                     v.parse()
                 };
                 match parsed {
-                    Ok(n) => Ok(Expr::IntLiteral(n)),
-                    Err(_) => Ok(Expr::BigIntLiteral(v)),
+                    Ok(n) => Ok(Expr::IntLiteral { value: n, span }),
+                    Err(_) => Ok(Expr::BigIntLiteral { value: v, span }),
                 }
             }
             TokenKind::Float => {
@@ -2205,7 +2256,7 @@ impl NeuroParser {
                 let v = self.cur().lexeme.clone();
                 self.advance();
                 match v.parse::<f64>() {
-                    Ok(n) => Ok(Expr::FloatLiteral(n)),
+                    Ok(n) => Ok(Expr::FloatLiteral { value: n, span }),
                     Err(_) => Err(
                         self.error_at(
                             codes::INVALID_LITERAL,
@@ -2218,39 +2269,46 @@ impl NeuroParser {
             }
             TokenKind::String => {
                 let v = self.cur().lexeme.clone();
+                let span = self.cur().span;
                 self.advance();
-                Ok(Expr::StringLiteral(v))
+                Ok(Expr::StringLiteral { value: v, span })
             }
             TokenKind::CssLiteral => {
                 let raw = self.cur().lexeme.clone();
+                let span = self.cur().span;
                 self.advance();
-                Ok(Expr::CssLiteral(raw))
+                Ok(Expr::CssLiteral { value: raw, span })
             }
             TokenKind::Char => {
                 let v = self.cur().lexeme.clone();
+                let span = self.cur().span;
                 self.advance();
-                Ok(Expr::CharLiteral(v.chars().next().unwrap_or('\0')))
+                Ok(Expr::CharLiteral { value: v.chars().next().unwrap_or('\0'), span })
             }
             TokenKind::Boolean | TokenKind::KwTrue => {
+                let span = self.cur().span;
                 let v = self.cur().lexeme == "true";
                 self.advance();
-                Ok(Expr::BoolLiteral(v))
+                Ok(Expr::BoolLiteral { value: v, span })
             }
             TokenKind::KwFalse => {
+                let span = self.cur().span;
                 self.advance();
-                Ok(Expr::BoolLiteral(false))
+                Ok(Expr::BoolLiteral { value: false, span })
             }
             TokenKind::Null | TokenKind::KwNull => {
+                let span = self.cur().span;
                 self.advance();
-                Ok(Expr::NullLiteral)
+                Ok(Expr::NullLiteral { span })
             }
 
             // array literal
             TokenKind::LBracket => {
+                let start_span = self.span_at();
                 self.advance();
                 if self.at(&TokenKind::RBracket) {
                     self.advance();
-                    return Ok(Expr::ArrayLiteral(vec![]));
+                    return Ok(Expr::ArrayLiteral { elements: vec![], span: Span::new(start_span.start, self.prev().span.end) });
                 }
                 let first = self.parse_expr()?;
                 if self.at(&TokenKind::Semicolon) {
@@ -2260,6 +2318,7 @@ impl NeuroParser {
                     return Ok(Expr::ArrayRepeat {
                         value: Box::new(first),
                         len: Box::new(len),
+                        span: Span::new(start_span.start, self.prev().span.end),
                     });
                 }
                 let mut elems = Vec::new();
@@ -2281,15 +2340,16 @@ impl NeuroParser {
                     elems.push(self.parse_expr()?);
                 }
                 self.expect(TokenKind::RBracket)?;
-                Ok(Expr::ArrayLiteral(elems))
+                Ok(Expr::ArrayLiteral { elements: elems, span: Span::new(start_span.start, self.prev().span.end) })
             }
 
             // grouped, tuple, or closure `(…)`
             TokenKind::LParen => {
+                let start_span = self.span_at();
                 self.advance();
                 if self.at(&TokenKind::RParen) {
                     self.advance();
-                    return Ok(Expr::TupleLiteral(vec![]));
+                    return Ok(Expr::TupleLiteral { elements: vec![], span: Span::new(start_span.start, self.prev().span.end) });
                 }
                 let first = self.parse_expr()?;
                 if self.at(&TokenKind::RParen) {
@@ -2305,11 +2365,12 @@ impl NeuroParser {
                     elems.push(self.parse_expr()?);
                 }
                 self.expect(TokenKind::RParen)?;
-                Ok(Expr::TupleLiteral(elems))
+                Ok(Expr::TupleLiteral { elements: elems, span: Span::new(start_span.start, self.prev().span.end) })
             }
 
             // block expression / struct-literal-without-name `{ field: val }`
             TokenKind::LBrace => {
+                let start_span = self.span_at();
                 // peek: if next is field name followed by colon (skipping trivia), it's a block literal
                 let next = self.next_non_trivia_pos(self.pos + 1);
                 let next2 = self.next_non_trivia_pos(next + 1);
@@ -2351,15 +2412,20 @@ impl NeuroParser {
                         self.skip_newlines();
                     }
                     self.expect(TokenKind::RBrace)?;
-                    return Ok(Expr::BlockLiteral(items));
+                    return Ok(Expr::BlockLiteral { items, span: Span::new(start_span.start, self.prev().span.end) });
                 }
                 // otherwise a block expression
                 let stmts = self.parse_block()?;
-                Ok(Expr::Block(stmts, None))
+                Ok(Expr::Block {
+                    stmts,
+                    tail_expr: None,
+                    span: Span::new(start_span.start, self.prev().span.end),
+                })
             }
 
             // anonymous function `fn(params) -> ret { body }` or `fn(params) -> expr`
             TokenKind::KwFn => {
+                let start_span = self.span_at();
                 self.advance();
                 self.expect(TokenKind::LParen)?;
                 let params = self.parse_params()?;
@@ -2383,7 +2449,12 @@ impl NeuroParser {
                             return Ok(Expr::Closure {
                                 params: cparams,
                                 return_ty,
-                                body: Box::new(Expr::Block(body_stmts, None)),
+                                body: Box::new(Expr::Block {
+                                    stmts: body_stmts,
+                                    tail_expr: None,
+                                    span: Span::new(start_span.start, self.prev().span.end),
+                                }),
+                                span: Span::new(start_span.start, self.prev().span.end),
                             });
                         }
                     }
@@ -2401,6 +2472,7 @@ impl NeuroParser {
                         params: cparams,
                         return_ty: None,
                         body: Box::new(body_expr),
+                        span: Span::new(start_span.start, self.prev().span.end),
                     });
                 }
                 let body_stmts = self.parse_block()?;
@@ -2415,12 +2487,18 @@ impl NeuroParser {
                 Ok(Expr::Closure {
                     params: cparams,
                     return_ty,
-                    body: Box::new(Expr::Block(body_stmts, None)),
+                    body: Box::new(Expr::Block {
+                        stmts: body_stmts,
+                        tail_expr: None,
+                        span: Span::new(start_span.start, self.prev().span.end),
+                    }),
+                    span: Span::new(start_span.start, self.prev().span.end),
                 })
             }
 
             // closure `|params| body`
             TokenKind::Pipe => {
+                let start_span = self.span_at();
                 self.advance();
                 let mut params = Vec::new();
                 while !self.at(&TokenKind::Pipe) && !self.is_eof() {
@@ -2450,11 +2528,13 @@ impl NeuroParser {
                     params,
                     return_ty: ret_ty,
                     body: Box::new(body),
+                    span: Span::new(start_span.start, self.prev().span.end),
                 })
             }
 
             // if expression
             TokenKind::KwIf => {
+                let start_span = self.span_at();
                 self.advance();
                 let cond = self.parse_control_expr()?;
                 let body = self.parse_block()?;
@@ -2464,7 +2544,7 @@ impl NeuroParser {
                         Some(Box::new(self.parse_primary()?))
                     } else {
                         let block = self.parse_block()?;
-                        Some(Box::new(Expr::Block(block, None)))
+                        Some(Box::new(Expr::Block { stmts: block, tail_expr: None, span: self.span_at() }))
                     }
                 } else {
                     None
@@ -2475,11 +2555,13 @@ impl NeuroParser {
                         body,
                     }],
                     else_body: else_e,
+                    span: Span::new(start_span.start, self.prev().span.end),
                 })
             }
 
             // loop expression
             TokenKind::KwLoop => {
+                let start_span = self.span_at();
                 let next_pos = self.next_non_trivia_pos(self.pos + 1);
                 let next_kind = self.tokens.get(next_pos).map(|t| t.kind.clone());
                 if !matches!(next_kind, Some(TokenKind::LBrace)) {
@@ -2488,11 +2570,12 @@ impl NeuroParser {
                 }
                 self.advance();
                 let e = self.parse_expr()?;
-                Ok(Expr::Loop(Box::new(e)))
+                Ok(Expr::Loop { expr: Box::new(e), span: Span::new(start_span.start, self.prev().span.end) })
             }
 
             // match expression
             TokenKind::KwMatch => {
+                let start_span = self.span_at();
                 self.advance();
                 let e = self.parse_control_expr()?;
                 self.expect(TokenKind::LBrace)?;
@@ -2501,15 +2584,17 @@ impl NeuroParser {
                 Ok(Expr::Match {
                     expr: Box::new(e),
                     arms,
+                    span: Span::new(start_span.start, self.prev().span.end),
                 })
             }
 
             // async block
             TokenKind::KwAsync => {
+                let start_span = self.span_at();
                 self.advance();
                 let _ = self.eat_kw("move");
                 let block = self.parse_block()?;
-                Ok(Expr::AsyncBlock(block))
+                Ok(Expr::AsyncBlock { body: block, span: Span::new(start_span.start, self.prev().span.end) })
             }
 
             // identifier / path / struct literal
@@ -2558,6 +2643,7 @@ impl NeuroParser {
     }
 
     fn parse_identifier_like_expr(&mut self, first: String) -> Result<Expr, Diagnostic> {
+        let start_pos = self.prev().span.start;
         let mut parts = vec![first];
         if self.at(&TokenKind::Less) && self.can_parse_type_args_in_expr() {
             self.advance();
@@ -2630,7 +2716,7 @@ impl NeuroParser {
                         self.advance();
                         self.parse_expr()?
                     } else {
-                        Expr::Identifier(fn_.clone())
+                        Expr::Identifier { name: fn_.clone(), span: self.span_at() }
                     };
                     fields.push(FieldInit {
                         name: fn_,
@@ -2642,13 +2728,13 @@ impl NeuroParser {
                     self.skip_newlines();
                 }
                 self.expect(TokenKind::RBrace)?;
-                return Ok(Expr::StructLiteral { name, fields });
+                return Ok(Expr::StructLiteral { name, fields, span: Span::new(start_pos, self.prev().span.end) });
             }
         }
         if parts.len() == 1 {
-            Ok(Expr::Identifier(parts.remove(0)))
+            Ok(Expr::Identifier { name: parts.remove(0), span: self.span_at() })
         } else {
-            Ok(Expr::Path(parts))
+            Ok(Expr::Path { segments: parts, span: self.span_at() })
         }
     }
 
@@ -2917,10 +3003,6 @@ impl NeuroParser {
                 self.expect(TokenKind::RBrace)?;
                 steps.push(HandshakeStep::Finish { actions });
             } else if self.at_kw("derive") {
-                 // handle KwSecure/KwProtocol style if they were keywords, 
-                 // but here they are contextual or keywords.
-                 // The earlier eat_contextual_kw("derive") handled it.
-                 // Let's make sure we handle the case where it might be a keyword.
                  self.advance();
                  self.expect(TokenKind::LBrace)?;
                  let mut assignments = Vec::new();
@@ -2936,7 +3018,6 @@ impl NeuroParser {
                  self.expect(TokenKind::RBrace)?;
                  steps.push(HandshakeStep::Derive { assignments });
             } else {
-                // message: Client -> Server: name { ... }
                 let from = self.expect_ident()?;
                 self.expect(TokenKind::Arrow)?;
                 let to = self.expect_ident()?;
@@ -2971,7 +3052,10 @@ impl NeuroParser {
              if self.at(&TokenKind::KwFn) {
                  // treat fn inside session as a special statement or just parse it
                  let f = self.parse_fn_decl()?;
-                 body.push(Stmt::Expr(Expr::Identifier(format!("__session_method_{}", f.name)))); 
+                body.push(Stmt::Expr(Expr::Identifier {
+                    name: format!("__session_method_{}", f.name),
+                    span: self.span_at(),
+                }));
                  // For now, I'll just push a dummy expression or extend SessionDef
                  // Actually, let's keep it simple: SessionDef has Vec<Stmt>.
                  // I'll wrap the function in a Block or similar if needed.

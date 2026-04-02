@@ -6,7 +6,7 @@
     "break", "continue", "struct", "union", "enum", "trait", "impl", "type",
     "mod", "use", "export", "pub", "crate", "super", "self", "Self", "true",
     "false", "null", "none", "async", "await", "move", "where", "const",
-    "static", "unsafe", "extern", "asm", "in", "as", "and", "or", "not", "defer"
+    "static", "unsafe", "extern", "asm", "in", "as", "and", "or", "not", "defer", "yield"
   ],
   "types": [
     "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",

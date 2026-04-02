@@ -115,7 +115,7 @@ fn run_bench(module: &nyx_vm::bytecode::BytecodeModule, func_name: &str, iterati
     // Calculate Standard Deviation (Jitter)
     let variance = times.iter()
         .map(|&t| {
-            let diff = if t > avg { t - avg } else { avg - t };
+            let diff = t.abs_diff(avg);
             diff * diff
         })
         .sum::<u128>() / iterations as u128;

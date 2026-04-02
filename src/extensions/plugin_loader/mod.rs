@@ -305,7 +305,7 @@ impl PluginManager {
         let dynamic_load_error: Option<NyxError> = None;
         #[cfg(feature = "dynamic_loading")]
         {
-            match Library::new(path) {
+            match unsafe { Library::new(path) } {
                 Ok(library) => {
                     // Try to load the plugin_create symbol
                     unsafe {

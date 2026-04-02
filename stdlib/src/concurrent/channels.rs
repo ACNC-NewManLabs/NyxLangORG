@@ -7,6 +7,12 @@ pub struct Channel<T> {
     receiver: Receiver<T>,
 }
 
+impl<T> Default for Channel<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Channel<T> {
     pub fn new() -> Channel<T> {
         let (sender, receiver) = mpsc::channel();

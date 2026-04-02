@@ -1,0 +1,23 @@
+fn main() {
+    let x = 10;
+    let y = 20;
+    let z = x + y + 5; // Should fold to 35
+    
+    println("Folded Z (expected 35): " + z);
+    
+    if false {
+        println("This should NEVER be printed!");
+    } else {
+        println("Aero-Optimizer: Branch pruning works.");
+    }
+    
+    let a = [10, 20, 30];
+    let b = a[1]; // Should fold to 20
+    println("Folded Array Index (expected 20): " + b);
+    
+    let identity = z * 0; // Should fold to 0
+    println("Identity Folding (expected 0): " + identity);
+    
+    let complex = (10 + 5) * (20 / 4) - 5; // Should fold to 70
+    println("Complex Folding (expected 70): " + complex);
+}

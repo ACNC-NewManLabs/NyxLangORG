@@ -37,7 +37,7 @@ impl NyxTableWriter {
         file.write_all(&2u32.to_le_bytes())?;
         
         // Schema
-        let schema_json = serde_json::to_string(schema).unwrap();
+        let schema_json = serde_json::to_string(schema).unwrap_or_else(|_| "[]".to_string());
         file.write_all(&(schema_json.len() as u64).to_le_bytes())?;
         file.write_all(schema_json.as_bytes())?;
         
@@ -78,7 +78,7 @@ impl NyxTableWriter {
                 };
 
                 // Write Stats JSON
-                let stats_json = serde_json::to_string(&stats).unwrap();
+                let stats_json = serde_json::to_string(&stats).unwrap_or_else(|_| "{}".to_string());
                 file.write_all(&(stats_json.len() as u64).to_le_bytes())?;
                 file.write_all(stats_json.as_bytes())?;
 
@@ -148,7 +148,7 @@ impl NyxTableWriter {
         let schema_len = u64::from_le_bytes(schema_len_buf);
         let mut schema_json = vec![0u8; schema_len as usize];
         file.read_exact(&mut schema_json)?;
-        let schema: Schema = serde_json::from_slice(&schema_json).unwrap();
+        let schema: Schema = serde_json::from_slice(&schema_json).expect("Corrupt schema JSON");
         
         let mut num_blocks_buf = [0u8; 8];
         file.read_exact(&mut num_blocks_buf)?;

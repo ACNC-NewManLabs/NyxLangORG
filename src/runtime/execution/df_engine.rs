@@ -23,7 +23,7 @@ pub fn global_schema_catalog() -> &'static Mutex<HashMap<String, Schema>> {
 pub fn global_tx_context() -> &'static crate::runtime::execution::transaction_context::TransactionContext {
     static TX_CTX: OnceLock<crate::runtime::execution::transaction_context::TransactionContext> = OnceLock::new();
     TX_CTX.get_or_init(|| {
-        let engines = global_database_engines().lock().unwrap();
+        let engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
         crate::runtime::execution::transaction_context::TransactionContext::new(Arc::new(engines.dur.clone()))
     })
 }
@@ -59,7 +59,7 @@ pub fn global_database_engines() -> &'static Mutex<NyxDatabaseEngines> {
         let dur = crate::runtime::database::durability::DurabilityStorage::new();
         // HYDRATION: Reconstruct schema catalog from WAL
         if let Ok(recovered_schemas) = dur.reconstruct_catalog() {
-            let mut schema_cat = global_schema_catalog().lock().unwrap();
+            let mut schema_cat = global_schema_catalog().lock().unwrap_or_else(|e| e.into_inner());
             for (name, schema) in recovered_schemas {
                 schema_cat.insert(name, schema);
             }
@@ -85,7 +85,7 @@ pub fn global_database_engines() -> &'static Mutex<NyxDatabaseEngines> {
 }
 
 pub fn create_table(name: String, schema: Schema) -> Result<(), String> {
-    let engines = global_database_engines().lock().unwrap();
+    let engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
     
     // 1. Persist to WAL
     engines.dur.log_op(crate::runtime::database::durability::WalOp::CreateTable {
@@ -94,7 +94,7 @@ pub fn create_table(name: String, schema: Schema) -> Result<(), String> {
     }).map_err(|e| e.to_string())?;
 
     // 2. Update Memory Catalog
-    let mut schema_cat = global_schema_catalog().lock().unwrap();
+    let mut schema_cat = global_schema_catalog().lock().unwrap_or_else(|e| e.into_inner());
     schema_cat.insert(name, schema);
     
     Ok(())
@@ -106,7 +106,7 @@ pub fn register_table(name: String, chunks: Arc<Vec<DataChunk>>) {
 
 pub fn register_table_internal(name: String, chunks: Arc<Vec<DataChunk>>, do_log: bool) {
     // --- 60-PILLAR NATIVE STORAGE & ANALYTICS INTEGRATION ---
-    let engines = crate::runtime::execution::df_engine::global_database_engines().lock().unwrap();
+    let engines = crate::runtime::execution::df_engine::global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
     
     // PERSISTENCE: Log to WAL before memory insertion
     if do_log && !chunks.is_empty() {
@@ -140,17 +140,17 @@ pub fn register_table_internal(name: String, chunks: Arc<Vec<DataChunk>>, do_log
         println!("[DB Engine] O(1) Min/Max headers populated for {}", name);
     }
     // --------------------------------------------------------
-    let mut catalog = global_catalog().lock().unwrap();
+    let mut catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
     catalog.insert(name, chunks);
 }
 
 /// Initializes the engine by recovering established state from the WAL and Checkpoints.
 pub fn init_engine_from_wal() {
-    let engines = global_database_engines().lock().unwrap();
+    let engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
     
     // 1. Try to load from FULL CHECKPOINT first (Secured)
     if let Some(checkpoint_catalog) = engines.dur.load_full_checkpoint() {
-        let mut catalog = global_catalog().lock().unwrap();
+        let mut catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         for (name, chunks) in checkpoint_catalog {
             catalog.insert(name, Arc::new(chunks));
         }
@@ -168,7 +168,7 @@ pub fn init_engine_from_wal() {
                 register_table_internal(name, Arc::new(chunks), false);
             }
             crate::runtime::database::durability::WalOp::DropTable { name } => {
-                let mut catalog = global_catalog().lock().unwrap();
+                let mut catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
                 catalog.remove(&name);
             }
             _ => {} // Handle transaction and chunk ops in a real system
@@ -192,14 +192,14 @@ pub fn init_engine_from_wal() {
         loop {
             interval.tick().await;
             let (max_years, archive_sweep) = {
-                let engines = global_database_engines().lock().unwrap();
+                let engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
                 (engines.retention.max_retention_years, engines.retention.archive_sweep_enabled)
             };
 
             if archive_sweep {
                 println!("[Retention] Running compliance sweep...");
-                let mut catalog = global_catalog().lock().unwrap();
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                let mut catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
                 let max_secs = max_years * 31_536_000;
 
                 for (name, chunks) in catalog.iter_mut() {
@@ -221,7 +221,7 @@ pub fn init_engine_from_wal() {
 
 pub async fn snapshot_global_catalog() -> Result<(), String> {
     let catalog_data = {
-        let catalog = global_catalog().lock().unwrap();
+        let catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         let mut data = std::collections::HashMap::new();
         for (name, chunks) in catalog.iter() {
             data.insert(name.clone(), (**chunks).clone());
@@ -229,7 +229,7 @@ pub async fn snapshot_global_catalog() -> Result<(), String> {
         data
     };
     
-    let engines = global_database_engines().lock().unwrap();
+    let engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
     engines.dur.create_full_checkpoint(&catalog_data).map_err(|e| e.to_string())?;
     
     println!("[Catalog] Global catalog SECURELY snapshotted to nyx_data/checkpoint.bin");
@@ -495,7 +495,7 @@ fn pack_validity(validity: Vec<bool>) -> (Option<Bitmap>, usize) {
     }
     
     let len = validity.len();
-    let byte_len = (len + 7) / 8;
+    let byte_len = len.div_ceil(8);
     let mut data = vec![0u8; byte_len];
     let mut null_count = 0;
     
@@ -592,7 +592,7 @@ impl LogicalPlan {
     pub fn estimate_row_count(&self) -> usize {
         match self {
             LogicalPlan::Scan { source_id, .. } => {
-                let catalog = global_catalog().lock().unwrap();
+                let catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
                 catalog.get(source_id).map(|chunks| chunks.iter().map(|c| c.num_rows()).sum()).unwrap_or(1000)
             }
             LogicalPlan::Filter { input, .. } => input.estimate_row_count() / 2, // Heuristic 50%
@@ -643,7 +643,7 @@ pub struct FilterExecNode {
 
 impl ExecNode for FilterExecNode {
     fn next_chunk(&mut self) -> Result<Option<DataChunk>, String> {
-        let _engines = crate::runtime::execution::df_engine::global_database_engines().lock().unwrap();
+        let _engines = crate::runtime::execution::df_engine::global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
 
         while let Some(chunk) = self.input.next_chunk()? {
             let mask = self.predicate.evaluate(&chunk)?;
@@ -829,7 +829,7 @@ impl HashAggregateExecNode {
                         match op {
                             AggregateOp::Sum => {
                                 if let Value::Array(arr_rc) = &states_row[idx] {
-                                    let mut arr = arr_rc.write().unwrap();
+                                    let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                                     let v_f = match &v { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.0 };
                                     if let Value::Float(sum) = arr[0] { arr[0] = Value::Float(sum + v_f); }
                                 }
@@ -851,7 +851,7 @@ impl HashAggregateExecNode {
                             }
                             AggregateOp::Mean => {
                                 if let Value::Array(arr_rc) = &states_row[idx] {
-                                    let mut arr = arr_rc.write().unwrap();
+                                    let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                                     let v_f = match &v { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.0 };
                                     if let (Value::Float(sum), Value::Int(count)) = (arr[0].clone(), arr[1].clone()) {
                                         arr[0] = Value::Float(sum + v_f);
@@ -881,8 +881,8 @@ impl HashAggregateExecNode {
                         match op {
                             AggregateOp::Sum | AggregateOp::Mean => {
                                 if let (Value::Array(a_rc), Value::Array(b_rc)) = (&entry[idx], &v[idx]) {
-                                    let mut a = a_rc.write().unwrap();
-                                    let b = b_rc.read().unwrap();
+                                    let mut a = a_rc.write().unwrap_or_else(|e| e.into_inner());
+                                    let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
                                     if let (Value::Float(a0), Value::Float(b0)) = (a[0].clone(), b[0].clone()) { a[0] = Value::Float(a0 + b0); }
                                     if let (Value::Int(a1), Value::Int(b1)) = (a[1].clone(), b[1].clone()) { a[1] = Value::Int(a1 + b1); }
                                 }
@@ -935,7 +935,7 @@ impl HashAggregateExecNode {
                     match op {
                         AggregateOp::Sum => {
                             if let Value::Array(arr_rc) = &states_row[idx] {
-                                let mut arr = arr_rc.write().unwrap();
+                                let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                                 let v_f = match &v { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.0 };
                                 if let Value::Float(sum) = arr[0] { arr[0] = Value::Float(sum + v_f); }
                             }
@@ -957,7 +957,7 @@ impl HashAggregateExecNode {
                         }
                         AggregateOp::Mean => {
                             if let Value::Array(arr_rc) = &states_row[idx] {
-                                let mut arr = arr_rc.write().unwrap();
+                                let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                                 let v_f = match &v { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.0 };
                                 if let (Value::Float(sum), Value::Int(count)) = (arr[0].clone(), arr[1].clone()) {
                                     arr[0] = Value::Float(sum + v_f);
@@ -988,8 +988,8 @@ impl HashAggregateExecNode {
                     match op {
                         AggregateOp::Sum | AggregateOp::Mean => {
                             if let (Value::Array(a_rc), Value::Array(b_rc)) = (&entry[idx], &v[idx]) {
-                                let mut a = a_rc.write().unwrap();
-                                let b = b_rc.read().unwrap();
+                                let mut a = a_rc.write().unwrap_or_else(|e| e.into_inner());
+                                let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
                                 if let (Value::Float(a0), Value::Float(b0)) = (a[0].clone(), b[0].clone()) { a[0] = Value::Float(a0 + b0); }
                                 if let (Value::Int(a1), Value::Int(b1)) = (a[1].clone(), b[1].clone()) { a[1] = Value::Int(a1 + b1); }
                             }
@@ -1077,7 +1077,7 @@ impl HashAggregateExecNode {
                 match op {
                     AggregateOp::Sum | AggregateOp::Mean => {
                         if let Value::Array(arr_rc) = v {
-                            let arr = arr_rc.read().unwrap();
+                            let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
                             let sum = arr[0].as_f64().unwrap_or(0.0);
                             let count = arr[1].as_i64().unwrap_or(0);
                             if *op == AggregateOp::Mean {
@@ -1176,7 +1176,7 @@ impl FusedFilterAggExecNode {
                         match op {
                             AggregateOp::Sum => {
                                 if let Value::Array(arr_rc) = &states_row[idx] {
-                                    let mut arr = arr_rc.write().unwrap();
+                                    let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                                     let v_f = match &v { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.0 };
                                     let sum = match arr[0] { Value::Float(f) => f, _ => 0.0 };
                                     arr[0] = Value::Float(sum + v_f);
@@ -1197,7 +1197,7 @@ impl FusedFilterAggExecNode {
                             }
                             AggregateOp::Mean => {
                                 if let Value::Array(arr_rc) = &states_row[idx] {
-                                    let mut arr = arr_rc.write().unwrap();
+                                    let mut arr = arr_rc.write().unwrap_or_else(|e| e.into_inner());
                                     let sum = match arr[0] { Value::Float(f) => f, _ => 0.0 };
                                     let count = match arr[1] { Value::Int(i) => i, _ => 0 };
                                     let v_f = match &v { Value::Float(f) => *f, Value::Int(i) => *i as f64, _ => 0.0 };
@@ -1228,8 +1228,8 @@ impl FusedFilterAggExecNode {
                     match op {
                         AggregateOp::Sum | AggregateOp::Mean => {
                             if let (Value::Array(a_rc), Value::Array(b_rc)) = (&entry[idx], &v[idx]) {
-                                let mut a = a_rc.write().unwrap();
-                                let b = b_rc.read().unwrap();
+                                let mut a = a_rc.write().unwrap_or_else(|e| e.into_inner());
+                                let b = b_rc.read().unwrap_or_else(|e| e.into_inner());
                                 let a0 = match a[0] { Value::Float(f) => f, _ => 0.0 };
                                 let b0 = match b[0] { Value::Float(f) => f, _ => 0.0 };
                                 let a1 = match a[1] { Value::Int(i) => i, _ => 0 };
@@ -1285,7 +1285,7 @@ impl FusedFilterAggExecNode {
                 match op {
                     AggregateOp::Mean | AggregateOp::Sum => {
                         if let Value::Array(arr_rc) = v {
-                            let arr = arr_rc.read().unwrap();
+                            let arr = arr_rc.read().unwrap_or_else(|e| e.into_inner());
                             let sum = arr[0].as_f64().unwrap_or(0.0);
                             let count = arr[1].as_i64().unwrap_or(0);
                             if *op == AggregateOp::Mean {
@@ -1434,9 +1434,9 @@ impl HashJoinExecNode {
                     let val = col.get_value(i);
                     let h = match val {
                         Value::Null => 0,
-                        Value::Int(inner) => ahash::RandomState::with_seeds(inner as u64, 0, 0, 0).hash_one(&inner),
-                        Value::Float(inner) => ahash::RandomState::with_seeds(inner.to_bits(), 0, 0, 0).hash_one(&inner.to_bits()),
-                        Value::Bool(inner) => ahash::RandomState::with_seeds(inner as u64, 0, 0, 0).hash_one(&inner),
+                        Value::Int(inner) => ahash::RandomState::with_seeds(inner as u64, 0, 0, 0).hash_one(inner),
+                        Value::Float(inner) => ahash::RandomState::with_seeds(inner.to_bits(), 0, 0, 0).hash_one(inner.to_bits()),
+                        Value::Bool(inner) => ahash::RandomState::with_seeds(inner as u64, 0, 0, 0).hash_one(inner),
                         Value::Str(ref inner) => ahash::RandomState::with_seeds(0, 0, 0, 0).hash_one(inner),
                         _ => 0,
                     };
@@ -1677,7 +1677,7 @@ impl ExecNode for InsertExecNode {
     fn next_chunk(&mut self) -> Result<Option<DataChunk>, String> {
         if self.done { return Ok(None); }
         
-        let engines = crate::runtime::execution::df_engine::global_database_engines().lock().unwrap();
+        let engines = crate::runtime::execution::df_engine::global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
         let mut total_rows = 0;
         
         while let Some(chunk) = self.source.next_chunk()? {
@@ -1928,7 +1928,7 @@ pub struct SeqScanNode {
 
 impl ExecNode for SeqScanNode {
     fn next_chunk(&mut self) -> Result<Option<DataChunk>, String> {
-        let mut engines = global_database_engines().lock().unwrap();
+        let mut engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
         if !engines.gov.evaluate_row_level_policy(&self.role, &self.table_name) {
             return Err(format!("RLS Violation: Role '{}' denied access to '{}'", self.role, self.table_name));
         }
@@ -2116,7 +2116,7 @@ pub struct BinaryExpr {
 fn compare_to_bitmap<T, U, F>(l: &[T], r: &[U], op: F) -> Bitmap 
 where T: Sync, U: Sync, F: Fn(&T, &U) -> bool + Sync {
     let len = l.len();
-    let byte_len = (len + 7) / 8;
+    let byte_len = len.div_ceil(8);
     let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
         let mut byte = 0u8;
         for bit in 0..8 {
@@ -2356,7 +2356,7 @@ impl DataSource for JsonDataSource {
             let file = std::fs::File::open(&self.path).map_err(|e| e.to_string())?;
             self.reader = Some(std::io::BufReader::new(file));
         }
-        let reader = self.reader.as_mut().unwrap();
+        let reader = self.reader.as_mut().expect("Reader must be initialized");
 
         let mut builders: Vec<ColumnBuilder> = self.schema.fields.iter()
             .map(|field| ColumnBuilder::with_capacity(&field.dtype, self.batch_size))
@@ -2524,16 +2524,16 @@ impl DataSource for MemoryDataSource {
 
 pub fn create_physical_expr(expr: &Expr, schema: &Schema) -> Result<Box<dyn PhysicalExpr>, String> {
     match expr {
-        Expr::Identifier(name) => {
+        Expr::Identifier { name, .. } => {
             let index = schema.fields.iter().position(|f| f.name == *name)
                 .ok_or_else(|| format!("Column {} not found in schema", name))?;
             Ok(Box::new(ColumnExpr { name: name.clone(), index }))
         }
-        Expr::IntLiteral(i) => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Int(*i) })),
-        Expr::FloatLiteral(f) => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Float(*f) })),
-        Expr::BoolLiteral(b) => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Bool(*b) })),
-        Expr::StringLiteral(s) => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Str(s.clone()) })),
-        Expr::Binary { left, op: op_str, right } => {
+        Expr::IntLiteral { value: i, .. } => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Int(*i) })),
+        Expr::FloatLiteral { value: f, .. } => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Float(*f) })),
+        Expr::BoolLiteral { value: b, .. } => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Bool(*b) })),
+        Expr::StringLiteral { value: s, .. } => Ok(Box::new(LiteralExpr { value: crate::runtime::execution::nyx_vm::Value::Str(s.clone()) })),
+        Expr::Binary { left, op: op_str, right, .. } => {
             let l = create_physical_expr(left, schema)?;
             let r = create_physical_expr(right, schema)?;
             let op = match op_str.as_str() {
@@ -2565,11 +2565,11 @@ pub fn create_physical_plan(logical: &LogicalPlan, ctx: &mut ExecutionContext) -
             
             // Try to resolve from global catalog
             {
-                let catalog = global_catalog().lock().unwrap();
+                let catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(chunks) = catalog.get(source_id) {
                     let schema = if chunks.is_empty() {
                         // If we have a schema in the global schema catalog, use it.
-                        global_schema_catalog().lock().unwrap().get(source_id).cloned().unwrap_or(Schema::new(vec![]))
+                        global_schema_catalog().lock().unwrap_or_else(|e| e.into_inner()).get(source_id).cloned().unwrap_or(Schema::new(vec![]))
                     } else {
                         Schema::new(chunks[0].columns.iter().map(|c| Field { 
                             name: c.name.clone(), 
@@ -2636,10 +2636,10 @@ pub fn create_physical_plan(logical: &LogicalPlan, ctx: &mut ExecutionContext) -
                 let mut values = Vec::new();
                 for expr in row {
                     match expr {
-                        Expr::FloatLiteral(f) => values.push(crate::runtime::execution::nyx_vm::Value::Float(*f)),
-                        Expr::IntLiteral(i) => values.push(crate::runtime::execution::nyx_vm::Value::Int(*i)),
-                        Expr::StringLiteral(s) => values.push(crate::runtime::execution::nyx_vm::Value::Str(s.clone())),
-                        Expr::BoolLiteral(b) => values.push(crate::runtime::execution::nyx_vm::Value::Bool(*b)),
+                        Expr::FloatLiteral { value: f, .. } => values.push(crate::runtime::execution::nyx_vm::Value::Float(*f)),
+                        Expr::IntLiteral { value: i, .. } => values.push(crate::runtime::execution::nyx_vm::Value::Int(*i)),
+                        Expr::StringLiteral { value: s, .. } => values.push(crate::runtime::execution::nyx_vm::Value::Str(s.clone())),
+                        Expr::BoolLiteral { value: b, .. } => values.push(crate::runtime::execution::nyx_vm::Value::Bool(*b)),
                         _ => values.push(crate::runtime::execution::nyx_vm::Value::Null),
                     }
                 }
@@ -2680,7 +2680,7 @@ pub fn create_physical_plan(logical: &LogicalPlan, ctx: &mut ExecutionContext) -
             if let LogicalPlan::Scan { source_id: _, projection: _, options: _, schema: _ } = &**input {
                // In a full implementation, we'd extract columns from predicate and push them here.
                // For this hardening, we ensure the engines are aware of the pushed-down logic.
-               let mut engines = global_database_engines().lock().unwrap();
+               let mut engines = global_database_engines().lock().unwrap_or_else(|e| e.into_inner());
                engines.core.pushdown_predicate(&[format!("{:?}", predicate)]);
             }
             let p_input = create_physical_plan(input, ctx)?;
@@ -2949,7 +2949,7 @@ impl ExecNode for UpdateExecNode {
         }
 
         // Update the catalog
-        let mut catalog = global_catalog().lock().unwrap();
+        let mut catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         catalog.insert(self.table_name.clone(), Arc::new(all_chunks));
         
         self.done = true;
@@ -3002,7 +3002,7 @@ impl ExecNode for DeleteExecNode {
             }
         }
 
-        let mut catalog = global_catalog().lock().unwrap();
+        let mut catalog = global_catalog().lock().unwrap_or_else(|e| e.into_inner());
         catalog.insert(self.table_name.clone(), Arc::new(all_chunks));
         
         self.done = true;

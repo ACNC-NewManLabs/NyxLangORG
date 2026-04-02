@@ -123,7 +123,7 @@ impl Compiler {
         let module = ir_builder.build(&Program { items })?;
 
         if matches!(opts.target, Target::BrowserJs) {
-            let backend = crate::systems::backend::js_backend::JsBackend::default();
+            let backend = crate::systems::backend::js_backend::JsBackend;
             let js_code = backend.lower_to_js(&module)?;
 
             std::fs::create_dir_all(&opts.output_dir).map_err(|e| e.to_string())?;
@@ -819,6 +819,18 @@ fn rewrite_stmt(
             );
         }
         Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        Stmt::Yield { expr, .. } => {
+            if let Some(e) = expr {
+                rewrite_expr(
+                    e,
+                    false,
+                    local_functions,
+                    imported_modules,
+                    imported_functions,
+                    module_aliases,
+                );
+            }
+        }
     }
 }
 
@@ -831,7 +843,7 @@ fn rewrite_expr(
     module_aliases: &ModuleAliasIndex,
 ) {
     match expr {
-        Expr::ArrayLiteral(items) | Expr::TupleLiteral(items) => {
+        Expr::ArrayLiteral { elements: items, .. } | Expr::TupleLiteral { elements: items, .. } => {
             for item in items {
                 rewrite_expr(
                     item,
@@ -843,7 +855,7 @@ fn rewrite_expr(
                 );
             }
         }
-        Expr::ArrayRepeat { value, len } => {
+        Expr::ArrayRepeat { value, len, .. } => {
             rewrite_expr(
                 value,
                 false,
@@ -880,10 +892,10 @@ fn rewrite_expr(
             );
         }
         Expr::Unary { right, .. }
-        | Expr::TryOp(right)
-        | Expr::Await(right)
-        | Expr::Deref(right)
-        | Expr::Move(right) => {
+        | Expr::TryOp { expr: right, .. }
+        | Expr::Await { expr: right, .. }
+        | Expr::Deref { expr: right, .. }
+        | Expr::Move { expr: right, .. } => {
             rewrite_expr(
                 right,
                 false,
@@ -923,7 +935,7 @@ fn rewrite_expr(
                 );
             }
         }
-        Expr::Index { object, index } => {
+        Expr::Index { object, index, .. } => {
             rewrite_expr(
                 object,
                 false,
@@ -941,7 +953,7 @@ fn rewrite_expr(
                 module_aliases,
             );
         }
-        Expr::Slice { object, start, end } => {
+        Expr::Slice { object, start, end, .. } => {
             rewrite_expr(
                 object,
                 false,
@@ -971,7 +983,7 @@ fn rewrite_expr(
                 );
             }
         }
-        Expr::Call { callee, args } => {
+        Expr::Call { callee, args, .. } => {
             rewrite_expr(
                 callee,
                 true,
@@ -1003,7 +1015,7 @@ fn rewrite_expr(
                 );
             }
         }
-        Expr::BlockLiteral(items) => {
+        Expr::BlockLiteral { items, .. } => {
             for item in items {
                 match item {
                     BlockItem::Field(field) => rewrite_expr(
@@ -1077,7 +1089,7 @@ fn rewrite_expr(
                 module_aliases,
             );
         }
-        Expr::Block(stmts, tail_expr) => {
+        Expr::Block { stmts, tail_expr, .. } => {
             for stmt in stmts {
                 rewrite_stmt(
                     stmt,
@@ -1101,6 +1113,7 @@ fn rewrite_expr(
         Expr::IfExpr {
             branches,
             else_body,
+            ..
         } => {
             for IfBranch { condition, body } in branches {
                 rewrite_expr(
@@ -1136,6 +1149,7 @@ fn rewrite_expr(
             condition,
             then_expr,
             else_expr,
+            ..
         } => {
             rewrite_expr(
                 condition,
@@ -1162,7 +1176,7 @@ fn rewrite_expr(
                 module_aliases,
             );
         }
-        Expr::Match { expr, arms } => {
+        Expr::Match { expr, arms, .. } => {
             rewrite_expr(
                 expr,
                 false,
@@ -1216,7 +1230,7 @@ fn rewrite_expr(
                 }
             }
         }
-        Expr::AsyncBlock(stmts) => {
+        Expr::AsyncBlock { body: stmts, .. } => {
             for stmt in stmts {
                 rewrite_stmt(
                     stmt,
@@ -1227,7 +1241,7 @@ fn rewrite_expr(
                 );
             }
         }
-        Expr::Loop(expr) => {
+        Expr::Loop { expr, .. } => {
             rewrite_expr(
                 expr,
                 false,
@@ -1237,29 +1251,29 @@ fn rewrite_expr(
                 module_aliases,
             );
         }
-        Expr::Identifier(name) if is_callee => {
+        Expr::Identifier { name, .. } if is_callee => {
             if let Some(qualified) = local_functions.and_then(|functions| functions.get(name)) {
                 *expr = qualified_path_expr(qualified);
             } else if let Some(qualified) = imported_functions.get(name) {
                 *expr = qualified_path_expr(qualified);
             }
         }
-        Expr::Path(parts) => {
+        Expr::Path { segments: parts, .. } => {
             if let Some(qualified) =
                 resolve_path_callee(parts, local_functions, imported_modules, module_aliases)
             {
                 *expr = qualified_path_expr(&qualified);
             }
         }
-        Expr::IntLiteral(_)
-        | Expr::BigIntLiteral(_)
-        | Expr::FloatLiteral(_)
-        | Expr::StringLiteral(_)
-        | Expr::CssLiteral(_)
-        | Expr::CharLiteral(_)
-        | Expr::BoolLiteral(_)
-        | Expr::NullLiteral
-        | Expr::Identifier(_) => {}
+        Expr::IntLiteral { value: _, .. }
+        | Expr::BigIntLiteral { value: _, .. }
+        | Expr::FloatLiteral { value: _, .. }
+        | Expr::StringLiteral { value: _, .. }
+        | Expr::CssLiteral { value: _, .. }
+        | Expr::CharLiteral { value: _, .. }
+        | Expr::BoolLiteral { value: _, .. }
+        | Expr::NullLiteral { .. }
+        | Expr::Identifier { name: _, .. } => {}
     }
 }
 
@@ -1298,7 +1312,7 @@ fn resolve_path_callee(
 }
 
 fn qualified_path_expr(qualified: &str) -> Expr {
-    Expr::Path(qualified.split("::").map(|part| part.to_string()).collect())
+    Expr::Path { segments: qualified.split("::").map(|part| part.to_string()).collect(), span: crate::core::diagnostics::Span::default() }
 }
 
 fn get_nyx_home() -> PathBuf {

@@ -385,7 +385,7 @@ fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         };
 
         let dirty_rects: Vec<Rect> = match dirty_regions {
-            Value::Array(arr) => arr.read().unwrap().iter().filter_map(parse_rect).collect(),
+            Value::Array(arr) => arr.read().unwrap_or_else(|e| e.into_inner()).iter().filter_map(parse_rect).collect(),
             _ => Vec::new(),
         };
 
@@ -400,7 +400,7 @@ fn renderer_render_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
         }
 
         let entries: Vec<Value> = match display_list {
-            Value::Array(arr) => arr.read().unwrap().clone(),
+            Value::Array(arr) => arr.read().unwrap_or_else(|e| e.into_inner()).clone(),
             _ => return Err(err("display_list must be an array")),
         };
 
@@ -643,8 +643,8 @@ struct Color {
 #[derive(Debug, Clone)]
 struct PaintStyle {
     fill_color: Option<Color>,
-    stroke_color: Option<Color>,
-    stroke_width: f32,
+    _stroke_color: Option<Color>,
+    _stroke_width: f32,
     corner_radius: f32,
     shadow: Option<Shadow>,
 }
@@ -663,7 +663,7 @@ fn parse_display_entry(entry: &Value) -> Option<(String, Rect, PaintStyle, Optio
     let Value::Object(map_ref) = entry else {
         return None;
     };
-    let map = map_ref.read().unwrap();
+    let map = map_ref.read().unwrap_or_else(|e| e.into_inner());
     let op_type = match map.get("op_type")? {
         Value::Str(s) => s.clone(),
         _ => return None,
@@ -679,7 +679,7 @@ fn parse_rect(value: &Value) -> Option<Rect> {
     let Value::Object(map_ref) = value else {
         return None;
     };
-    let map = map_ref.read().unwrap();
+    let map = map_ref.read().unwrap_or_else(|e| e.into_inner());
     Some(Rect {
         x: numeric_to_f32(map.get("x")?)?,
         y: numeric_to_f32(map.get("y")?)?,
@@ -693,13 +693,13 @@ fn parse_style(value: Option<&Value>) -> PaintStyle {
     let Some(Value::Object(map_ref)) = value else {
         return PaintStyle {
             fill_color: None,
-            stroke_color: None,
-            stroke_width: 0.0,
+            _stroke_color: None,
+            _stroke_width: 0.0,
             corner_radius: 0.0,
             shadow: None,
         };
     };
-    let map = map_ref.read().unwrap();
+    let map = map_ref.read().unwrap_or_else(|e| e.into_inner());
     let fill_color = map.get("fill_color").and_then(parse_color);
     let stroke_color = map.get("stroke_color").and_then(parse_color);
     let stroke_width = map
@@ -714,8 +714,8 @@ fn parse_style(value: Option<&Value>) -> PaintStyle {
 
     PaintStyle {
         fill_color,
-        stroke_color,
-        stroke_width,
+        _stroke_color: stroke_color,
+        _stroke_width: stroke_width,
         corner_radius,
         shadow,
     }
@@ -726,7 +726,7 @@ fn parse_shadow(value: &Value) -> Option<Shadow> {
     let Value::Object(map_ref) = value else {
         return None;
     };
-    let map = map_ref.read().unwrap();
+    let map = map_ref.read().unwrap_or_else(|e| e.into_inner());
     Some(Shadow {
         offset_x: numeric_to_f32(map.get("offset_x")?)?,
         offset_y: numeric_to_f32(map.get("offset_y")?)?,
@@ -740,7 +740,7 @@ fn parse_color(value: &Value) -> Option<Color> {
     let Value::Object(map_ref) = value else {
         return None;
     };
-    let map = map_ref.read().unwrap();
+    let map = map_ref.read().unwrap_or_else(|e| e.into_inner());
     Some(Color {
         r: numeric_to_f32(map.get("r")?)?,
         g: numeric_to_f32(map.get("g")?)?,
@@ -1203,7 +1203,7 @@ fn fs_watch_create_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, Eval
             let _ = tx.send(res);
         })
         .map_err(|e| err(e.to_string()))?;
-    for path in paths_rc.read().unwrap().iter() {
+    for path in paths_rc.read().unwrap_or_else(|e| e.into_inner()).iter() {
         let Value::Str(path) = path else {
             continue;
         };
@@ -1232,30 +1232,27 @@ fn fs_watch_poll_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalEr
     let Some(entry) = watchers.get_mut(watcher_id) else {
         return Ok(Value::array(events));
     };
-    for res in entry.rx.try_iter() {
-        if let Ok(event) = res {
-            let event_type = match event.kind {
-                notify::EventKind::Create(_) => "create",
-                notify::EventKind::Modify(_) => "modify",
-                notify::EventKind::Remove(_) => "remove",
-                notify::EventKind::Any => "any",
-                _ => "other",
-            };
-            let path = event
-                .paths
-                .get(0)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let mut evt = HashMap::new();
-            evt.insert("event_type".to_string(), Value::Str(event_type.to_string()));
-            evt.insert("path".to_string(), Value::Str(path));
-            let ts = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as i64;
-            evt.insert("timestamp".to_string(), Value::Int(ts));
-            events.push(Value::object(evt));
-        }
+    for event in entry.rx.try_iter().flatten() {
+        let event_type = match event.kind {
+            notify::EventKind::Create(_) => "create",
+            notify::EventKind::Modify(_) => "modify",
+            notify::EventKind::Remove(_) => "remove",
+            notify::EventKind::Any => "any",
+            _ => "other",
+        };
+        let path = event
+            .paths.first()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let mut evt = HashMap::new();
+        evt.insert("event_type".to_string(), Value::Str(event_type.to_string()));
+        evt.insert("path".to_string(), Value::Str(path));
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        evt.insert("timestamp".to_string(), Value::Int(ts));
+        events.push(Value::object(evt));
     }
     Ok(Value::array(events))
 }
@@ -1382,7 +1379,7 @@ fn tls_accept_native(_vm: &mut NyxVm, args: &[Value]) -> Result<Value, EvalError
         .conn
         .negotiated_cipher_suite()
         .map(|suite| format!("{:?}", suite.suite()));
-    let verified = stream.conn.is_handshaking() == false;
+    let verified = !stream.conn.is_handshaking();
     let id = NEXT_TLS_ID.fetch_add(1, Ordering::SeqCst);
     TLS_CONNS
         .get_or_init(|| Mutex::new(HashMap::new()))
@@ -1537,7 +1534,7 @@ fn read_private_key(pem: &str) -> Result<PrivateKeyDer<'static>, EvalError> {
 fn extract_socket_id(conn: &Value) -> Result<i64, EvalError> {
     match conn {
         Value::Int(id) => Ok(*id),
-        Value::Object(map_rc) => match map_rc.read().unwrap().get("socket") {
+        Value::Object(map_rc) => match map_rc.read().unwrap_or_else(|e| e.into_inner()).get("socket") {
             Some(Value::Int(id)) => Ok(*id),
             _ => Err(err("connection missing socket id")),
         },

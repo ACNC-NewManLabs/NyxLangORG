@@ -25,10 +25,11 @@ wide = "0.7"
 ahash = { version = "0.8", features = ["serde"] }
 hashbrown = { version = "0.14", features = ["serde"] }
 crc32fast = "1.4"
-libloading = { version = "0.8", optional = true }
-nyx-vm = { path = "vm", features = ["jit"] }
+libloading = { version = "0.8" }
+nyx-vm = { path = "vm" }
 nyx_diagnostics = { path = "diagnostics" }
 nyx_std = { path = "stdlib" }
+nyx-hypervisor = { path = "libs/hypervisor", optional = true }
 
 # Cryptography dependencies
 sha2 = "0.10"
@@ -65,11 +66,15 @@ openssl = { version = "0.10", features = ["vendored"] }
 wgpu = "0.17.0"
 pollster = "0.3"
 sysinfo = "0.38.4"
+libc = "0.2.183"
+time = { version = "0.3.47", features = ["formatting", "macros"] }
 
 [features]
 # Enables loading compiler plugins from dynamic libraries at runtime.
-dynamic_loading = ["dep:libloading"]
+dynamic_loading = []
 default = []
+hypervisor = ["dep:nyx-hypervisor"]
+jit = ["nyx-vm/jit"]
 ui = ["dep:minifb", "dep:font8x8"]
 
 [dev-dependencies]
@@ -113,6 +118,6 @@ default-members = [".", "stdlib"]
 opt-level = 3
 lto = true
 codegen-units = 1
-panic = "abort"
+panic = "unwind"
 strip = "symbols"
 

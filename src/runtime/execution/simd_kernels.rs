@@ -14,7 +14,105 @@ use super::df_engine::Bitmap;
 // ── SIMD lane width ────────────────────────────────────────────────────────
 const LANES: usize = 4;
 // Chunk size per rayon thread: process 256 SIMD batches = 1024 f64 values per task
+// Chunk size per rayon thread: process 256 SIMD batches = 1024 f64 values per task
 const THREAD_CHUNK: usize = LANES * 256;
+
+// ── Vector Search Kernels ──────────────────────────────────────────────────
+
+/// Rayon + SIMD F64 dot product.
+pub fn simd_f64_dot_product(a: &[f64], b: &[f64]) -> f64 {
+    let _n = a.len().min(b.len());
+    
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        if is_x86_feature_detected!("avx2") {
+            return a.par_chunks(THREAD_CHUNK)
+                .zip(b.par_chunks(THREAD_CHUNK))
+                .map(|(ac, bc)| {
+                    let len = ac.len().min(bc.len());
+                    let simd_len = len / LANES * LANES;
+                    let mut sum = f64x4::splat(0.0);
+                    for i in (0..simd_len).step_by(LANES) {
+                        let av = f64x4::new([ac[i], ac[i+1], ac[i+2], ac[i+3]]);
+                        let bv = f64x4::new([bc[i], bc[i+1], bc[i+2], bc[i+3]]);
+                        sum += av * bv;
+                    }
+                    let res: [f64; 4] = sum.into();
+                    let mut s = res[0] + res[1] + res[2] + res[3];
+                    for i in simd_len..len {
+                        s += ac[i] * bc[i];
+                    }
+                    s
+                })
+                .sum();
+        }
+    }
+
+    // Scalar fallback for non-AVX systems
+    a.par_iter().zip(b.par_iter()).map(|(&ax, &bx)| ax * bx).sum()
+}
+
+/// Rayon + SIMD F64 L2 Norm Squared.
+pub fn simd_f64_l2_norm_sq(v: &[f64]) -> f64 {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        if is_x86_feature_detected!("avx2") {
+            return v.par_chunks(THREAD_CHUNK)
+                .map(|vc| {
+                    let len = vc.len();
+                    let simd_len = len / LANES * LANES;
+                    let mut sum = f64x4::splat(0.0);
+                    for i in (0..simd_len).step_by(LANES) {
+                        let av = f64x4::new([vc[i], vc[i+1], vc[i+2], vc[i+3]]);
+                        sum += av * av;
+                    }
+                    let res: [f64; 4] = sum.into();
+                    let mut s = res[0] + res[1] + res[2] + res[3];
+                    for i in simd_len..len {
+                        s += vc[i] * vc[i];
+                    }
+                    s
+                })
+                .sum();
+        }
+    }
+
+    // Scalar fallback
+    v.par_iter().map(|&x| x * x).sum()
+}
+
+/// Rayon + SIMD F64 Cosine Similarity.
+pub fn simd_f64_cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
+    let dot = simd_f64_dot_product(a, b);
+    let norm_a_sq = simd_f64_l2_norm_sq(a);
+    let norm_b_sq = simd_f64_l2_norm_sq(b);
+    
+    if norm_a_sq == 0.0 || norm_b_sq == 0.0 {
+        return 0.0;
+    }
+    
+    dot / (norm_a_sq.sqrt() * norm_b_sq.sqrt())
+}
+
+/// Rayon + SIMD Parallel Vector Search (Top-K)
+pub fn simd_f64_vector_search(matrix: &[f64], query: &[f64], d: usize, k: usize) -> Vec<(usize, f64)> {
+    let n = matrix.len() / d;
+    let mut scores: Vec<(usize, f64)> = (0..n).into_par_iter()
+        .map(|i| {
+            let start = i * d;
+            let end = start + d;
+            let row = &matrix[start..end];
+            let sim = simd_f64_cosine_similarity(row, query);
+            (i, sim)
+        })
+        .collect();
+    
+    // Sort descending by score
+    scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scores.truncate(k);
+    scores
+}
+
 
 // ── Arithmetic kernels ─────────────────────────────────────────────────────
 
@@ -155,7 +253,7 @@ pub fn simd_f64_hash(data: &[f64]) -> Vec<u64> {
 /// SIMD I64 comparison → Bitmap (l[i] == r[i])
 pub fn simd_i64_eq_bitmap(l: &[i64], r: &[i64]) -> Bitmap {
     let n = l.len().min(r.len());
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
         let mut byte = 0u8;
         let base = byte_idx * 8;
@@ -207,28 +305,28 @@ where F: Fn(f64x4, f64x4) -> f64x4 + Sync
 /// Rayon + SIMD F64 GT comparison → Bitmap (l[i] > r[i])
 pub fn simd_f64_gt_bitmap(l: &[f64], r: &[f64]) -> Bitmap {
     let n = l.len().min(r.len());
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     build_bitmap_chunked(l, r, n, byte_len, &|la: f64x4, ra: f64x4| la.cmp_gt(ra))
 }
 
 /// Rayon + SIMD F64 LT comparison → Bitmap
 pub fn simd_f64_lt_bitmap(l: &[f64], r: &[f64]) -> Bitmap {
     let n = l.len().min(r.len());
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     build_bitmap_chunked(l, r, n, byte_len, &|la: f64x4, ra: f64x4| la.cmp_lt(ra))
 }
 
 /// Rayon + SIMD F64 EQ comparison → Bitmap
 pub fn simd_f64_eq_bitmap(l: &[f64], r: &[f64]) -> Bitmap {
     let n = l.len().min(r.len());
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     build_bitmap_chunked(l, r, n, byte_len, &|la: f64x4, ra: f64x4| la.cmp_eq(ra))
 }
 
 /// Scalar-broadcast GT: each l[i] vs. a constant threshold (common filter pattern).
 pub fn simd_f64_gt_scalar_bitmap(l: &[f64], threshold: f64) -> Bitmap {
     let n = l.len();
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     let ra = f64x4::splat(threshold);
     let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
         let mut byte = 0u8;
@@ -256,7 +354,7 @@ pub fn simd_f64_gt_scalar_bitmap(l: &[f64], threshold: f64) -> Bitmap {
 /// Scalar-broadcast LT.
 pub fn simd_f64_lt_scalar_bitmap(l: &[f64], threshold: f64) -> Bitmap {
     let n = l.len();
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     let ra = f64x4::splat(threshold);
     let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
         let mut byte = 0u8;
@@ -283,7 +381,7 @@ pub fn simd_f64_lt_scalar_bitmap(l: &[f64], threshold: f64) -> Bitmap {
 /// Scalar-broadcast EQ.
 pub fn simd_f64_eq_scalar_bitmap(l: &[f64], threshold: f64) -> Bitmap {
     let n = l.len();
-    let byte_len = (n + 7) / 8;
+    let byte_len = n.div_ceil(8);
     let ra = f64x4::splat(threshold);
     let data: Vec<u8> = (0..byte_len).into_par_iter().map(|byte_idx| {
         let mut byte = 0u8;

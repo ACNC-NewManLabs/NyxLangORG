@@ -1,0 +1,159 @@
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  Nyx OS v1.0 Production Preview                                           ║
+# ║  Interactive Multi-Window Bare-Metal Kernel                               ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+fn main() {
+    let FB_BASE = std::kernel::vm::get_fb_ptr()
+    let INPUT_BASE = std::kernel::vm::get_input_ptr()
+    let WIDTH      = 800
+    let HEIGHT     = 600
+    
+    # UI Theme
+    let C_TITLE    = 0xFF00F2FF
+    let C_WINDOW   = 0xFFE0E0E0
+    let C_TASKBAR  = 0xFF050510
+    
+    # Window 1: Main App
+    let mut w1_x = 100
+    let mut w1_y = 100
+    let mut w1_w = 320
+    let mut w1_h = 240
+    
+    # Window 2: System Monitor
+    let mut w2_x = 450
+    let mut w2_y = 150
+    let mut w2_w = 200
+    let mut w2_h = 160
+    
+    # State
+    let mut active_window = 1
+    let mut dragging      = 0
+    let mut drag_off_x    = 0
+    let mut drag_off_y    = 0
+    let mut is_first_frame = 1
+    
+    loop {
+        # 1. Input Processing
+        let mx    = std::kernel::memory::read_u32(INPUT_BASE)
+        let my    = std::kernel::memory::read_u32(INPUT_BASE + 4)
+        let mdown = std::kernel::memory::read_u32(INPUT_BASE + 8)
+        
+        # 2. Window Management Logic
+        if mdown == 1 {
+            if dragging == 0 {
+                # Hit-test Window 2 (Top Stack)
+                if mx >= w2_x && mx < (w2_x + w2_w) && my >= w2_y && my < (w2_y + 32) {
+                    active_window = 2
+                    dragging      = 2
+                    drag_off_x    = mx - w2_x
+                    drag_off_y    = my - w2_y
+                } else if mx >= w1_x && mx < (w1_x + w1_w) && my >= w1_y && my < (w1_y + 32) {
+                    active_window = 1
+                    dragging      = 1
+                    drag_off_x    = mx - w1_x
+                    drag_off_y    = my - w1_y
+                }
+            } else {
+                # Update positions
+                if dragging == 1 {
+                    w1_x = mx - drag_off_x
+                    w1_y = my - drag_off_y
+                } else if dragging == 2 {
+                    w2_x = mx - drag_off_x
+                    w2_y = my - drag_off_y
+                }
+            }
+        } else {
+            dragging = 0
+        }
+        
+        # 3. Rendering pipeline
+        
+        # Background (Only once)
+        if is_first_frame == 1 {
+            draw_gradient(FB_BASE, WIDTH, HEIGHT)
+            is_first_frame = 0
+        }
+        
+        # Clear old areas (optimized: we just redraw the whole UI layer)
+        # In a real OS we'd use double-buffering. Here we just draw.
+        
+        # Redraw Background occasionally or just part of it? 
+        # For this demo, let's redraw the Desktop and Windows.
+        # To avoid flicker, we redraw only when moving.
+        
+        if dragging != 0 {
+             # Re-draw desktop background gradient (expensive but looks good)
+             # NOTE: In JIT, drawing 480k pixels is the bottleneck.
+             # We draw a static color except for first frame.
+             draw_rect(FB_BASE, 0, 0, 800, 560, 0xFF001122) 
+        }
+
+        # Draw Window 1
+        draw_os_window(FB_BASE, w1_x, w1_y, w1_w, w1_h, "File Explorer", active_window == 1)
+        
+        # Draw Window 2
+        draw_os_window(FB_BASE, w2_x, w2_y, w2_w, w2_h, "Sys Mon", active_window == 2)
+        # Add a "Graph" to Sys Mon
+        let t = std::kernel::cpu::rdtsc()
+        let graph_h = (t / 1000000) % 80
+        draw_rect(FB_BASE, w2_x + 20, w2_y + 120 - graph_h, 20, graph_h, C_TITLE)
+        
+        # Taskbar
+        draw_rect(FB_BASE, 0, 560, 800, 40, C_TASKBAR)
+        draw_rect(FB_BASE, 10, 568, 60, 24, C_TITLE) # "Start" button
+        
+        # Cursor (Arrow)
+        draw_rect(FB_BASE, mx - 1, my - 8, 3, 16, 0xFFFFFFFF)
+        draw_rect(FB_BASE, mx - 8, my - 1, 16, 3, 0xFFFFFFFF)
+        
+        # Sync
+        std::kernel::cpu::hlt()
+    }
+}
+
+fn draw_os_window(fb, x, y, w, h, title, active) {
+    # Shadow / Border
+    draw_rect(fb, x - 1, y - 1, w + 2, h + 2, 0xFF444444)
+    # Body
+    draw_rect(fb, x, y, w, h, 0xFFE0E0E0)
+    # Title Bar
+    let title_c = if active { 0xFF111111 } else { 0xFF333333 }
+    draw_rect(fb, x, y, w, 32, title_c)
+    # Accent Line
+    if active { draw_rect(fb, x, y + 30, w, 2, 0xFF00F2FF) }
+    
+    # Close Button mockup
+    draw_rect(fb, x + w - 24, y + 8, 16, 16, 0xFFCC3333)
+}
+
+fn draw_gradient(fb, w, h) {
+    let mut r = 0
+    while r < h {
+        let b = 60 - (r / 10)
+        let color = 0xFF001100 | b
+        let mut c = 0
+        while c < w {
+            std::kernel::memory::write_u32(fb + (r * w + c) * 4, color)
+            c = c + 1
+        }
+        r = r + 1
+    }
+}
+
+fn draw_rect(fb, x, y, w, h, color) {
+    let mut r = 0
+    while r < h {
+        let mut c = 0
+        while c < w {
+            let py = y + r
+            let px = x + c
+            if px >= 0 && px < 800 && py >= 0 && py < 560 {
+                std::kernel::memory::write_u32(fb + (py * 800 + px) * 4, color)
+            }
+            c = c + 1
+        }
+        r = r + 1
+    }
+}

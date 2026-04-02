@@ -1,0 +1,21 @@
+use std::time;
+
+fn main() {
+    let n = 10000000;
+    println("🚀 Nyx SIMD Benchmark: 10,000,000 floats");
+    
+    // 1. Ingestion (Vectorized)
+    let start_gen = time::now();
+    let col_data = std::df::generate_synthetic(n, {"v": "float"});
+    let end_gen = time::now();
+    println("✅ Ingestion: " + (end_gen - start_gen) + "ms");
+    
+    // 2. SIMD Aggregation
+    let raw_data = col_data[0]._data; // Extract raw buffer
+    let start_simd = time::now();
+    let total = std::df::sum_simd(raw_data);
+    let end_simd = time::now();
+    
+    println("✅ SIMD Sum: " + (end_simd - start_simd) + "ms");
+    println("Result: " + total);
+}

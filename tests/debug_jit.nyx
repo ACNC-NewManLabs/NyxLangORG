@@ -1,0 +1,10 @@
+fn main() {
+    let i = 0;
+    let n = 5;
+    println("Start JIT Loop Test (5 iterations)...");
+    while i < n {
+        println("Iteration i=" + i);
+        i = i + 1;
+    }
+    println("End JIT Loop Test. Final i: " + i);
+}
